@@ -1,120 +1,328 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<title>Certivo – Human Verification</title>
+<meta charset="UTF-8">
+<title>Certivo Prime Flow - Liveness & Dashboard</title>
 <style>
-    body { font-family: Arial, sans-serif; background: #0e0e11; color: #fff; text-align: center; }
-    video { width: 420px; border-radius: 8px; margin-top: 10px; }
-    button { padding: 12px 18px; font-size: 16px; margin-top: 12px; cursor: pointer; }
-    #status { margin-top: 14px; font-weight: bold; }
+    body {
+        font-family: Arial, sans-serif;
+        background: #0f172a;
+        color: #e5e7eb;
+        text-align: center;
+        padding: 20px;
+    }
+
+    video {
+        width: 320px;
+        border-radius: 12px;
+        margin-top: 10px;
+    }
+
+    button {
+        margin-top: 15px;
+        padding: 10px 20px;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+        font-weight: bold;
+    }
+
+    #status {
+        margin-top: 15px;
+        font-weight: bold;
+        min-height: 50px;
+    }
+
+    #dashboardContainer {
+        width: 500px;
+        margin: 20px auto;
+    }
+
+    canvas#overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        pointer-events: none;
+    }
 </style>
 </head>
 <body>
 
-<h2>Certivo Human Verification</h2>
+<h1>Certivo Prime Verification - Liveness</h1>
 
+<div style="position: relative; display: inline-block;">
+    <video id="video" autoplay muted></video>
+    <canvas id="overlay"></canvas>
+</div>
+
+<br>
 <button id="startBtn">Start Verification</button>
+<p id="status">Idle</p>
 
-<div id="status">Idle</div>
+<div id="dashboardContainer">
+    <canvas id="dashboardChart"></canvas>
+</div>
 
-<video id="video" autoplay muted></video>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/facemesh"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
-const video = document.getElementById("video");
-const startBtn = document.getElementById("startBtn");
-const statusEl = document.getElementById("status");
+/* ------------------------
+   GLOBAL STATE
+------------------------ */
+let video = document.getElementById("video");
+let overlay = document.getElementById("overlay");
+let overlayCtx = overlay.getContext("2d");
+let statusEl = document.getElementById("status");
+let startBtn = document.getElementById("startBtn");
 
+let faceModel;
 let mediaRecorder;
 let recordedChunks = [];
-let challengeQueue = [];
+let faceCheckInterval;
+
+let canRecord = false;
+let verificationCompleted = false;
+
 let currentChallenge = null;
+
+/* ------------------------
+   METRICS
+------------------------ */
 let challengeShownAt = null;
+let recordingStartedAt = null;
+let faceMovementTotal = 0;
+let faceFrames = 0;
+let lastFaceBox = null;
+let blinkCount = 0;
+let lastEAR = null;
 
-/* ------------------ LOAD CHALLENGE ------------------ */
-async function loadChallenge() {
-    if (challengeQueue.length === 0) {
-        statusEl.innerText = "Loading challenges...";
-        const res = await fetch("http://127.0.0.1:8000/v1/challenge");
+let sessionMetrics = {
+    reactionTimes: [],
+    faceStabilityScores: [],
+    blinkCounts: []
+};
 
-        if (!res.ok) {
-            statusEl.innerText = "❌ Failed to load challenges";
-            return;
-        }
+/* ------------------------
+   DASHBOARD
+------------------------ */
+let dashboardChart;
+let challengeLabels = [];
+let reactionData = [];
+let stabilityData = [];
+let blinkData = [];
 
-        const data = await res.json();
-
-        if (!data.challenges || data.challenges.length === 0) {
-            statusEl.innerText = "❌ No challenges returned";
-            return;
-        }
-
-        challengeQueue = data.challenges;
-    }
-
-    currentChallenge = challengeQueue.shift();
-    challengeShownAt = Date.now();
-
-    statusEl.innerText = "🧠 Challenge: " + currentChallenge.instruction;
+function initDashboard(){
+    const ctx = document.getElementById('dashboardChart').getContext('2d');
+    dashboardChart = new Chart(ctx,{
+        type:'line',
+        data:{
+            labels:challengeLabels,
+            datasets:[
+                {label:'Reaction Time (ms)', data:reactionData, borderColor:'#f87171', tension:0.3},
+                {label:'Face Stability', data:stabilityData, borderColor:'#22c55e', tension:0.3},
+                {label:'Blink Count', data:blinkData, borderColor:'#60a5fa', tension:0.3}
+            ]
+        },
+        options:{responsive:true, scales:{y:{beginAtZero:true}}}
+    });
 }
 
-/* ------------------ START CAMERA ------------------ */
-async function startCamera() {
+/* ------------------------
+   CAMERA
+------------------------ */
+async function initCamera() {
     const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     video.srcObject = stream;
-
-    mediaRecorder = new MediaRecorder(stream);
-    recordedChunks = [];
-
-    mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
+    video.addEventListener('loadeddata', ()=>{
+        overlay.width = video.videoWidth;
+        overlay.height = video.videoHeight;
+    });
 }
 
-/* ------------------ RECORD & VERIFY ------------------ */
-async function recordAndVerify() {
+/* ------------------------
+   EAR
+------------------------ */
+function computeEAR(landmarks) {
+    const leftEye = landmarks.slice(33,42);
+    const rightEye = landmarks.slice(133,142);
+    function ear(eye){
+        const A = Math.hypot(eye[1][0]-eye[5][0], eye[1][1]-eye[5][1]);
+        const B = Math.hypot(eye[2][0]-eye[4][0], eye[2][1]-eye[4][1]);
+        const C = Math.hypot(eye[0][0]-eye[3][0], eye[0][1]-eye[3][1]);
+        return (A+B)/(2*C);
+    }
+    return (ear(leftEye)+ear(rightEye))/2;
+}
+
+/* ------------------------
+   FACE CHECK
+------------------------ */
+async function startFaceCheck() {
+    faceCheckInterval = setInterval(async () => {
+        if (verificationCompleted) return;
+
+        const predictions = await faceModel.estimateFaces(video);
+        overlayCtx.clearRect(0,0,overlay.width,overlay.height);
+
+        if(predictions.length!==1){
+            canRecord=false;
+            statusEl.innerText="⚠️ Ensure one face is visible";
+            return;
+        }
+
+        canRecord=true;
+        const face=predictions[0];
+        const [x1,y1]=face.topLeft;
+        const [x2,y2]=face.bottomRight;
+
+        overlayCtx.strokeStyle="lime";
+        overlayCtx.lineWidth=2;
+        overlayCtx.strokeRect(x1,y1,x2-x1,y2-y1);
+
+        if(lastFaceBox){
+            faceMovementTotal+=Math.abs(x1-lastFaceBox[0])+Math.abs(y1-lastFaceBox[1]);
+            faceFrames++;
+        }
+        lastFaceBox=[x1,y1];
+
+        const ear=computeEAR(face.scaledMesh);
+        if(lastEAR && lastEAR>0.25 && ear<0.20) blinkCount++;
+        lastEAR=ear;
+
+        statusEl.innerText=`✅ Face OK | Blinks: ${blinkCount}`;
+    },200);
+}
+
+/* ------------------------
+   SESSION
+------------------------ */
+async function startSession(){
+    const res = await fetch("http://127.0.0.1:8000/v1/session/start",{method:"POST"});
+    if(!res.ok){
+        statusEl.innerText="❌ Failed to start session";
+        throw new Error("Session start failed");
+    }
+    const data = await res.json();
+    sessionId = data.session_id;
+}
+
+
+/* ------------------------
+   LOAD CHALLENGE (FIXED)
+------------------------ */
+async function loadChallenge(){
+    const res = await fetch(`http://127.0.0.1:8000/v1/challenge?session_id=${sessionId}`);
+    if(!res.ok){
+        statusEl.innerText="❌ Failed to load challenge";
+        return;
+    }
+
+    const data = await res.json();
+
+    // HARD GUARD
+    if(!data || !data.instruction){
+        statusEl.innerText="❌ Invalid challenge received";
+        return;
+    }
+
+    currentChallenge = data;
+    statusEl.innerText = "🧠 Challenge: " + currentChallenge.instruction;
+    challengeShownAt = Date.now();
+}
+
+/* ------------------------
+   RECORD
+------------------------ */
+function startRecording(){
+    recordedChunks=[];
+    mediaRecorder=new MediaRecorder(video.srcObject);
+    sessionMetrics.reactionTimes.push(Date.now()-challengeShownAt);
+
+    mediaRecorder.ondataavailable=e=>recordedChunks.push(e.data);
+    mediaRecorder.onstop=submitRecording;
     mediaRecorder.start();
 
-    setTimeout(async () => {
-        mediaRecorder.stop();
-
-        mediaRecorder.onstop = async () => {
-            const blob = new Blob(recordedChunks, { type: "video/webm" });
-            const formData = new FormData();
-
-            formData.append("challenge_id", currentChallenge.challenge_id);
-            formData.append("device_id", "web-client");
-            formData.append("video", blob, "verification.webm");
-
-            statusEl.innerText = "🔍 Verifying...";
-
-            const res = await fetch("http://127.0.0.1:8000/v1/verify", {
-                method: "POST",
-                body: formData
-            });
-
-            const data = await res.json();
-
-            if (!res.ok || !data.challenge_passed) {
-                statusEl.innerText = "❌ FAILED";
-                return;
-            }
-
-            statusEl.innerText = "✅ VERIFIED";
-
-            if (challengeQueue.length > 0) {
-                setTimeout(loadChallenge, 1500);
-            }
-        };
-    }, 5000); // record 5 seconds
+    setTimeout(()=>mediaRecorder.stop(),currentChallenge.duration*1000);
 }
 
-/* ------------------ BUTTON ------------------ */
-startBtn.onclick = async () => {
-    startBtn.disabled = true;
-    await startCamera();
+/* ------------------------
+   SUBMIT (SAFE)
+------------------------ */
+async function submitRecording(){
+    verificationCompleted=true;
+
+    if(!currentChallenge || !currentChallenge.id){
+        statusEl.innerText="❌ Invalid challenge";
+        return;
+    }
+
+    const faceStability = faceFrames?Math.round(faceMovementTotal/faceFrames):0;
+
+    const blob=new Blob(recordedChunks,{type:"video/webm"});
+    const formData=new FormData();
+    formData.append("video",blob);
+    formData.append("session_id",sessionId);
+    formData.append("challenge_id",currentChallenge.id);
+    formData.append("reaction_time",sessionMetrics.reactionTimes.at(-1));
+    formData.append("face_stability",faceStability);
+    formData.append("blink_count",blinkCount);
+
+    const res = await fetch("http://127.0.0.1:8000/v1/verify",{method:"POST",body:formData});
+    const result = await res.json();
+
+    statusEl.innerHTML=`
+        ${result.verified?"✅ VERIFIED":"❌ FAILED"}<br>
+        Trust Score: <b>${result.trust_score}</b><br>
+        Risk Level: <b>${result.risk_level}</b>
+    `;
+
+    challengeLabels.push(`Ch ${currentChallenge.id}`);
+    reactionData.push(sessionMetrics.reactionTimes.at(-1));
+    stabilityData.push(faceStability);
+    blinkData.push(blinkCount);
+    dashboardChart.update();
+
+    setTimeout(nextStep,3000);
+}
+
+/* ------------------------
+   FLOW
+------------------------ */
+async function nextStep(){
+    verificationCompleted=false;
+    if(currentChallenge.last){
+        statusEl.innerHTML="🎉 Session Complete";
+        clearInterval(faceCheckInterval);
+        return;
+    }
     await loadChallenge();
-    await recordAndVerify();
+    waitForFaceThenRecord();
+}
+
+function waitForFaceThenRecord(){
+    const i=setInterval(()=>{
+        if(canRecord){
+            clearInterval(i);
+            startRecording();
+        }
+    },300);
+}
+
+/* ------------------------
+   INIT
+------------------------ */
+startBtn.onclick=async()=>{
+    startBtn.disabled=true;
+    await initCamera();
+    faceModel=await facemesh.load();
+    initDashboard();
+    await startSession();
+    await loadChallenge();
+    startFaceCheck();
+    waitForFaceThenRecord();
 };
 </script>
-
 </body>
 </html>
