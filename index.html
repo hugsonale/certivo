@@ -310,12 +310,15 @@ async function submitRecording(){
     const result = await res.json();
 
     // ✅ SUCCESS = STOP SESSION
-    if(result.challenge_passed){
-        statusEl.innerHTML = "✅ HUMAN VERIFIED";
-        verificationCompleted = true;
-        clearInterval(faceCheckInterval);
-        return;
-    }
+    updateTrustScore(result);
+
+if(result.challenge_passed){
+    statusEl.innerHTML = "✅ HUMAN VERIFIED";
+    verificationCompleted = true;
+    clearInterval(faceCheckInterval);
+    return;
+}
+
 
     // ❌ Failure → continue
     statusEl.innerHTML = "❌ CHALLENGE FAILED";
