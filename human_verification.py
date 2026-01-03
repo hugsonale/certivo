@@ -3,18 +3,22 @@ import os
 import cv2
 import numpy as np
 
-MIN_AUDIO_SIZE = 5_000        # bytes
-MIN_VIDEO_FRAMES = 15
-MOTION_THRESHOLD = 2.5        # pixel intensity delta
+# ---------------- V1 FRIENDLY THRESHOLDS ----------------
+MIN_AUDIO_SIZE = 1_500          # bytes (browser-safe)
+MIN_VIDEO_FRAMES = 5            # allow short clips
+MOTION_THRESHOLD = 1.2          # less aggressive
 
-BLINK_MOTION_THRESHOLD = 1.8
-HEAD_MOTION_THRESHOLD = 4.0
+BLINK_MOTION_THRESHOLD = 0.8
+HEAD_MOTION_THRESHOLD = 1.5
 
 
 def _video_motion_profile(video_path: str):
     """
     Analyze video motion and return basic movement stats
     """
+    if not video_path or not os.path.exists(video_path):
+        return None
+
     cap = cv2.VideoCapture(video_path)
     ret, prev = cap.read()
     if not ret:
@@ -24,8 +28,8 @@ def _video_motion_profile(video_path: str):
     prev_gray = cv2.cvtColor(prev, cv2.COLOR_BGR2GRAY)
 
     total_motion = 0
-    x_motion = 0
-    y_motion = 0
+    x_motion = 0.0
+    y_motion = 0.0
     frames = 0
 
     while True:
@@ -40,19 +44,22 @@ def _video_motion_profile(video_path: str):
         if mean_diff > MOTION_THRESHOLD:
             total_motion += 1
 
-        # motion direction estimation
+        # Optical flow for motion direction
         flow = cv2.calcOpticalFlowFarneback(
             prev_gray, gray, None,
             0.5, 3, 15, 3, 5, 1.2, 0
         )
 
-        x_motion += np.mean(flow[..., 0])
-        y_motion += np.mean(flow[..., 1])
+        x_motion += float(np.mean(flow[..., 0]))
+        y_motion += float(np.mean(flow[..., 1]))
 
         prev_gray = gray
         frames += 1
 
     cap.release()
+
+    if frames == 0:
+        return None
 
     return {
         "frames": frames,
@@ -64,55 +71,70 @@ def _video_motion_profile(video_path: str):
 
 def run_human_verification(video_path: str, audio_path: str, challenge_type: str):
     """
-    Certivo V1 Verification Engine (Challenge-Aware)
+    Certivo V1 Verification Engine
+    Rule: Any successful challenge == human
     """
 
     motion = _video_motion_profile(video_path)
-    if not motion:
-        return _fail("no_video")
 
     # ---------------- SPEAK PHRASE ----------------
     if challenge_type == "speak_phrase":
-        if not audio_path or os.path.getsize(audio_path) < MIN_AUDIO_SIZE:
+        if not audio_path or not os.path.exists(audio_path):
+            return _fail("missing_audio")
+
+        if os.path.getsize(audio_path) < MIN_AUDIO_SIZE:
             return _fail("audio_too_small")
-        return _pass()
+
+        # Require at least minimal facial motion while speaking
+        if not motion or motion["total_motion"] < 2:
+            return _fail("no_face_motion")
+
+        return _pass(confidence=0.95)
+
+    # From here down, video is required
+    if not motion:
+        return _fail("no_video")
 
     # ---------------- BLINK ----------------
     if challenge_type == "blink":
-        # Blink = short burst motion, low directional drift
         if motion["total_motion"] < MIN_VIDEO_FRAMES:
-            return _fail("no_blink_motion")
+            return _fail("insufficient_motion")
 
+        # Blink = short vertical movement
         if abs(motion["y_motion"]) < BLINK_MOTION_THRESHOLD:
             return _fail("blink_not_detected")
 
-        return _pass()
+        return _pass(confidence=0.90)
 
     # ---------------- HEAD TURN ----------------
     if challenge_type == "head_turn":
         if abs(motion["x_motion"]) < HEAD_MOTION_THRESHOLD:
-            return _fail("no_head_turn")
-        return _pass()
+            return _fail("head_turn_not_detected")
+
+        return _pass(confidence=0.92)
 
     # ---------------- NOD ----------------
     if challenge_type == "nod":
         if abs(motion["y_motion"]) < HEAD_MOTION_THRESHOLD:
-            return _fail("no_nod")
-        return _pass()
+            return _fail("nod_not_detected")
+
+        return _pass(confidence=0.91)
 
     # ---------------- FALLBACK ----------------
+    # Generic liveness movement
     if motion["total_motion"] >= MIN_VIDEO_FRAMES:
-        return _pass()
+        return _pass(confidence=0.85)
 
-    return _fail("unknown_challenge")
+    return _fail("challenge_failed")
 
 
-def _pass():
+def _pass(confidence=0.9):
     return {
-        "liveness_score": 0.93,
-        "lip_sync_score": 0.88,
+        "liveness_score": round(confidence, 2),
+        "lip_sync_score": round(confidence - 0.05, 2),
         "challenge_passed": True,
-        "replay_flag": False
+        "replay_flag": False,
+        "reason": "passed"
     }
 
 
