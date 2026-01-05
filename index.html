@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Certivo Prime Flow - Liveness & Trust Verdict</title>
+<title>Certivo Prime Flow – Trust Flow V1</title>
 
 <style>
 body {
@@ -102,11 +102,15 @@ let faceCheckInterval;
 
 let canRecord = false;
 let verificationCompleted = false;
+
 let challenges = [];
 let challengeIndex = 0;
 let currentChallenge = null;
 
 let challengeShownAt = null;
+
+/* 🔐 SESSION RESULTS (NEW) */
+let sessionResults = [];
 
 /* ========================
    CAMERA
@@ -148,24 +152,28 @@ async function startFaceCheck() {
 }
 
 /* ========================
-   CHALLENGES
+   LOAD CHALLENGES
 ======================== */
 async function loadChallenges(){
     const res = await fetch("http://127.0.0.1:8000/v1/challenge");
     const data = await res.json();
+
     challenges = data.challenges || [];
     challengeIndex = 0;
+    sessionResults = [];
+
     loadNextChallenge();
 }
 
 function loadNextChallenge(){
     if(challengeIndex >= challenges.length){
-        statusEl.innerText = "⏳ Finalizing verification…";
+        finalizeSession();
         return;
     }
 
     currentChallenge = challenges[challengeIndex++];
     challengeShownAt = Date.now();
+
     statusEl.innerText = "🧠 Challenge: " + currentChallenge.instruction;
     waitForFaceThenRecord();
 }
@@ -175,19 +183,22 @@ function loadNextChallenge(){
 ======================== */
 function startRecording(){
     recordedChunks = [];
+
     mediaRecorder = new MediaRecorder(video.srcObject);
     mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
     mediaRecorder.onstop = submitRecording;
+
     mediaRecorder.start();
     setTimeout(()=>mediaRecorder.stop(), 3000);
 }
 
 /* ========================
-   SUBMIT
+   SUBMIT PER CHALLENGE
 ======================== */
 async function submitRecording(){
     const blob = new Blob(recordedChunks,{type:"video/webm"});
     const formData = new FormData();
+
     formData.append("video", blob);
     formData.append("challenge_id", currentChallenge.challenge_id);
     formData.append("device_id", "web");
@@ -199,16 +210,36 @@ async function submitRecording(){
 
     const result = await res.json();
 
-    if(result.human_verified){
-        showVerdict(result.trust_score, result.trust_level);
-        verificationCompleted = true;
-        clearInterval(faceCheckInterval);
-        statusEl.innerText = "Verification Complete";
-        return;
-    }
+    sessionResults.push(result);
 
-    statusEl.innerText = "❌ Challenge failed";
-    setTimeout(loadNextChallenge,2000);
+    statusEl.innerText = result.challenge_passed
+        ? "✅ Challenge passed"
+        : "❌ Challenge failed";
+
+    setTimeout(loadNextChallenge, 1500);
+}
+
+/* ========================
+   FINALIZE SESSION
+======================== */
+async function finalizeSession(){
+    statusEl.innerText = "🔐 Calculating trust score...";
+
+    const res = await fetch("http://127.0.0.1:8000/v1/finalize",{
+        method:"POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+            results: sessionResults,
+            device_id: "web"
+        })
+    });
+
+    const finalResult = await res.json();
+
+    showVerdict(finalResult.trust_score, finalResult.trust_level);
+
+    verificationCompleted = true;
+    clearInterval(faceCheckInterval);
 }
 
 /* ========================
