@@ -256,16 +256,33 @@ async function finalizeSession(){
 /* ========================
    VERDICT UI
 ======================== */
+/* ========================
+   VERDICT UI (Animated & Capped)
+======================== */
 function showVerdict(score, level){
     verdictScreen.style.display = "block";
 
-    let color = "#22c55e";
+    // Clamp score to 0-100%
+    score = Math.min(Math.max(score,0),100);
+
+    let color = "#22c55e"; // high trust
     if(level === "medium") color = "#facc15";
     if(level === "low") color = "#ef4444";
 
     trustBar.style.background = color;
-    trustBar.style.width = Math.min(Math.max(score,0),100) + "%";
-    trustLabel.innerText = `${level.toUpperCase()} TRUST (${Math.round(score)}%)`;
+
+    // Smooth animation using setInterval
+    let current = 0;
+    const step = score / 50; // adjust speed (50 steps)
+    const interval = setInterval(()=>{
+        current += step;
+        if(current >= score){
+            current = score;
+            clearInterval(interval);
+        }
+        trustBar.style.width = current + "%";
+        trustLabel.innerText = `${level.toUpperCase()} TRUST (${Math.round(current)}%)`;
+    }, 15);
 }
 
 /* ========================

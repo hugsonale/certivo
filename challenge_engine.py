@@ -1,7 +1,6 @@
 import uuid
 import random
 
-# Define challenge pool with type
 CHALLENGES = [
     {"type": "visual", "instruction": "Blink twice"},
     {"type": "visual", "instruction": "Turn your head left"},
@@ -13,12 +12,10 @@ CHALLENGES = [
 def generate_challenges(num=3):
     selected = random.sample(CHALLENGES, num)
     challenges = []
-
     for ch in selected:
         challenges.append({
             "challenge_id": str(uuid.uuid4()),
             "challenge_type": ch["type"],
             "challenge_value": ch["instruction"]
         })
-
     return challenges

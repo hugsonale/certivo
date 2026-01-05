@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 import sqlite3, uuid, time, hashlib, os
@@ -64,6 +64,10 @@ def verify(challenge_id: str = Form(...), device_id: str = Form(...), video: Upl
 
     result = run_human_verification(video_path, audio_path, challenge_type)
 
+    # Safe clamping
+    result["liveness_score"] = min(max(result.get("liveness_score",0),0),1)
+    result["lip_sync_score"] = min(max(result.get("lip_sync_score",0),0),1)
+
     raw_token = f"{device_id}{time.time()}".encode()
     trusted_device_token = hashlib.sha256(raw_token).hexdigest()
 
@@ -77,6 +81,44 @@ def verify(challenge_id: str = Form(...), device_id: str = Form(...), video: Upl
         "trusted_device_token": trusted_device_token,
         "challenge_type": challenge_type,
         "details":{"reasons":["liveness_ok","challenge_ok"],"timestamp_utc":time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())}
+    }
+
+# -------------------- FINALIZE SESSION --------------------
+@app.post("/v1/finalize")
+async def finalize(request: Request):
+    """
+    Compute combined session trust score from multiple challenge results.
+    """
+    data = await request.json()
+    results = data.get("results", [])
+    device_id = data.get("device_id", "web")
+
+    if not results:
+        return JSONResponse(status_code=400, content={"error":"No results provided"})
+
+    # Compute combined trust score (average of challenge liveness_score & lip_sync_score)
+    trust_scores = []
+    for r in results:
+        score = (r.get("liveness_score",0) + r.get("lip_sync_score",0)) / 2
+        trust_scores.append(score)
+
+    # Average & scale to 0-100
+    avg_score = sum(trust_scores) / len(trust_scores) * 100
+    avg_score = min(max(avg_score,0),100)
+
+    # Assign trust level
+    if avg_score >= 85:
+        trust_level = "high"
+    elif avg_score >= 60:
+        trust_level = "medium"
+    else:
+        trust_level = "low"
+
+    return {
+        "trust_score": round(avg_score,2),
+        "trust_level": trust_level,
+        "device_id": device_id,
+        "details":{"total_challenges":len(results),"timestamp_utc":time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())}
     }
 
 # -------------------- SERVE FRONTEND --------------------
