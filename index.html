@@ -52,11 +52,6 @@ canvas#overlay {
     width: 0%;
     transition: width 0.8s ease;
 }
-#trustScoreDisplay {
-    font-size: 24px;
-    font-weight: bold;
-    margin-bottom: 5px;
-}
 </style>
 </head>
 
@@ -77,7 +72,6 @@ canvas#overlay {
 <div id="verdictScreen">
     <h2 style="color:#22c55e;">✅ HUMAN VERIFIED</h2>
     <p>Trust Confidence</p>
-    <div id="trustScoreDisplay">0%</div>
     <div id="trustBarOuter">
         <div id="trustBar"></div>
     </div>
@@ -100,7 +94,6 @@ let startBtn = document.getElementById("startBtn");
 let verdictScreen = document.getElementById("verdictScreen");
 let trustBar = document.getElementById("trustBar");
 let trustLabel = document.getElementById("trustLabel");
-let trustScoreDisplay = document.getElementById("trustScoreDisplay");
 
 let faceModel;
 let mediaRecorder;
@@ -214,6 +207,7 @@ async function submitRecording(){
     });
 
     const result = await res.json();
+
     sessionResults.push(result);
 
     statusEl.innerText = result.challenge_passed
@@ -247,34 +241,30 @@ async function finalizeSession(){
 }
 
 /* ========================
-   VERDICT UI (Animated + Count-up)
+   VERDICT UI WITH ANIMATION
 ======================== */
 function showVerdict(score, level){
     verdictScreen.style.display = "block";
 
-    // Clamp score
-    score = Math.min(Math.max(score,0),100);
-
-    let color = "#22c55e"; // high trust
+    let color = "#22c55e"; // High trust
     if(level === "medium") color = "#facc15";
     if(level === "low") color = "#ef4444";
 
     trustBar.style.background = color;
+    trustLabel.innerText = `${level.toUpperCase()} TRUST (0%)`;
 
-    // Animate bar & count-up number
+    // Animate percentage
     let current = 0;
-    const steps = 50;
-    const step = score / steps;
-    const interval = setInterval(()=>{
+    const step = Math.max(Math.round(score / 50), 1); // adjust speed
+    const interval = setInterval(() => {
         current += step;
         if(current >= score){
             current = score;
             clearInterval(interval);
         }
         trustBar.style.width = current + "%";
-        trustScoreDisplay.innerText = Math.round(current) + "%";
-        trustLabel.innerText = `${level.toUpperCase()} TRUST (${Math.round(current)}%)`;
-    }, 15);
+        trustLabel.innerText = `${level.toUpperCase()} TRUST (${current}%)`;
+    }, 20);
 }
 
 /* ========================
