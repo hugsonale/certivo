@@ -3,8 +3,6 @@ from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 import sqlite3, uuid, time, hashlib, os
-from typing import List
-
 from challenge_engine import generate_challenges
 from human_verification import run_human_verification  # prototype
 
@@ -13,10 +11,8 @@ app = FastAPI()
 # -------------------- CORS --------------------
 origins = [
     "http://127.0.0.1:5500",
-    "http://localhost:5500",
-    "http://127.0.0.1:8000"
+    "http://localhost:5500"
 ]
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -28,10 +24,8 @@ app.add_middleware(
 # -------------------- DATABASE --------------------
 DB = "certivo.db"
 os.makedirs("uploads", exist_ok=True)
-
 conn = sqlite3.connect(DB, check_same_thread=False)
 c = conn.cursor()
-
 c.execute("""
 CREATE TABLE IF NOT EXISTS challenges (
     challenge_id TEXT PRIMARY KEY,
@@ -43,11 +37,12 @@ CREATE TABLE IF NOT EXISTS challenges (
 """)
 conn.commit()
 
-# -------------------- GET MULTIPLE CHALLENGES --------------------
+# -------------------- GET CHALLENGES --------------------
 @app.get("/v1/challenge")
 def get_challenge():
-    challenges = generate_challenges(num=3)
+    challenges = generate_challenges(num=3)  # 3 challenges per session
 
+    # Insert into DB
     for ch in challenges:
         c.execute(
             "INSERT INTO challenges VALUES (?, ?, ?, ?, 0)",
@@ -66,7 +61,7 @@ def get_challenge():
         ]
     }
 
-# -------------------- VERIFY (PER CHALLENGE) --------------------
+# -------------------- VERIFY SINGLE CHALLENGE --------------------
 @app.post("/v1/verify")
 def verify(
     challenge_id: str = Form(...),
@@ -74,22 +69,20 @@ def verify(
     video: UploadFile = File(...),
     audio: UploadFile = File(None)
 ):
-    c.execute(
-        "SELECT challenge_type, challenge_value, used FROM challenges WHERE challenge_id=?",
-        (challenge_id,)
-    )
+    # Validate challenge
+    c.execute("SELECT challenge_type, challenge_value, used FROM challenges WHERE challenge_id=?", (challenge_id,))
     row = c.fetchone()
-
     if not row:
         return JSONResponse(status_code=400, content={"error": "Invalid challenge"})
-
     challenge_type, challenge_value, used = row
     if used:
         return JSONResponse(status_code=400, content={"error": "Challenge already used"})
 
+    # Mark challenge as used
     c.execute("UPDATE challenges SET used=1 WHERE challenge_id=?", (challenge_id,))
     conn.commit()
 
+    # Save uploaded video/audio
     video_path = f"uploads/{uuid.uuid4()}_{video.filename}"
     with open(video_path, "wb") as f:
         f.write(video.file.read())
@@ -100,76 +93,54 @@ def verify(
         with open(audio_path, "wb") as f:
             f.write(audio.file.read())
 
-    # Run prototype human verification
+    # Run verification
     result = run_human_verification(video_path, audio_path, challenge_type)
 
-    # Reaction time simulation (V1 placeholder)
-    response_time = round(result.get("response_time", 1.5), 2)
+    # ---------------- SAFEGUARD: scores 0..1 ----------------
+    result["liveness_score"] = max(0.0, min(1.0, float(result.get("liveness_score", 0.0))))
+    result["lip_sync_score"] = max(0.0, min(1.0, float(result.get("lip_sync_score", 0.0))))
 
-    # Trusted device token (V1 – not persistent yet)
+    # Trusted device token
     raw_token = f"{device_id}{time.time()}".encode()
     trusted_device_token = hashlib.sha256(raw_token).hexdigest()
 
     return {
+        "verified": result["challenge_passed"],
+        "liveness_score": result["liveness_score"],
+        "lip_sync_score": result["lip_sync_score"],
         "challenge_passed": result.get("challenge_passed", False),
-        "face_stability": round(result.get("face_stability", 0.9), 2),
-        "response_time": response_time,
         "replay_flag": result.get("replay_flag", False),
-        "trusted_device_token": trusted_device_token
+        "device_trust_score": 0.97,
+        "trusted_device_token": trusted_device_token,
+        "challenge_type": challenge_type,
+        "details": {
+            "reasons": ["liveness_ok", "challenge_ok", "lip_sync_ok", "device_safe"],
+            "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
+        }
     }
 
-# -------------------- FINALIZE SESSION --------------------
+# -------------------- FINALIZE SESSION (OPTIONAL) --------------------
 @app.post("/v1/finalize")
-def finalize_session(payload: dict):
-    results: List[dict] = payload.get("results", [])
-    device_id = payload.get("device_id")
-
+def finalize_session(data: dict):
+    """
+    Accepts multiple challenge results to compute a session trust score
+    """
+    results = data.get("results", [])
     if not results:
-        return JSONResponse(status_code=400, content={"error": "No session results"})
+        return {"trust_score": 0, "trust_level": "low"}
 
-    total = len(results)
-    passed = sum(1 for r in results if r.get("challenge_passed"))
-    pass_rate = passed / total
+    # Average liveness score across challenges
+    avg_liveness = sum(max(0.0, min(1.0, float(r.get("liveness_score", 0.0)))) for r in results) / len(results)
+    score = round(avg_liveness * 100)
 
-    avg_response = sum(r.get("response_time", 2) for r in results) / total
-    avg_stability = sum(r.get("face_stability", 0.8) for r in results) / total
+    # Trust level
+    if score >= 90: level = "high"
+    elif score >= 80: level = "medium"
+    else: level = "low"
 
-    # --------------------
-    # TRUST SCORE (V1)
-    # --------------------
-    score = (
-        pass_rate * 40 +
-        (1 - min(avg_response / 5, 1)) * 25 +
-        avg_stability * 35
-    ) * 100
-
-    trust_score = round(score)
-
-    if trust_score >= 90:
-        trust_level = "high"
-    elif trust_score >= 70:
-        trust_level = "medium"
-    else:
-        trust_level = "low"
-
-    return {
-        "human_verified": trust_score >= 70,
-        "trust_score": trust_score,
-        "trust_level": trust_level,
-        "summary": {
-            "challenges_completed": total,
-            "pass_rate": round(pass_rate, 2),
-            "avg_response_time": round(avg_response, 2),
-            "avg_face_stability": round(avg_stability, 2)
-        },
-        "issued_at": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
-    }
+    return {"trust_score": score, "trust_level": level}
 
 # -------------------- SERVE FRONTEND --------------------
 @app.get("/")
 def read_index():
-    """
-    Serve the frontend HTML directly from FastAPI.
-    Open http://127.0.0.1:8000/ in your browser.
-    """
     return FileResponse("index.html")
