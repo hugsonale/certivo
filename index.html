@@ -52,6 +52,11 @@ canvas#overlay {
     width: 0%;
     transition: width 0.8s ease;
 }
+#trustScoreDisplay {
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
 </style>
 </head>
 
@@ -72,6 +77,7 @@ canvas#overlay {
 <div id="verdictScreen">
     <h2 style="color:#22c55e;">✅ HUMAN VERIFIED</h2>
     <p>Trust Confidence</p>
+    <div id="trustScoreDisplay">0%</div>
     <div id="trustBarOuter">
         <div id="trustBar"></div>
     </div>
@@ -94,6 +100,7 @@ let startBtn = document.getElementById("startBtn");
 let verdictScreen = document.getElementById("verdictScreen");
 let trustBar = document.getElementById("trustBar");
 let trustLabel = document.getElementById("trustLabel");
+let trustScoreDisplay = document.getElementById("trustScoreDisplay");
 
 let faceModel;
 let mediaRecorder;
@@ -106,9 +113,8 @@ let verificationCompleted = false;
 let challenges = [];
 let challengeIndex = 0;
 let currentChallenge = null;
-let challengeShownAt = null;
 
-/* 🔐 SESSION RESULTS */
+let challengeShownAt = null;
 let sessionResults = [];
 
 /* ========================
@@ -129,7 +135,6 @@ async function initCamera() {
 async function startFaceCheck() {
     faceCheckInterval = setInterval(async () => {
         if (verificationCompleted) return;
-        if (!faceModel) return;
 
         const predictions = await faceModel.estimateFaces(video);
         overlayCtx.clearRect(0,0,overlay.width,overlay.height);
@@ -148,7 +153,6 @@ async function startFaceCheck() {
         overlayCtx.strokeStyle = "lime";
         overlayCtx.lineWidth = 2;
         overlayCtx.strokeRect(x1,y1,x2-x1,y2-y1);
-
     }, 200);
 }
 
@@ -176,11 +180,6 @@ function loadNextChallenge(){
     challengeShownAt = Date.now();
 
     statusEl.innerText = "🧠 Challenge: " + currentChallenge.instruction;
-
-    if(currentChallenge.challenge_type === "speak_phrase"){
-        statusEl.innerText += " (Please speak)";
-    }
-
     waitForFaceThenRecord();
 }
 
@@ -195,12 +194,11 @@ function startRecording(){
     mediaRecorder.onstop = submitRecording;
 
     mediaRecorder.start();
-
     setTimeout(()=>mediaRecorder.stop(), 3000);
 }
 
 /* ========================
-   SUBMIT CHALLENGE
+   SUBMIT PER CHALLENGE
 ======================== */
 async function submitRecording(){
     const blob = new Blob(recordedChunks,{type:"video/webm"});
@@ -216,11 +214,6 @@ async function submitRecording(){
     });
 
     const result = await res.json();
-
-    // Safe scores
-    result.liveness_score = Math.min(Math.max(result.liveness_score,0),1);
-    result.lip_sync_score = Math.min(Math.max(result.lip_sync_score,0),1);
-
     sessionResults.push(result);
 
     statusEl.innerText = result.challenge_passed
@@ -254,15 +247,12 @@ async function finalizeSession(){
 }
 
 /* ========================
-   VERDICT UI
-======================== */
-/* ========================
-   VERDICT UI (Animated & Capped)
+   VERDICT UI (Animated + Count-up)
 ======================== */
 function showVerdict(score, level){
     verdictScreen.style.display = "block";
 
-    // Clamp score to 0-100%
+    // Clamp score
     score = Math.min(Math.max(score,0),100);
 
     let color = "#22c55e"; // high trust
@@ -271,9 +261,10 @@ function showVerdict(score, level){
 
     trustBar.style.background = color;
 
-    // Smooth animation using setInterval
+    // Animate bar & count-up number
     let current = 0;
-    const step = score / 50; // adjust speed (50 steps)
+    const steps = 50;
+    const step = score / steps;
     const interval = setInterval(()=>{
         current += step;
         if(current >= score){
@@ -281,6 +272,7 @@ function showVerdict(score, level){
             clearInterval(interval);
         }
         trustBar.style.width = current + "%";
+        trustScoreDisplay.innerText = Math.round(current) + "%";
         trustLabel.innerText = `${level.toUpperCase()} TRUST (${Math.round(current)}%)`;
     }, 15);
 }
@@ -308,5 +300,6 @@ startBtn.onclick = async ()=>{
     startFaceCheck();
 };
 </script>
+
 </body>
 </html>
