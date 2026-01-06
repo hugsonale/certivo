@@ -4,7 +4,6 @@ from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 from typing import List
 import sqlite3, uuid, time, hashlib, os
-import numpy as np
 
 from challenge_engine import generate_challenges
 from human_verification import run_human_verification
@@ -106,64 +105,40 @@ def verify(
         with open(audio_path, "wb") as f:
             f.write(audio.file.read())
 
-    # Record timestamp when challenge verification starts
-    challenge_start_ts = time.time()
-
     result = run_human_verification(video_path, audio_path, challenge_type)
 
-    # Record timestamp when challenge verification ends
-    challenge_end_ts = time.time()
-    reaction_time = challenge_end_ts - challenge_start_ts  # in seconds
-
-    # Metric normalization
-    normalized_liveness = max(0.0, min(1.0, result.get("liveness_score", 0)))
-    normalized_lip_sync = max(0.0, min(1.0, result.get("lip_sync_score", 0)))
-    normalized_reaction_time = min(reaction_time / 10.0, 1.0)  # assuming 10s max for full score
-
-    # Facial stability placeholder (simulate for now)
-    facial_stability = np.random.uniform(0.7, 1.0)  # 0–1 scale
-
-    # Blink count placeholder (simulate for now)
-    blink_count = np.random.randint(1, 5)
-
-    # Generate a trusted device token
     raw_token = f"{device_id}{time.time()}".encode()
     trusted_device_token = hashlib.sha256(raw_token).hexdigest()
 
-    # Construct session result with metrics
-    session_result = {
-        "challenge_id": challenge_id,
+    return {
         "challenge_passed": result["challenge_passed"],
-        "liveness_score": normalized_liveness,
-        "lip_sync_score": normalized_lip_sync,
-        "reaction_time": normalized_reaction_time,
-        "facial_stability": facial_stability,
-        "blink_count": blink_count,
-        "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()),
+        "liveness_score": result.get("liveness_score", 0),
+        "lip_sync_score": result.get("lip_sync_score", 0),
+        "reaction_time": result.get("reaction_time", 1.0),
+        "facial_stability": result.get("facial_stability", 1.0),
+        "blink_count": result.get("blink_count", 0),
+        "replay_flag": result.get("replay_flag", False),
         "trusted_device_token": trusted_device_token,
-        "challenge_type": challenge_type
+        "challenge_type": challenge_type,
+        "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
     }
 
-    # Return challenge verification result with metrics
-    return session_result
-
-# -------------------- FINALIZE SESSION --------------------
-class ChallengeResult(BaseModel):
+# -------------------- FINALIZE SESSION (V2 METRICS) --------------------
+class ChallengeResultV2(BaseModel):
     liveness_score: float
     lip_sync_score: float
-    reaction_time: float
-    facial_stability: float
-    blink_count: int
     challenge_passed: bool
+    reaction_time: float          # normalized 0-1
+    facial_stability: float       # normalized 0-1
+    blink_count: int
 
-class FinalizeRequest(BaseModel):
-    results: List[ChallengeResult]
+class FinalizeRequestV2(BaseModel):
+    results: List[ChallengeResultV2]
     device_id: str
 
 @app.post("/v1/finalize")
-def finalize_session(payload: FinalizeRequest):
+def finalize_session_v2(payload: FinalizeRequestV2):
     results = payload.results
-
     if not results:
         return {
             "trust_score": 0,
@@ -171,46 +146,63 @@ def finalize_session(payload: FinalizeRequest):
             "reason": "no_results"
         }
 
-    # ---------------- AGGREGATE METRICS ----------------
-    liveness_scores = [max(0.0, min(1.0, r.liveness_score)) for r in results]
-    lip_sync_scores = [max(0.0, min(1.0, r.lip_sync_score)) for r in results]
-    reaction_times = [max(0.0, min(1.0, r.reaction_time)) for r in results]
-    stability_scores = [max(0.0, min(1.0, r.facial_stability)) for r in results]
-    blink_counts = [r.blink_count for r in results]
+    # -------------------- NORMALIZE METRICS --------------------
+    trust_scores = []
+    failed_challenges = 0
 
-    failed = sum(1 for r in results if not r.challenge_passed)
+    for r in results:
+        # Clamp scores between 0 and 1
+        liveness = max(0, min(1, r.liveness_score))
+        lip_sync = max(0, min(1, r.lip_sync_score))
+        reaction_time = max(0, min(1, r.reaction_time))
+        stability = max(0, min(1, r.facial_stability))
 
-    # Weighted aggregation (normalize 0–1, then scale to 0–100)
-    aggregated_score = (
-        np.mean(liveness_scores) * 0.4 +
-        np.mean(lip_sync_scores) * 0.3 +
-        np.mean(stability_scores) * 0.2 +
-        np.mean([1 - rt for rt in reaction_times]) * 0.1
-    ) * 100
+        # Blink penalty: more than 5 blinks per challenge reduces trust slightly
+        blink_penalty = 0
+        if r.blink_count > 5:
+            blink_penalty = min((r.blink_count - 5) * 0.02, 0.2)  # max 0.2 reduction
 
-    # Soft penalties
-    if failed == 1:
-        aggregated_score -= 10
-    elif failed == 2:
-        aggregated_score -= 25
-    elif failed >= 3:
-        aggregated_score -= 40
+        # Aggregate per-challenge trust (weights adjustable)
+        challenge_trust = (
+            liveness * 0.35 +
+            lip_sync * 0.25 +
+            reaction_time * 0.15 +
+            stability * 0.15 -
+            blink_penalty
+        )
 
-    # Clamp
-    aggregated_score = max(30, min(100, aggregated_score))
-    aggregated_score = round(aggregated_score, 2)
+        trust_scores.append(challenge_trust)
 
-    if aggregated_score >= 85:
+        if not r.challenge_passed:
+            failed_challenges += 1
+
+    # -------------------- AGGREGATE ACROSS SESSION --------------------
+    base_trust = sum(trust_scores) / len(trust_scores)  # 0-1
+    trust_score = base_trust * 100
+
+    # -------------------- SOFT PENALTIES FOR FAILED CHALLENGES --------------------
+    if failed_challenges == 1:
+        trust_score -= 10
+    elif failed_challenges == 2:
+        trust_score -= 25
+    elif failed_challenges >= 3:
+        trust_score -= 40
+
+    # Clamp final score
+    trust_score = max(30, min(100, round(trust_score, 2)))
+
+    # -------------------- TRUST LEVEL --------------------
+    if trust_score >= 85:
         level = "high"
-    elif aggregated_score >= 60:
+    elif trust_score >= 60:
         level = "medium"
     else:
         level = "low"
 
     return {
-        "trust_score": aggregated_score,
+        "trust_score": trust_score,
         "trust_level": level,
-        "failed_challenges": failed,
+        "failed_challenges": failed_challenges,
         "total_challenges": len(results),
         "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
     }

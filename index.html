@@ -81,13 +81,14 @@ canvas#overlay {
 
 <!-- FINAL VERDICT -->
 <div id="verdictScreen">
-    <h2 id="verdictTitle">✅ HUMAN VERIFIED</h2>
+    <h2 style="color:#22c55e;">✅ HUMAN VERIFIED</h2>
     <p>Trust Confidence</p>
     <div id="trustBarOuter">
         <div id="trustBar"></div>
     </div>
     <p id="trustLabel" style="margin-top:8px;font-weight:bold;"></p>
 </div>
+
 
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/facemesh"></script>
@@ -105,7 +106,6 @@ let startBtn = document.getElementById("startBtn");
 let verdictScreen = document.getElementById("verdictScreen");
 let trustBar = document.getElementById("trustBar");
 let trustLabel = document.getElementById("trustLabel");
-let verdictTitle = document.getElementById("verdictTitle");
 
 let challengeProgress = document.getElementById("challengeProgress");
 let challengeTimer = document.getElementById("challengeTimer");
@@ -122,11 +122,12 @@ let challenges = [];
 let challengeIndex = 0;
 let currentChallenge = null;
 
-let challengeDuration = 15;
+let challengeShownAt = null;
+let challengeDuration = 15; // seconds per challenge
 let countdownInterval;
 
 /* 🔐 SESSION RESULTS */
-let sessionResults = [];
+let sessionResults = []; // now stores V2 metrics for each challenge
 
 /* ========================
    CAMERA
@@ -143,6 +144,9 @@ async function initCamera() {
 /* ========================
    FACE CHECK
 ======================== */
+let lastHeadPosition = null;
+let blinkCount = 0;
+
 async function startFaceCheck() {
     faceCheckInterval = setInterval(async () => {
         if (verificationCompleted) return;
@@ -157,12 +161,44 @@ async function startFaceCheck() {
         }
 
         canRecord = true;
-        const [x1,y1] = predictions[0].topLeft;
-        const [x2,y2] = predictions[0].bottomRight;
+        const face = predictions[0];
+        const [x1,y1] = face.topLeft;
+        const [x2,y2] = face.bottomRight;
 
+        // Draw rectangle
         overlayCtx.strokeStyle = "lime";
         overlayCtx.lineWidth = 2;
         overlayCtx.strokeRect(x1,y1,x2-x1,y2-y1);
+
+        // ====================
+        // BLINK & STABILITY DETECTION
+        // ====================
+        const currentHead = {x: (x1+x2)/2, y: (y1+y2)/2};
+        if(lastHeadPosition){
+            const dx = currentHead.x - lastHeadPosition.x;
+            const dy = currentHead.y - lastHeadPosition.y;
+            const movement = Math.sqrt(dx*dx + dy*dy);
+
+            // Small movement = stable
+            lastHeadPosition.stability = lastHeadPosition.stability ? lastHeadPosition.stability + movement : movement;
+
+            // Simple blink detection using eye height (vertical size)
+            const eyeHeight = y2 - y1;
+            if(!lastHeadPosition.prevEyeHeight) lastHeadPosition.prevEyeHeight = eyeHeight;
+
+            if(eyeHeight < lastHeadPosition.prevEyeHeight*0.5){
+                blinkCount += 1;
+            }
+            lastHeadPosition.prevEyeHeight = eyeHeight;
+        } else {
+            lastHeadPosition = currentHead;
+            lastHeadPosition.stability = 0;
+            lastHeadPosition.prevEyeHeight = y2 - y1;
+        }
+
+        lastHeadPosition.x = currentHead.x;
+        lastHeadPosition.y = currentHead.y;
+
     }, 200);
 }
 
@@ -190,10 +226,17 @@ function loadNextChallenge(){
     }
 
     currentChallenge = challenges[challengeIndex++];
+    challengeShownAt = Date.now();
+
+    // Reset per-challenge metrics
+    blinkCount = 0;
+    lastHeadPosition = null;
+    currentChallenge.reactionStart = Date.now();
+
     challengeProgress.innerText = `Challenge ${challengeIndex} of ${challenges.length}`;
     statusEl.innerText = "🧠 Challenge: " + currentChallenge.instruction;
-
     startCountdown(challengeDuration);
+
     waitForFaceThenRecord();
 }
 
@@ -221,17 +264,17 @@ function startCountdown(seconds){
 ======================== */
 function startRecording(){
     recordedChunks = [];
-    mediaRecorder = new MediaRecorder(video.srcObject);
 
+    mediaRecorder = new MediaRecorder(video.srcObject);
     mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
     mediaRecorder.onstop = submitRecording;
 
     mediaRecorder.start();
-    setTimeout(()=>mediaRecorder.stop(), 3000);
+    setTimeout(()=>mediaRecorder.stop(), 3000); // record 3s
 }
 
 /* ========================
-   SUBMIT
+   SUBMIT PER CHALLENGE
 ======================== */
 async function submitRecording(){
     clearInterval(countdownInterval);
@@ -249,11 +292,24 @@ async function submitRecording(){
     });
 
     const result = await res.json();
-    sessionResults.push(result);
 
-    statusEl.innerText = result.challenge_passed
-        ? "✅ Challenge passed"
-        : "❌ Challenge failed";
+    // Calculate reaction time
+    const reactionTime = Math.min(1, (Date.now() - challengeShownAt)/10000); // normalize to 0-1, 10s max
+
+    // Facial stability normalization
+    const stability = lastHeadPosition?.stability ? Math.min(1, 1/(1 + lastHeadPosition.stability/50)) : 1; // simple 0-1
+
+    // Store in sessionResults
+    sessionResults.push({
+        challenge_passed: result.challenge_passed,
+        liveness_score: result.liveness_score,
+        lip_sync_score: result.lip_sync_score,
+        reaction_time: reactionTime,
+        facial_stability: stability,
+        blink_count: blinkCount
+    });
+
+    statusEl.innerText = result.challenge_passed ? "✅ Challenge passed" : "❌ Challenge failed";
 
     setTimeout(loadNextChallenge, 1500);
 }
@@ -264,7 +320,7 @@ async function submitRecording(){
 async function finalizeSession(){
     statusEl.innerText = "🔐 Calculating trust score...";
 
-    const res = await fetch("http://127.0.0.1:8000/v1/finalize",{
+    const res = await fetch("http://127.0.0.1:8000/v1/finalize", {
         method:"POST",
         headers: {"Content-Type":"application/json"},
         body: JSON.stringify({
@@ -281,20 +337,14 @@ async function finalizeSession(){
 }
 
 /* ========================
-   VERDICT UI (FIXED)
+   VERDICT UI
 ======================== */
 function showVerdict(score, level){
     verdictScreen.style.display = "block";
 
-    // 🔒 HARD SAFETY CLAMP
-    score = Math.max(0, Math.min(score, 100));
-
     let color = "#22c55e";
     if(level === "medium") color = "#facc15";
     if(level === "low") color = "#ef4444";
-
-    verdictTitle.innerText =
-        level === "low" ? "⚠️ VERIFICATION COMPLETE" : "✅ HUMAN VERIFIED";
 
     trustBar.style.background = color;
     trustBar.style.width = score + "%";
@@ -324,6 +374,7 @@ startBtn.onclick = async ()=>{
     startFaceCheck();
 };
 </script>
+
 
 </body>
 </html>
