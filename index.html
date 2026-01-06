@@ -315,6 +315,66 @@ async function submitRecording(){
 }
 
 /* ========================
+   RECORD PER-CHALLENGE METRICS
+======================== */
+function startRecording(){
+    recordedChunks = [];
+    const startedAt = Date.now();
+
+    mediaRecorder = new MediaRecorder(video.srcObject);
+    mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
+
+    mediaRecorder.onstop = async () => {
+        const completedAt = Date.now();
+        const reactionTime = (completedAt - challengeShownAt) / 1000; // seconds
+
+        const blob = new Blob(recordedChunks,{type:"video/webm"});
+        const formData = new FormData();
+        formData.append("video", blob);
+        formData.append("challenge_id", currentChallenge.challenge_id);
+        formData.append("device_id", "web");
+
+        const res = await fetch("http://127.0.0.1:8000/v1/verify",{
+            method:"POST",
+            body: formData
+        });
+
+        const result = await res.json();
+
+        // --------------------
+        // Blink count & stability
+        // For now we approximate with motion data captured in overlay (frontend)
+        // We'll use simple random / placeholder if not available
+        const blinkCount = Math.min(Math.abs(result.liveness_score*10), 5); // placeholder
+        const stabilityScore = 1 - Math.min(Math.abs(result.liveness_score-0.8),1); // placeholder
+
+        // Store metrics in sessionResults
+        sessionResults.push({
+            challenge_id: currentChallenge.challenge_id,
+            challenge_type: currentChallenge.challenge_type,
+            challenge_passed: result.challenge_passed,
+            liveness_score: result.liveness_score,
+            lip_sync_score: result.lip_sync_score,
+            reaction_time: reactionTime,
+            blink_count: blinkCount,
+            stability_score: stabilityScore,
+            shown_at: challengeShownAt,
+            completed_at: completedAt
+        });
+
+        statusEl.innerText = result.challenge_passed
+            ? "✅ Challenge passed"
+            : "❌ Challenge failed";
+
+        setTimeout(loadNextChallenge, 1500);
+    };
+
+    mediaRecorder.start();
+    setTimeout(()=>mediaRecorder.stop(), 3000);
+}
+
+
+/* ========================
    FINALIZE SESSION
 ======================== */
 async function finalizeSession(){

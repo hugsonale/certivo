@@ -123,6 +123,64 @@ def verify(
         "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
     }
 
+
+
+@app.post("/v1/finalize")
+def finalize_session(payload: dict):
+    """
+    Aggregates all session metrics (liveness, lip sync, reaction, blink, stability)
+    and computes a normalized trust score (0-100)
+    """
+    results = payload.get("results", [])
+    device_id = payload.get("device_id", "web")
+
+    if not results:
+        return {"trust_score": 0, "trust_level": "low", "details": "No challenge results"}
+
+    # Normalize and combine metrics
+    combined_scores = []
+    for r in results:
+        # Normalize each metric
+        liveness = max(0, min(1, r.get("liveness_score", 0)))
+        lip_sync = max(0, min(1, r.get("lip_sync_score", 0)))
+        stability = max(0, min(1, r.get("stability_score", 0)))
+        reaction = 1 / (1 + r.get("reaction_time", 1))  # faster = closer to 1
+        blink = max(0, min(1, r.get("blink_count", 0)/5)) # assume max 5 blinks per challenge
+
+        # Weighted combination
+        trust = (
+            0.3*liveness +
+            0.2*lip_sync +
+            0.2*stability +
+            0.2*reaction +
+            0.1*blink
+        )
+        combined_scores.append(trust)
+
+    # Aggregate session
+    aggregated_score = sum(combined_scores) / len(combined_scores)
+    aggregated_score *= 100
+    aggregated_score = round(max(0, min(aggregated_score, 100)), 2)
+
+    # Determine trust level
+    if aggregated_score >= 85:
+        trust_level = "high"
+    elif aggregated_score >= 60:
+        trust_level = "medium"
+    else:
+        trust_level = "low"
+
+    return {
+        "trust_score": aggregated_score,
+        "trust_level": trust_level,
+        "device_id": device_id,
+        "total_challenges": len(results),
+        "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
+    }
+
+
+
+
 # -------------------- FINALIZE SESSION (V2 METRICS) --------------------
 class ChallengeResultV2(BaseModel):
     liveness_score: float
