@@ -1,9 +1,9 @@
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
-from typing import List
-import sqlite3, uuid, time, hashlib, os
+from typing import List, Optional
+import time, uuid, hashlib, os
 
 from challenge_engine import generate_challenges
 from human_verification import run_human_verification
@@ -25,40 +25,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# -------------------- DATABASE --------------------
-DB = "certivo.db"
+# -------------------- UPLOADS --------------------
 os.makedirs("uploads", exist_ok=True)
 
-conn = sqlite3.connect(DB, check_same_thread=False)
-c = conn.cursor()
-
-c.execute("""
-CREATE TABLE IF NOT EXISTS challenges (
-    challenge_id TEXT PRIMARY KEY,
-    challenge_type TEXT,
-    challenge_value TEXT,
-    created_at REAL,
-    used INTEGER DEFAULT 0
-)
-""")
-conn.commit()
+# -------------------- IN-MEMORY SESSION LOG --------------------
+# Stores all sessions with full per-challenge metrics
+session_log = []
 
 # -------------------- GET CHALLENGES --------------------
 @app.get("/v1/challenge")
 def get_challenge():
     challenges = generate_challenges(num=3)
 
+    # Add creation timestamp
     for ch in challenges:
-        c.execute(
-            "INSERT INTO challenges VALUES (?, ?, ?, ?, 0)",
-            (
-                ch["challenge_id"],
-                ch["challenge_type"],
-                ch["challenge_value"],
-                time.time()
-            )
-        )
-    conn.commit()
+        ch["created_at"] = time.time()
 
     return {
         "challenges": [
@@ -71,7 +52,7 @@ def get_challenge():
         ]
     }
 
-# -------------------- VERIFY CHALLENGE --------------------
+# -------------------- VERIFY --------------------
 @app.post("/v1/verify")
 def verify(
     challenge_id: str = Form(...),
@@ -79,22 +60,7 @@ def verify(
     video: UploadFile = File(...),
     audio: UploadFile = File(None)
 ):
-    c.execute(
-        "SELECT challenge_type, used FROM challenges WHERE challenge_id=?",
-        (challenge_id,)
-    )
-    row = c.fetchone()
-
-    if not row:
-        return JSONResponse(status_code=400, content={"error": "Invalid challenge"})
-
-    challenge_type, used = row
-    if used:
-        return JSONResponse(status_code=400, content={"error": "Challenge already used"})
-
-    c.execute("UPDATE challenges SET used=1 WHERE challenge_id=?", (challenge_id,))
-    conn.commit()
-
+    # Save video/audio
     video_path = f"uploads/{uuid.uuid4()}_{video.filename}"
     with open(video_path, "wb") as f:
         f.write(video.file.read())
@@ -105,7 +71,7 @@ def verify(
         with open(audio_path, "wb") as f:
             f.write(audio.file.read())
 
-    result = run_human_verification(video_path, audio_path, challenge_type)
+    result = run_human_verification(video_path, audio_path, "generic")
 
     raw_token = f"{device_id}{time.time()}".encode()
     trusted_device_token = hashlib.sha256(raw_token).hexdigest()
@@ -119,69 +85,10 @@ def verify(
         "blink_count": result.get("blink_count", 0),
         "replay_flag": result.get("replay_flag", False),
         "trusted_device_token": trusted_device_token,
-        "challenge_type": challenge_type,
         "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
     }
 
-
-
-@app.post("/v1/finalize")
-def finalize_session(payload: dict):
-    """
-    Aggregates all session metrics (liveness, lip sync, reaction, blink, stability)
-    and computes a normalized trust score (0-100)
-    """
-    results = payload.get("results", [])
-    device_id = payload.get("device_id", "web")
-
-    if not results:
-        return {"trust_score": 0, "trust_level": "low", "details": "No challenge results"}
-
-    # Normalize and combine metrics
-    combined_scores = []
-    for r in results:
-        # Normalize each metric
-        liveness = max(0, min(1, r.get("liveness_score", 0)))
-        lip_sync = max(0, min(1, r.get("lip_sync_score", 0)))
-        stability = max(0, min(1, r.get("stability_score", 0)))
-        reaction = 1 / (1 + r.get("reaction_time", 1))  # faster = closer to 1
-        blink = max(0, min(1, r.get("blink_count", 0)/5)) # assume max 5 blinks per challenge
-
-        # Weighted combination
-        trust = (
-            0.3*liveness +
-            0.2*lip_sync +
-            0.2*stability +
-            0.2*reaction +
-            0.1*blink
-        )
-        combined_scores.append(trust)
-
-    # Aggregate session
-    aggregated_score = sum(combined_scores) / len(combined_scores)
-    aggregated_score *= 100
-    aggregated_score = round(max(0, min(aggregated_score, 100)), 2)
-
-    # Determine trust level
-    if aggregated_score >= 85:
-        trust_level = "high"
-    elif aggregated_score >= 60:
-        trust_level = "medium"
-    else:
-        trust_level = "low"
-
-    return {
-        "trust_score": aggregated_score,
-        "trust_level": trust_level,
-        "device_id": device_id,
-        "total_challenges": len(results),
-        "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
-    }
-
-
-
-
-# -------------------- FINALIZE SESSION (V2 METRICS) --------------------
+# -------------------- FINALIZE SESSION --------------------
 class ChallengeResultV2(BaseModel):
     liveness_score: float
     lip_sync_score: float
@@ -197,6 +104,8 @@ class FinalizeRequestV2(BaseModel):
 @app.post("/v1/finalize")
 def finalize_session_v2(payload: FinalizeRequestV2):
     results = payload.results
+    device_id = payload.device_id
+
     if not results:
         return {
             "trust_score": 0,
@@ -204,23 +113,22 @@ def finalize_session_v2(payload: FinalizeRequestV2):
             "reason": "no_results"
         }
 
-    # -------------------- NORMALIZE METRICS --------------------
+    session_id = str(uuid.uuid4())  # unique session ID
+
+    # -------------------- NORMALIZE METRICS & CALCULATE TRUST --------------------
     trust_scores = []
     failed_challenges = 0
 
     for r in results:
-        # Clamp scores between 0 and 1
         liveness = max(0, min(1, r.liveness_score))
         lip_sync = max(0, min(1, r.lip_sync_score))
         reaction_time = max(0, min(1, r.reaction_time))
         stability = max(0, min(1, r.facial_stability))
 
-        # Blink penalty: more than 5 blinks per challenge reduces trust slightly
         blink_penalty = 0
         if r.blink_count > 5:
-            blink_penalty = min((r.blink_count - 5) * 0.02, 0.2)  # max 0.2 reduction
+            blink_penalty = min((r.blink_count - 5) * 0.02, 0.2)
 
-        # Aggregate per-challenge trust (weights adjustable)
         challenge_trust = (
             liveness * 0.35 +
             lip_sync * 0.25 +
@@ -234,11 +142,9 @@ def finalize_session_v2(payload: FinalizeRequestV2):
         if not r.challenge_passed:
             failed_challenges += 1
 
-    # -------------------- AGGREGATE ACROSS SESSION --------------------
-    base_trust = sum(trust_scores) / len(trust_scores)  # 0-1
+    base_trust = sum(trust_scores) / len(trust_scores)
     trust_score = base_trust * 100
 
-    # -------------------- SOFT PENALTIES FOR FAILED CHALLENGES --------------------
     if failed_challenges == 1:
         trust_score -= 10
     elif failed_challenges == 2:
@@ -246,10 +152,8 @@ def finalize_session_v2(payload: FinalizeRequestV2):
     elif failed_challenges >= 3:
         trust_score -= 40
 
-    # Clamp final score
     trust_score = max(30, min(100, round(trust_score, 2)))
 
-    # -------------------- TRUST LEVEL --------------------
     if trust_score >= 85:
         level = "high"
     elif trust_score >= 60:
@@ -257,13 +161,45 @@ def finalize_session_v2(payload: FinalizeRequestV2):
     else:
         level = "low"
 
-    return {
+    timestamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
+
+    # -------------------- STORE SESSION IN MEMORY --------------------
+    session_log.append({
+        "session_id": session_id,
+        "device_id": device_id,
+        "results": [r.dict() for r in results],
         "trust_score": trust_score,
         "trust_level": level,
         "failed_challenges": failed_challenges,
         "total_challenges": len(results),
-        "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
+        "timestamp_utc": timestamp
+    })
+
+    return {
+        "trust_score": trust_score,
+        "trust_level": level,
+        "session_id": session_id,
+        "failed_challenges": failed_challenges,
+        "total_challenges": len(results),
+        "timestamp_utc": timestamp
     }
+
+# -------------------- SESSION LOG VIEW / FILTER --------------------
+@app.get("/v1/sessions")
+def get_sessions(
+    device_id: Optional[str] = Query(None),
+    after_ts: Optional[float] = Query(None)
+):
+    """
+    Return session log. Can filter by device_id or sessions after a given timestamp.
+    """
+    filtered = session_log
+    if device_id:
+        filtered = [s for s in filtered if s["device_id"] == device_id]
+    if after_ts:
+        filtered = [s for s in filtered if time.mktime(time.strptime(s["timestamp_utc"], "%Y-%m-%dT%H:%M:%S")) > after_ts]
+
+    return {"sessions": filtered}
 
 # -------------------- SERVE FRONTEND --------------------
 @app.get("/")
