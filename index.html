@@ -52,6 +52,15 @@ canvas#overlay {
     width: 0%;
     transition: width 0.8s ease;
 }
+#challengeProgress {
+    margin-top: 10px;
+    font-weight: bold;
+}
+#challengeTimer {
+    margin-top: 5px;
+    color: #facc15;
+    font-weight: bold;
+}
 </style>
 </head>
 
@@ -67,10 +76,12 @@ canvas#overlay {
 <br>
 <button id="startBtn">Start Verification</button>
 <p id="status">Idle</p>
+<p id="challengeProgress"></p>
+<p id="challengeTimer"></p>
 
 <!-- FINAL VERDICT -->
 <div id="verdictScreen">
-    <h2 style="color:#22c55e;">✅ HUMAN VERIFIED</h2>
+    <h2 id="verdictTitle">✅ HUMAN VERIFIED</h2>
     <p>Trust Confidence</p>
     <div id="trustBarOuter">
         <div id="trustBar"></div>
@@ -94,6 +105,10 @@ let startBtn = document.getElementById("startBtn");
 let verdictScreen = document.getElementById("verdictScreen");
 let trustBar = document.getElementById("trustBar");
 let trustLabel = document.getElementById("trustLabel");
+let verdictTitle = document.getElementById("verdictTitle");
+
+let challengeProgress = document.getElementById("challengeProgress");
+let challengeTimer = document.getElementById("challengeTimer");
 
 let faceModel;
 let mediaRecorder;
@@ -107,7 +122,10 @@ let challenges = [];
 let challengeIndex = 0;
 let currentChallenge = null;
 
-let challengeShownAt = null;
+let challengeDuration = 15;
+let countdownInterval;
+
+/* 🔐 SESSION RESULTS */
 let sessionResults = [];
 
 /* ========================
@@ -139,9 +157,8 @@ async function startFaceCheck() {
         }
 
         canRecord = true;
-        const face = predictions[0];
-        const [x1,y1] = face.topLeft;
-        const [x2,y2] = face.bottomRight;
+        const [x1,y1] = predictions[0].topLeft;
+        const [x2,y2] = predictions[0].bottomRight;
 
         overlayCtx.strokeStyle = "lime";
         overlayCtx.lineWidth = 2;
@@ -163,6 +180,9 @@ async function loadChallenges(){
     loadNextChallenge();
 }
 
+/* ========================
+   LOAD NEXT CHALLENGE
+======================== */
 function loadNextChallenge(){
     if(challengeIndex >= challenges.length){
         finalizeSession();
@@ -170,10 +190,30 @@ function loadNextChallenge(){
     }
 
     currentChallenge = challenges[challengeIndex++];
-    challengeShownAt = Date.now();
-
+    challengeProgress.innerText = `Challenge ${challengeIndex} of ${challenges.length}`;
     statusEl.innerText = "🧠 Challenge: " + currentChallenge.instruction;
+
+    startCountdown(challengeDuration);
     waitForFaceThenRecord();
+}
+
+/* ========================
+   COUNTDOWN TIMER
+======================== */
+function startCountdown(seconds){
+    clearInterval(countdownInterval);
+    let remaining = seconds;
+    challengeTimer.innerText = `Time left: ${remaining}s`;
+
+    countdownInterval = setInterval(()=>{
+        remaining--;
+        if(remaining <= 0){
+            clearInterval(countdownInterval);
+            challengeTimer.innerText = "⏰ Time up!";
+        } else {
+            challengeTimer.innerText = `Time left: ${remaining}s`;
+        }
+    }, 1000);
 }
 
 /* ========================
@@ -181,8 +221,8 @@ function loadNextChallenge(){
 ======================== */
 function startRecording(){
     recordedChunks = [];
-
     mediaRecorder = new MediaRecorder(video.srcObject);
+
     mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
     mediaRecorder.onstop = submitRecording;
 
@@ -191,9 +231,11 @@ function startRecording(){
 }
 
 /* ========================
-   SUBMIT PER CHALLENGE
+   SUBMIT
 ======================== */
 async function submitRecording(){
+    clearInterval(countdownInterval);
+
     const blob = new Blob(recordedChunks,{type:"video/webm"});
     const formData = new FormData();
 
@@ -207,7 +249,6 @@ async function submitRecording(){
     });
 
     const result = await res.json();
-
     sessionResults.push(result);
 
     statusEl.innerText = result.challenge_passed
@@ -233,7 +274,6 @@ async function finalizeSession(){
     });
 
     const finalResult = await res.json();
-
     showVerdict(finalResult.trust_score, finalResult.trust_level);
 
     verificationCompleted = true;
@@ -241,30 +281,24 @@ async function finalizeSession(){
 }
 
 /* ========================
-   VERDICT UI WITH ANIMATION
+   VERDICT UI (FIXED)
 ======================== */
 function showVerdict(score, level){
     verdictScreen.style.display = "block";
 
-    let color = "#22c55e"; // High trust
+    // 🔒 HARD SAFETY CLAMP
+    score = Math.max(0, Math.min(score, 100));
+
+    let color = "#22c55e";
     if(level === "medium") color = "#facc15";
     if(level === "low") color = "#ef4444";
 
-    trustBar.style.background = color;
-    trustLabel.innerText = `${level.toUpperCase()} TRUST (0%)`;
+    verdictTitle.innerText =
+        level === "low" ? "⚠️ VERIFICATION COMPLETE" : "✅ HUMAN VERIFIED";
 
-    // Animate percentage
-    let current = 0;
-    const step = Math.max(Math.round(score / 50), 1); // adjust speed
-    const interval = setInterval(() => {
-        current += step;
-        if(current >= score){
-            current = score;
-            clearInterval(interval);
-        }
-        trustBar.style.width = current + "%";
-        trustLabel.innerText = `${level.toUpperCase()} TRUST (${current}%)`;
-    }, 20);
+    trustBar.style.background = color;
+    trustBar.style.width = score + "%";
+    trustLabel.innerText = `${level.toUpperCase()} TRUST (${score}%)`;
 }
 
 /* ========================
