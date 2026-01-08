@@ -187,7 +187,15 @@ let challengeDuration = 15; // seconds per challenge
 let countdownInterval;
 
 /* 🔐 SESSION RESULTS */
-let sessionResults = []; // stores V2 metrics for each challenge
+let sessionResults = []; // V2 metrics for each challenge
+
+/* DEVICE ID & USER AGENT */
+let deviceId = localStorage.getItem("certivo_device_id");
+if(!deviceId){
+    deviceId = crypto.randomUUID();
+    localStorage.setItem("certivo_device_id", deviceId);
+}
+let userAgent = navigator.userAgent;
 
 /* ========================
    CAMERA
@@ -225,24 +233,17 @@ async function startFaceCheck() {
         const [x1,y1] = face.topLeft;
         const [x2,y2] = face.bottomRight;
 
-        // Draw rectangle
         overlayCtx.strokeStyle = "lime";
         overlayCtx.lineWidth = 2;
         overlayCtx.strokeRect(x1,y1,x2-x1,y2-y1);
 
-        // ====================
-        // BLINK & STABILITY DETECTION
-        // ====================
         const currentHead = {x: (x1+x2)/2, y: (y1+y2)/2};
         if(lastHeadPosition){
             const dx = currentHead.x - lastHeadPosition.x;
             const dy = currentHead.y - lastHeadPosition.y;
             const movement = Math.sqrt(dx*dx + dy*dy);
-
-            // Small movement = stable
             lastHeadPosition.stability = lastHeadPosition.stability ? lastHeadPosition.stability + movement : movement;
 
-            // Simple blink detection using eye height (vertical size)
             const eyeHeight = y2 - y1;
             if(!lastHeadPosition.prevEyeHeight) lastHeadPosition.prevEyeHeight = eyeHeight;
 
@@ -263,24 +264,25 @@ async function startFaceCheck() {
 }
 
 /* ========================
-   LOAD CHALLENGES
+   LOAD CHALLENGES WITH TRUSTED DEVICE CHECK
 ======================== */
 async function loadChallenges(){
-    const res = await fetch(`http://127.0.0.1:8000/v1/challenge?device_id=web&user_agent=${navigator.userAgent}`);
+    const res = await fetch(`http://127.0.0.1:8000/v1/challenge?device_id=${deviceId}&user_agent=${encodeURIComponent(userAgent)}`);
     const data = await res.json();
 
-    challenges = data.challenges || [];
+    // If server says device is trusted, skip extra challenges
+    if(data.trusted_device){
+        challenges = data.challenges.slice(0,1); // only first challenge
+        statusEl.innerText = "⚡ Trusted device detected: skipping extra challenges";
+    } else {
+        challenges = data.challenges;
+    }
+
     challengeIndex = 0;
     sessionResults = [];
 
-    if(challenges.length === 0){
-        statusEl.innerText = "⚠️ No challenges available, retrying...";
-        return;
-    }
-
     loadNextChallenge();
 }
-
 
 /* ========================
    LOAD NEXT CHALLENGE
@@ -294,7 +296,6 @@ function loadNextChallenge(){
     currentChallenge = challenges[challengeIndex++];
     challengeShownAt = Date.now();
 
-    // Reset per-challenge metrics
     blinkCount = 0;
     lastHeadPosition = null;
     currentChallenge.reactionStart = Date.now();
@@ -326,7 +327,7 @@ function startCountdown(seconds){
 }
 
 /* ========================
-   RECORD & SUBMIT
+   RECORD PER-CHALLENGE
 ======================== */
 function startRecording(){
     recordedChunks = [];
@@ -337,13 +338,14 @@ function startRecording(){
 
     mediaRecorder.onstop = async () => {
         const completedAt = Date.now();
-        const reactionTime = Math.min(1, (completedAt - challengeShownAt)/10000); // 0-1
+        const reactionTime = (completedAt - challengeShownAt) / 10000; // normalize 0-1 (max 10s)
 
         const blob = new Blob(recordedChunks,{type:"video/webm"});
         const formData = new FormData();
         formData.append("video", blob);
         formData.append("challenge_id", currentChallenge.challenge_id);
-        formData.append("device_id", "web");
+        formData.append("device_id", deviceId);
+        formData.append("user_agent", userAgent);
 
         const res = await fetch("http://127.0.0.1:8000/v1/verify",{
             method:"POST",
@@ -352,19 +354,16 @@ function startRecording(){
 
         const result = await res.json();
 
-        // Facial stability normalization
-        const stability = lastHeadPosition?.stability ? Math.min(1, 1/(1 + lastHeadPosition.stability/50)) : 1;
-
-        // Store metrics
+        // Store metrics in sessionResults
         sessionResults.push({
             challenge_id: currentChallenge.challenge_id,
-            challenge_type: currentChallenge.challenge_type,
             challenge_passed: result.challenge_passed,
             liveness_score: result.liveness_score,
             lip_sync_score: result.lip_sync_score,
             reaction_time: reactionTime,
-            facial_stability: stability,
+            facial_stability: lastHeadPosition?.stability ? Math.min(1, 1/(1 + lastHeadPosition.stability/50)) : 1,
             blink_count: blinkCount,
+            trusted_device_token: result.trusted_device_token,
             shown_at: challengeShownAt,
             completed_at: completedAt
         });
@@ -375,7 +374,7 @@ function startRecording(){
     };
 
     mediaRecorder.start();
-    setTimeout(()=>mediaRecorder.stop(), 3000);
+    setTimeout(()=>mediaRecorder.stop(), 3000); // record 3s
 }
 
 /* ========================
@@ -389,7 +388,7 @@ async function finalizeSession(){
         headers: {"Content-Type":"application/json"},
         body: JSON.stringify({
             results: sessionResults,
-            device_id: "web"
+            device_id: deviceId
         })
     });
 
@@ -416,42 +415,6 @@ function showVerdict(score, level){
 }
 
 /* ========================
-   SESSION ANALYTICS
-======================== */
-const analyticsPanel = document.getElementById("analyticsPanel");
-const loadSessionsBtn = document.getElementById("loadSessionsBtn");
-const sessionTableBody = document.querySelector("#sessionTable tbody");
-
-function formatSessionRow(session) {
-    return `<tr>
-        <td>${session.session_id || "N/A"}</td>
-        <td>${session.device_id}</td>
-        <td>${session.trust_score}</td>
-        <td>${session.trust_level}</td>
-        <td>${session.failed_challenges}</td>
-        <td>${session.total_challenges}</td>
-        <td>${session.timestamp_utc}</td>
-    </tr>`;
-}
-
-async function loadSessions() {
-    const device = document.getElementById("filterDevice").value.trim();
-    const ts = document.getElementById("filterTs").value.trim();
-
-    let url = "http://127.0.0.1:8000/v1/sessions?";
-    if (device) url += `device_id=${device}&`;
-    if (ts) url += `after_ts=${new Date(ts).getTime() / 1000}&`;
-
-    const res = await fetch(url);
-    const data = await res.json();
-
-    sessionTableBody.innerHTML = data.sessions.map(formatSessionRow).join("");
-}
-
-analyticsPanel.style.display = "block";
-loadSessionsBtn.onclick = loadSessions;
-
-/* ========================
    FLOW
 ======================== */
 function waitForFaceThenRecord(){
@@ -474,6 +437,7 @@ startBtn.onclick = async ()=>{
     startFaceCheck();
 };
 </script>
+
 
 </body>
 </html>
