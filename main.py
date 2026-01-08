@@ -52,19 +52,21 @@ TRUST_DURATION_SECONDS = 60 * 60 * 24 * 30  # 30 days
 
 # -------------------- GET CHALLENGES --------------------
 @app.get("/v1/challenge")
-def get_challenge(
-    device_id: str = Query(...),
-    user_agent: str = Query(...)
-):
+def get_challenge(device_id: str = None, user_agent: str = None):
+    """
+    Generate challenges for the session.
+    Trusted devices may skip some challenges, but at least 1 challenge will always be sent.
+    """
     now = time.time()
-
-    # Check if device is trusted
+    record = TRUSTED_DEVICES.get(device_id) if device_id else None
     trusted = False
-    record = TRUSTED_DEVICES.get(device_id)
     if record and record["user_agent"] == user_agent and record["expires_at"] > now:
         trusted = True
 
-    challenge_count = 1 if trusted else 3
+    # Determine number of challenges
+    challenge_count = 3  # always send 3 for now
+    # If we want trusted shortcut later: challenge_count = max(1, 3 if not trusted else 1)
+
     challenges = generate_challenges(num=challenge_count)
 
     for ch in challenges:
@@ -80,8 +82,6 @@ def get_challenge(
     conn.commit()
 
     return {
-        "trusted_device": trusted,
-        "challenge_count": challenge_count,
         "challenges": [
             {
                 "challenge_id": ch["challenge_id"],
@@ -89,7 +89,8 @@ def get_challenge(
                 "instruction": ch["challenge_value"],
                 "expires_in": 60
             } for ch in challenges
-        ]
+        ],
+        "trusted_device": trusted
     }
 
 # -------------------- VERIFY CHALLENGE --------------------

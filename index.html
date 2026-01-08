@@ -266,15 +266,21 @@ async function startFaceCheck() {
    LOAD CHALLENGES
 ======================== */
 async function loadChallenges(){
-    const res = await fetch("http://127.0.0.1:8000/v1/challenge");
+    const res = await fetch(`http://127.0.0.1:8000/v1/challenge?device_id=web&user_agent=${navigator.userAgent}`);
     const data = await res.json();
 
     challenges = data.challenges || [];
     challengeIndex = 0;
     sessionResults = [];
 
+    if(challenges.length === 0){
+        statusEl.innerText = "⚠️ No challenges available, retrying...";
+        return;
+    }
+
     loadNextChallenge();
 }
+
 
 /* ========================
    LOAD NEXT CHALLENGE
