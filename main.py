@@ -43,31 +43,29 @@ CREATE TABLE IF NOT EXISTS challenges (
 """)
 conn.commit()
 
-# -------------------- IN-MEMORY SESSION & TRUST STORE --------------------
+# -------------------- IN-MEMORY SESSION STORE --------------------
 in_memory_sessions = []
-TRUSTED_DEVICES = {}
-USED_TOKENS = set()
-SERVER_SECRET = "certivo_super_secret"  # move to env later
-TRUST_DURATION_SECONDS = 60 * 60 * 24 * 30  # 30 days
+
+# -------------------- TRUSTED DEVICES STORE --------------------
+TRUSTED_DEVICES = {}  # device_id -> {token, user_agent, expires_at}
+TRUSTED_DURATION = 24 * 60 * 60  # 24 hours
 
 # -------------------- GET CHALLENGES --------------------
 @app.get("/v1/challenge")
-def get_challenge(device_id: str = None, user_agent: str = None):
+def get_challenge(device_id: str = Query(...), user_agent: str = Query(...)):
     """
-    Generate challenges for the session.
-    Trusted devices may skip some challenges, but at least 1 challenge will always be sent.
+    Returns challenges. If device is trusted and token valid, reduce challenges.
     """
     now = time.time()
-    record = TRUSTED_DEVICES.get(device_id) if device_id else None
+    # check if trusted
     trusted = False
-    if record and record["user_agent"] == user_agent and record["expires_at"] > now:
-        trusted = True
+    if device_id in TRUSTED_DEVICES:
+        info = TRUSTED_DEVICES[device_id]
+        if info["expires_at"] > now and info["user_agent"] == user_agent:
+            trusted = True
 
-    # Determine number of challenges
-    challenge_count = 3  # always send 3 for now
-    # If we want trusted shortcut later: challenge_count = max(1, 3 if not trusted else 1)
-
-    challenges = generate_challenges(num=challenge_count)
+    num_challenges = 1 if trusted else 3
+    challenges = generate_challenges(num=num_challenges)
 
     for ch in challenges:
         c.execute(
@@ -98,6 +96,7 @@ def get_challenge(device_id: str = None, user_agent: str = None):
 def verify(
     challenge_id: str = Form(...),
     device_id: str = Form(...),
+    user_agent: str = Form(...),
     video: UploadFile = File(...),
     audio: UploadFile = File(None)
 ):
@@ -129,12 +128,20 @@ def verify(
 
     result = run_human_verification(video_path, audio_path, challenge_type)
 
-    # -------------------- Trusted Device Token for per-challenge verify --------------------
-    raw_token = f"{device_id}{time.time()}".encode()
-    trusted_device_token = hashlib.sha256(raw_token).hexdigest()
+    trusted_device_token = None
+    if result.get("challenge_passed", False):
+        # Generate token
+        raw_token = f"{device_id}{user_agent}{time.time()}".encode()
+        trusted_device_token = hashlib.sha256(raw_token).hexdigest()
+        # Store device as trusted
+        TRUSTED_DEVICES[device_id] = {
+            "token": trusted_device_token,
+            "user_agent": user_agent,
+            "expires_at": time.time() + TRUSTED_DURATION
+        }
 
     return {
-        "challenge_passed": result["challenge_passed"],
+        "challenge_passed": result.get("challenge_passed", False),
         "liveness_score": result.get("liveness_score", 0),
         "lip_sync_score": result.get("lip_sync_score", 0),
         "reaction_time": result.get("reaction_time", 1.0),
@@ -151,7 +158,6 @@ def verify(
 def finalize_session(payload: dict = Body(...)):
     results = payload.get("results", [])
     device_id = payload.get("device_id", "web")
-    user_agent = payload.get("user_agent", "unknown")
 
     if not results:
         trust_score = 0
@@ -205,9 +211,8 @@ def finalize_session(payload: dict = Body(...)):
             level = "low"
 
     # -------------------- STORE SESSION IN MEMORY --------------------
-    session_id = str(uuid.uuid4())
     session_record = {
-        "session_id": session_id,
+        "session_id": str(uuid.uuid4()),
         "device_id": device_id,
         "trust_score": trust_score,
         "trust_level": level,
@@ -215,49 +220,9 @@ def finalize_session(payload: dict = Body(...)):
         "total_challenges": len(results),
         "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
     }
-
-    # -------------------- Trusted Device Token --------------------
-    raw = f"{device_id}{user_agent}{session_id}{SERVER_SECRET}"
-    token = hashlib.sha256(raw.encode()).hexdigest()
-    TRUSTED_DEVICES[device_id] = {
-        "trusted_device_token": token,
-        "device_id": device_id,
-        "user_agent": user_agent,
-        "session_id": session_id,
-        "issued_at": time.time(),
-        "expires_at": time.time() + TRUST_DURATION_SECONDS
-    }
-
-    session_record["trusted_device_token"] = token
-    session_record["trusted_until"] = TRUSTED_DEVICES[device_id]["expires_at"]
-
     in_memory_sessions.append(session_record)
 
     return session_record
-
-# -------------------- REPLAY PROTECTION CHECK --------------------
-@app.post("/v1/trusted-check")
-def trusted_check(
-    trusted_device_token: str = Form(...),
-    device_id: str = Form(...),
-    user_agent: str = Form(...)
-):
-    if trusted_device_token in USED_TOKENS:
-        return JSONResponse(status_code=403, content={"error": "Replay detected"})
-
-    record = TRUSTED_DEVICES.get(device_id)
-    if not record:
-        return {"trusted": False}
-
-    if (
-        record["trusted_device_token"] != trusted_device_token or
-        record["user_agent"] != user_agent or
-        record["expires_at"] < time.time()
-    ):
-        return {"trusted": False}
-
-    USED_TOKENS.add(trusted_device_token)
-    return {"trusted": True}
 
 # -------------------- SESSIONS LIST FOR ANALYTICS --------------------
 @app.get("/v1/sessions")
