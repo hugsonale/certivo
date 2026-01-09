@@ -1,8 +1,8 @@
 from fastapi import FastAPI, UploadFile, File, Form, Body, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from typing import List
+from typing import Dict, List
 import time, uuid, hashlib, os
 
 from challenge_engine import generate_challenges
@@ -25,36 +25,62 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# -------------------- DATABASE (for challenges only) --------------------
+# -------------------- STORAGE --------------------
 os.makedirs("uploads", exist_ok=True)
 
-# -------------------- IN-MEMORY SESSION & TRUSTED DEVICE STORE --------------------
-in_memory_sessions = []
-trusted_devices = {}  # {device_id: trusted_token}
+# Active sessions (analytics + replay protection)
+SESSIONS: Dict[str, dict] = {}
+
+# Trusted devices (device_hash → metadata)
+TRUSTED_DEVICES: Dict[str, dict] = {}
+
+# -------------------- HELPERS --------------------
+def device_hash(device_id: str, user_agent: str) -> str:
+    return hashlib.sha256(f"{device_id}:{user_agent}".encode()).hexdigest()
+
+# -------------------- START VERIFICATION --------------------
+class StartVerification(BaseModel):
+    device_id: str
+    user_agent: str
+
+@app.post("/v1/start-verification")
+async def start_verification(data: StartVerification):
+    d_hash = device_hash(data.device_id, data.user_agent)
+
+    # 🔐 Trusted shortcut
+    if d_hash in TRUSTED_DEVICES:
+        trusted = TRUSTED_DEVICES[d_hash]
+        return {
+            "trusted": True,
+            "verdict": "HUMAN VERIFIED",
+            "confidence": trusted["confidence"]
+        }
+
+    # New session
+    session_id = str(uuid.uuid4())
+    SESSIONS[session_id] = {
+        "session_id": session_id,
+        "device_id": data.device_id,
+        "user_agent": data.user_agent,
+        "started_at": time.time(),
+        "results": [],
+        "completed": False
+    }
+
+    return {
+        "trusted": False,
+        "session_id": session_id
+    }
 
 # -------------------- GET CHALLENGES --------------------
 @app.get("/v1/challenge")
-async def get_challenge(request: Request, device_id: str = Query(...)):
-    # Check if device is trusted
-    user_agent = request.headers.get("user-agent", "unknown")
-    trusted_token = trusted_devices.get(device_id)
-    if trusted_token:
-        # Already trusted: return minimal challenge
-        challenge = generate_challenges(num=1)[0]
-        return {
-            "trusted_device": True,
-            "challenges": [{
-                "challenge_id": challenge["challenge_id"],
-                "challenge_type": challenge["challenge_type"],
-                "instruction": challenge["challenge_value"],
-                "expires_in": 60
-            }]
-        }
+async def get_challenge(session_id: str = Query(...)):
+    session = SESSIONS.get(session_id)
+    if not session:
+        return {"error": "Invalid session"}
 
-    # Not trusted: normal challenge flow
     challenges = generate_challenges(num=3)
     return {
-        "trusted_device": False,
         "challenges": [
             {
                 "challenge_id": ch["challenge_id"],
@@ -69,11 +95,15 @@ async def get_challenge(request: Request, device_id: str = Query(...)):
 @app.post("/v1/verify")
 async def verify(
     request: Request,
+    session_id: str = Form(...),
     challenge_id: str = Form(...),
-    device_id: str = Form(...),
     video: UploadFile = File(...),
     audio: UploadFile = File(None)
 ):
+    session = SESSIONS.get(session_id)
+    if not session or session["completed"]:
+        return {"error": "Invalid or closed session"}
+
     video_path = f"uploads/{uuid.uuid4()}_{video.filename}"
     with open(video_path, "wb") as f:
         f.write(video.file.read())
@@ -84,111 +114,89 @@ async def verify(
         with open(audio_path, "wb") as f:
             f.write(audio.file.read())
 
-    result = run_human_verification(video_path, audio_path, "generic")  # challenge_type could be extended
+    result = run_human_verification(video_path, audio_path, "generic")
 
-    # Trusted device token
-    user_agent = request.headers.get("user-agent", "unknown")
-    raw_token = f"{device_id}:{user_agent}:{uuid.uuid4()}".encode()
-    trusted_device_token = hashlib.sha256(raw_token).hexdigest()
-
-    return {
+    session["results"].append({
+        "challenge_id": challenge_id,
         "challenge_passed": result.get("challenge_passed", False),
         "liveness_score": result.get("liveness_score", 0),
         "lip_sync_score": result.get("lip_sync_score", 0),
         "reaction_time": result.get("reaction_time", 1.0),
         "facial_stability": result.get("facial_stability", 1.0),
         "blink_count": result.get("blink_count", 0),
-        "replay_flag": False,
-        "trusted_device_token": trusted_device_token,
-        "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
-    }
+        "timestamp": time.time()
+    })
+
+    return {"status": "recorded"}
 
 # -------------------- FINALIZE SESSION --------------------
 @app.post("/v1/finalize")
-async def finalize_session(payload: dict = Body(...)):
-    results = payload.get("results", [])
-    device_id = payload.get("device_id", "web")
-    user_agent = payload.get("user_agent", "unknown")
+async def finalize(payload: dict = Body(...)):
+    session_id = payload.get("session_id")
+    session = SESSIONS.get(session_id)
 
+    if not session or session["completed"]:
+        return {"error": "Invalid session"}
+
+    results = session["results"]
     if not results:
-        trust_score = 0
-        level = "low"
-        failed_challenges = 0
-    else:
-        trust_scores = []
-        failed_challenges = 0
-        for r in results:
-            liveness = max(0, min(1, r.get("liveness_score", 0)))
-            lip_sync = max(0, min(1, r.get("lip_sync_score", 0)))
-            reaction_time = max(0, min(1, r.get("reaction_time", 1)))
-            stability = max(0, min(1, r.get("facial_stability", 1)))
-            blink_count = r.get("blink_count", 0)
+        return {"error": "No challenges completed"}
 
-            blink_penalty = 0
-            if blink_count > 5:
-                blink_penalty = min((blink_count - 5) * 0.02, 0.2)
+    scores = []
+    failed = 0
 
-            challenge_trust = (
-                liveness * 0.35 +
-                lip_sync * 0.25 +
-                reaction_time * 0.15 +
-                stability * 0.15 -
-                blink_penalty
-            )
-            trust_scores.append(challenge_trust)
+    for r in results:
+        liveness = r["liveness_score"]
+        lip = r["lip_sync_score"]
+        reaction = max(0, 1 - r["reaction_time"])
+        stability = r["facial_stability"]
+        blink_penalty = max(0, (r["blink_count"] - 5) * 0.02)
 
-            if not r.get("challenge_passed", True):
-                failed_challenges += 1
+        score = (
+            liveness * 0.35 +
+            lip * 0.25 +
+            reaction * 0.15 +
+            stability * 0.15 -
+            blink_penalty
+        )
 
-        base_trust = sum(trust_scores) / len(trust_scores)
-        trust_score = round(max(30, min(100, base_trust * 100)), 2)
+        scores.append(score)
+        if not r["challenge_passed"]:
+            failed += 1
 
-        if failed_challenges == 1:
-            trust_score -= 10
-        elif failed_challenges == 2:
-            trust_score -= 25
-        elif failed_challenges >= 3:
-            trust_score -= 40
-        trust_score = max(30, trust_score)
+    trust_score = round(max(0, min(100, (sum(scores) / len(scores)) * 100)), 2)
 
-        if trust_score >= 85:
-            level = "high"
-        elif trust_score >= 60:
-            level = "medium"
-        else:
-            level = "low"
+    if failed >= 2:
+        trust_score -= 25
 
-    # Store session in memory
-    session_record = {
-        "session_id": str(uuid.uuid4()),
-        "device_id": device_id,
-        "trust_score": trust_score,
-        "trust_level": level,
-        "failed_challenges": failed_challenges,
-        "total_challenges": len(results),
-        "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
-    }
-    in_memory_sessions.append(session_record)
+    verdict = "HUMAN VERIFIED" if trust_score >= 60 else "LOW TRUST"
 
-    # If score high enough, mark device as trusted
+    # 🔐 Trust device if strong pass
     if trust_score >= 85:
-        trusted_token = hashlib.sha256(f"{device_id}:{user_agent}:{session_record['session_id']}".encode()).hexdigest()
-        trusted_devices[device_id] = trusted_token
-        session_record["trusted_device_token"] = trusted_token
+        d_hash = device_hash(session["device_id"], session["user_agent"])
+        TRUSTED_DEVICES[d_hash] = {
+            "confidence": trust_score,
+            "trusted_at": time.time()
+        }
 
-    return session_record
+    session["completed"] = True
+    session["trust_score"] = trust_score
+    session["verdict"] = verdict
 
-# -------------------- SESSIONS LIST FOR ANALYTICS --------------------
+    return {
+        "verdict": verdict,
+        "trust_score": trust_score
+    }
+
+# -------------------- ANALYTICS --------------------
 @app.get("/v1/sessions")
-async def get_sessions(device_id: str = Query(None), after_ts: float = Query(None)):
-    filtered = in_memory_sessions
+async def sessions(device_id: str = Query(None)):
+    data = list(SESSIONS.values())
     if device_id:
-        filtered = [s for s in filtered if s["device_id"] == device_id]
-    if after_ts:
-        filtered = [s for s in filtered if time.mktime(time.strptime(s["timestamp_utc"], "%Y-%m-%dT%H:%M:%S")) > after_ts]
-    return {"sessions": filtered}
+        data = [s for s in data if s["device_id"] == device_id]
+    return {"sessions": data}
 
 # -------------------- SERVE FRONTEND --------------------
 @app.get("/")
-def read_index():
+def index():
     return FileResponse("index.html")
