@@ -1,14 +1,18 @@
 from fastapi import FastAPI, UploadFile, File, Form, Body, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from sqlalchemy import create_engine, Column, String, Float, Integer, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from datetime import datetime
 import time, uuid, hashlib, os
 
 from challenge_engine import generate_challenges
 from human_verification import run_human_verification
 
+# -------------------- FASTAPI APP --------------------
 app = FastAPI()
 
-# -------------------- CORS --------------------
 origins = [
     "http://127.0.0.1:5500",
     "http://localhost:5500",
@@ -26,23 +30,40 @@ app.add_middleware(
 # -------------------- STORAGE --------------------
 os.makedirs("uploads", exist_ok=True)
 
-# -------------------- IN-MEMORY STORES --------------------
-in_memory_sessions = []           # Stores session results
-trusted_devices = {}              # {device_id: trusted_token}
-submitted_video_hashes = set()    # For replay protection
-challenge_timestamps = {}         # {challenge_id: timestamp_utc}
+# -------------------- SQLITE / SQLALCHEMY --------------------
+DATABASE_URL = "sqlite:///./certivo_v1.db"
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+Base = declarative_base()
+
+class SessionRecord(Base):
+    __tablename__ = "sessions"
+    session_id = Column(String, primary_key=True, index=True)
+    device_id = Column(String)
+    trust_score = Column(Float)
+    trust_level = Column(String)
+    failed_challenges = Column(Integer)
+    total_challenges = Column(Integer)
+    timestamp_utc = Column(DateTime, default=datetime.utcnow)
+
+Base.metadata.create_all(bind=engine)
+
+# -------------------- IN-MEMORY TRUSTED DEVICE STORE --------------------
+trusted_devices = {}  # {device_id: trusted_token}
 
 # -------------------- GET CHALLENGES --------------------
 @app.get("/v1/challenge")
 async def get_challenge(request: Request, device_id: str = Query(...)):
+    """
+    Phase 3 rules:
+    - Fetch multiple challenges
+    - Trusted devices get fast-track (fewer/shorter)
+    """
+    user_agent = request.headers.get("user-agent", "unknown")
     is_trusted = device_id in trusted_devices
     challenge_count = 1 if is_trusted else 3
 
     challenges = generate_challenges(num=challenge_count)
-
-    now = time.time()
-    for ch in challenges:
-        challenge_timestamps[ch["challenge_id"]] = now
 
     return {
         "trusted_device": is_trusted,
@@ -52,56 +73,34 @@ async def get_challenge(request: Request, device_id: str = Query(...)):
                 "challenge_type": ch["challenge_type"],
                 "instruction": ch["challenge_value"],
                 "expires_in": 30 if is_trusted else 60
-            }
-            for ch in challenges
+            } for ch in challenges
         ]
     }
 
-# -------------------- VERIFY CHALLENGE WITH REPLAY PROTECTION --------------------
+# -------------------- VERIFY CHALLENGE --------------------
 @app.post("/v1/verify")
 async def verify(
+    request: Request,
     challenge_id: str = Form(...),
     device_id: str = Form(...),
     video: UploadFile = File(...),
     audio: UploadFile = File(None)
 ):
     """
-    Phase 3.3:
-    - Replay protection via video hash
-    - Only returns biometric signals
-    - Verifies challenge expiry
+    Phase 3.2:
+    - Returns only biometric signals
+    - No trust calculation
     """
-
-    # Check if challenge exists
-    challenge_time = challenge_timestamps.get(challenge_id)
-    if not challenge_time:
-        return {"error": "Invalid or expired challenge.", "replay_flag": True}
-
-    if time.time() - challenge_time > 90:  # 90s expiry buffer
-        return {"error": "Challenge expired.", "replay_flag": True}
-
-    # Read video bytes & hash for replay protection
-    video_bytes = await video.read()
-    video_hash = hashlib.sha256(video_bytes).hexdigest()
-
-    if video_hash in submitted_video_hashes:
-        return {"error": "Replay detected. Video already submitted.", "replay_flag": True}
-
-    # Save video
     video_path = f"uploads/{uuid.uuid4()}_{video.filename}"
     with open(video_path, "wb") as f:
-        f.write(video_bytes)
-    submitted_video_hashes.add(video_hash)
+        f.write(video.file.read())
 
-    # Save audio if present
     audio_path = None
     if audio:
-        audio_bytes = await audio.read()
         audio_path = f"uploads/{uuid.uuid4()}_{audio.filename}"
         with open(audio_path, "wb") as f:
-            f.write(audio_bytes)
+            f.write(audio.file.read())
 
-    # Run biometric verification
     result = run_human_verification(video_path, audio_path, "generic")
 
     return {
@@ -110,6 +109,7 @@ async def verify(
         "reaction_time": result.get("reaction_time", 1.0),
         "facial_stability": result.get("facial_stability", 1.0),
         "blink_count": result.get("blink_count", 0),
+        "challenge_passed": result.get("challenge_passed", True),
         "replay_flag": False,
         "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
     }
@@ -125,18 +125,11 @@ async def finalize_session(payload: dict = Body(...)):
     failed_challenges = 0
 
     for r in results:
-        # Phase 3.2/3.3: challenge pass sanity check
-        instruction = r.get("instruction_type")
-        blink_count = r.get("blink_count", 0)
-
-        if instruction == "blink" and blink_count < 2:
-            r["challenge_passed"] = False
-
-        # Score calculation
         liveness = max(0, min(1, r.get("liveness_score", 0)))
         lip_sync = max(0, min(1, r.get("lip_sync_score", 0)))
         reaction_time = max(0, min(1, r.get("reaction_time", 1)))
         stability = max(0, min(1, r.get("facial_stability", 1)))
+        blink_count = r.get("blink_count", 0)
 
         blink_penalty = min(max(blink_count - 5, 0) * 0.02, 0.2)
 
@@ -177,25 +170,55 @@ async def finalize_session(payload: dict = Body(...)):
         "trust_level": level,
         "failed_challenges": failed_challenges,
         "total_challenges": len(results),
-        "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
+        "timestamp_utc": datetime.utcnow()
     }
 
-    in_memory_sessions.append(session_record)
+    # Save to SQLite
+    db = SessionLocal()
+    db.merge(SessionRecord(
+        session_id=session_record["session_id"],
+        device_id=session_record["device_id"],
+        trust_score=session_record["trust_score"],
+        trust_level=session_record["trust_level"],
+        failed_challenges=session_record["failed_challenges"],
+        total_challenges=session_record["total_challenges"],
+        timestamp_utc=session_record["timestamp_utc"]
+    ))
+    db.commit()
+    db.close()
 
-    # Mark device trusted if score >=85
+    # Mark device trusted if trust_score >= 85
     if trust_score >= 85:
-        trusted_devices[device_id] = hashlib.sha256(
-            f"{device_id}:{user_agent}".encode()
-        ).hexdigest()
+        trusted_token = hashlib.sha256(f"{device_id}:{user_agent}".encode()).hexdigest()
+        trusted_devices[device_id] = trusted_token
+        session_record["trusted_device_token"] = trusted_token
 
     return session_record
 
 # -------------------- ANALYTICS --------------------
 @app.get("/v1/sessions")
 async def get_sessions(device_id: str = Query(None)):
+    db = SessionLocal()
+    query = db.query(SessionRecord)
     if device_id:
-        return {"sessions": [s for s in in_memory_sessions if s["device_id"] == device_id]}
-    return {"sessions": in_memory_sessions}
+        query = query.filter(SessionRecord.device_id == device_id)
+    sessions = query.all()
+    db.close()
+
+    return {
+        "sessions": [
+            {
+                "session_id": s.session_id,
+                "device_id": s.device_id,
+                "trust_score": s.trust_score,
+                "trust_level": s.trust_level,
+                "failed_challenges": s.failed_challenges,
+                "total_challenges": s.total_challenges,
+                "timestamp_utc": s.timestamp_utc.strftime("%Y-%m-%dT%H:%M:%S")
+            }
+            for s in sessions
+        ]
+    }
 
 # -------------------- SERVE FRONTEND --------------------
 @app.get("/")
