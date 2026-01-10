@@ -1,3 +1,5 @@
+# main.py
+
 from fastapi import FastAPI, UploadFile, File, Form, Body, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -51,39 +53,21 @@ Base.metadata.create_all(bind=engine)
 # -------------------- IN-MEMORY TRUSTED DEVICE STORE --------------------
 trusted_devices = {}  # {device_id: trusted_token}
 
-
 # -------------------- GET CHALLENGES --------------------
 @app.get("/v1/challenge")
 async def get_challenge(request: Request, device_id: str = Query(...)):
     """
-    Phase 3.5 rule:
-    - Adaptive challenge difficulty based on prior performance
+    Phase 3.5 rules:
     - Trusted devices get fast-track (fewer/shorter)
+    - Include difficulty for each challenge
     """
     user_agent = request.headers.get("user-agent", "unknown")
     is_trusted = device_id in trusted_devices
-
-    # default challenge count
     challenge_count = 1 if is_trusted else 3
 
-    # Fetch previous session history (in SQLite)
-    db = SessionLocal()
-    sessions = db.query(SessionRecord).filter(SessionRecord.device_id == device_id).all()
-    db.close()
+    # None = random difficulty inside generate_challenges
+    challenges = generate_challenges(num=challenge_count, difficulty=None)
 
-    last_failed = sessions[-1].failed_challenges if sessions else 0
-
-    # Determine challenge difficulty
-    if last_failed >= 2:
-        difficulty = "hard"
-    elif last_failed == 1:
-        difficulty = "medium"
-    else:
-        difficulty = "easy"
-
-    challenges = generate_challenges(num=challenge_count, difficulty=difficulty)
-
-    # Adjust expiration for fast-track users
     return {
         "trusted_device": is_trusted,
         "challenges": [
@@ -91,12 +75,13 @@ async def get_challenge(request: Request, device_id: str = Query(...)):
                 "challenge_id": ch["challenge_id"],
                 "challenge_type": ch["challenge_type"],
                 "instruction": ch["challenge_value"],
-                "difficulty": difficulty,
+                "difficulty": ch["difficulty"],   # used for frontend
+                "fast_track": is_trusted,
                 "expires_in": 30 if is_trusted else 60
-            } for ch in challenges
+            }
+            for ch in challenges
         ]
     }
-
 
 # -------------------- VERIFY CHALLENGE --------------------
 @app.post("/v1/verify")
@@ -110,7 +95,6 @@ async def verify(
     """
     Phase 3.2:
     - Returns only biometric signals
-    - No trust calculation
     """
     video_path = f"uploads/{uuid.uuid4()}_{video.filename}"
     with open(video_path, "wb") as f:
@@ -145,22 +129,30 @@ async def finalize_session(payload: dict = Body(...)):
     trust_scores = []
     failed_challenges = 0
 
+    # Track averages
+    total_liveness = 0
+    total_reaction = 0
+    total_stability = 0
+
     for r in results:
         liveness = max(0, min(1, r.get("liveness_score", 0)))
         lip_sync = max(0, min(1, r.get("lip_sync_score", 0)))
         reaction_time = max(0, min(1, r.get("reaction_time", 1)))
         stability = max(0, min(1, r.get("facial_stability", 1)))
         blink_count = r.get("blink_count", 0)
+        difficulty = r.get("difficulty", "medium")
+
+        # Difficulty weighting
+        weight = {"easy": 0.8, "medium": 1.0, "hard": 1.2}.get(difficulty, 1.0)
 
         blink_penalty = min(max(blink_count - 5, 0) * 0.02, 0.2)
 
-        trust_scores.append(
-            liveness * 0.35 +
-            lip_sync * 0.25 +
-            reaction_time * 0.15 +
-            stability * 0.15 -
-            blink_penalty
-        )
+        score = (liveness * 0.35 + lip_sync * 0.25 + reaction_time * 0.15 + stability * 0.15 - blink_penalty) * weight
+        trust_scores.append(score)
+
+        total_liveness += liveness
+        total_reaction += reaction_time
+        total_stability += stability
 
         if not r.get("challenge_passed", True):
             failed_challenges += 1
@@ -168,6 +160,7 @@ async def finalize_session(payload: dict = Body(...)):
     base_trust = sum(trust_scores) / len(trust_scores) if trust_scores else 0
     trust_score = round(max(30, min(100, base_trust * 100)), 2)
 
+    # Penalties for failed challenges
     if failed_challenges == 1:
         trust_score -= 10
     elif failed_challenges == 2:
@@ -184,6 +177,11 @@ async def finalize_session(payload: dict = Body(...)):
     else:
         level = "low"
 
+    # Compute averages
+    avg_liveness = round(total_liveness / len(results), 2) if results else 0
+    avg_reaction = round(total_reaction / len(results), 2) if results else 0
+    avg_stability = round(total_stability / len(results), 2) if results else 0
+
     session_record = {
         "session_id": str(uuid.uuid4()),
         "device_id": device_id,
@@ -191,6 +189,9 @@ async def finalize_session(payload: dict = Body(...)):
         "trust_level": level,
         "failed_challenges": failed_challenges,
         "total_challenges": len(results),
+        "avg_liveness": avg_liveness,
+        "avg_reaction": avg_reaction,
+        "avg_stability": avg_stability,
         "timestamp_utc": datetime.utcnow()
     }
 
@@ -215,6 +216,7 @@ async def finalize_session(payload: dict = Body(...)):
         session_record["trusted_device_token"] = trusted_token
 
     return session_record
+
 
 # -------------------- ANALYTICS --------------------
 @app.get("/v1/sessions")

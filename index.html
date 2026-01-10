@@ -24,7 +24,7 @@ canvas#overlay { position: absolute; top: 0; left: 0; pointer-events: none; }
 
 <h1>Certivo Prime Verification</h1>
 <div id="trustedLabel" style="display:none;">🔒 Trusted Device Mode</div>
-<div id="fastTrackLabel">⚡ Fast-Track Mode Enabled</div>
+<div id="fastTrackLabel"></div>
 
 <div style="position: relative; display: inline-block;">
     <video id="video" autoplay muted></video>
@@ -143,14 +143,12 @@ async function loadChallenges(){
     trustedDevice = data.trusted_device;
     if(trustedDevice) trustedLabelEl.style.display = "block";
 
-    // mark challenges with fast_track flag
     challenges = data.challenges.map(ch => ({ ...ch, fast_track: trustedDevice }));
     challengeIndex = 0;
     sessionResults = [];
     loadNextChallenge();
 }
 
-/* ======================== LOAD NEXT CHALLENGE ======================== */
 /* ======================== LOAD NEXT CHALLENGE ======================== */
 function loadNextChallenge(){
     if(challengeIndex >= challenges.length){
@@ -167,18 +165,19 @@ function loadNextChallenge(){
     challengeProgress.innerText = `Challenge ${challengeIndex} of ${challenges.length}`;
     statusEl.innerText = "🧠 Challenge: " + currentChallenge.instruction;
 
-    // Determine duration based on difficulty & fast-track
-    let duration = challengeDuration; // default 15s
+    let duration = challengeDuration;
     let label = "";
 
     if(currentChallenge.fast_track){
         duration = 10;
         label = "⚡ Fast-Track Mode";
     } else {
-        if(currentChallenge.difficulty === "easy") duration = 12;
-        if(currentChallenge.difficulty === "medium") duration = 15;
-        if(currentChallenge.difficulty === "hard") duration = 20;
-        label = currentChallenge.difficulty === "hard" ? "🔥 Hard Challenge" : "";
+        const diff = currentChallenge.difficulty || "medium";
+        if(diff === "easy") duration = 12;
+        if(diff === "medium") duration = 15;
+        if(diff === "hard") duration = 20;
+
+        label = diff === "hard" ? "🔥 Hard Challenge" : "🟢 Easy Challenge";
     }
 
     fastTrackLabel.innerText = label;
@@ -187,7 +186,6 @@ function loadNextChallenge(){
     startCountdown(duration);
     waitForFaceThenRecord();
 }
-
 
 /* ======================== COUNTDOWN TIMER ======================== */
 function startCountdown(seconds){
@@ -221,6 +219,7 @@ async function submitRecording(){
     formData.append("video", blob);
     formData.append("challenge_id", currentChallenge.challenge_id);
     formData.append("device_id", deviceId);
+    formData.append("difficulty", currentChallenge.difficulty || "medium");
 
     const res = await fetch("http://127.0.0.1:8000/v1/verify",{
         method:"POST",
@@ -238,7 +237,8 @@ async function submitRecording(){
         lip_sync_score: result.lip_sync_score,
         reaction_time: reactionTime,
         facial_stability: stability,
-        blink_count: blinkCount
+        blink_count: blinkCount,
+        difficulty: currentChallenge.difficulty || "medium"
     });
 
     statusEl.innerText = result.challenge_passed ? "✅ Challenge passed" : "❌ Challenge failed";
