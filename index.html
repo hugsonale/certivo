@@ -44,34 +44,15 @@ canvas#overlay { position: absolute; top: 0; left: 0; pointer-events: none; }
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/facemesh"></script>
 
 <script>
-/* ========================
-   DEVICE & TRUST HELPERS
-======================== */
-function getDeviceId() {
-    let id = localStorage.getItem("certivo_device_id");
-    if (!id) {
-        id = crypto.randomUUID();
-        localStorage.setItem("certivo_device_id", id);
-    }
-    return id;
-}
-
-const DEVICE_ID = getDeviceId();
-const USER_AGENT = navigator.userAgent;
-
-/* ========================
-   GLOBAL STATE
-======================== */
+/* ======================== GLOBAL STATE ======================== */
 let video = document.getElementById("video");
 let overlay = document.getElementById("overlay");
 let overlayCtx = overlay.getContext("2d");
 let statusEl = document.getElementById("status");
 let startBtn = document.getElementById("startBtn");
-
 let verdictScreen = document.getElementById("verdictScreen");
 let trustBar = document.getElementById("trustBar");
 let trustLabel = document.getElementById("trustLabel");
-
 let challengeProgress = document.getElementById("challengeProgress");
 let challengeTimer = document.getElementById("challengeTimer");
 
@@ -79,53 +60,99 @@ let faceModel;
 let mediaRecorder;
 let recordedChunks = [];
 let faceCheckInterval;
+let canRecord = false;
+let verificationCompleted = false;
 
 let challenges = [];
 let challengeIndex = 0;
 let currentChallenge = null;
+let challengeShownAt = null;
+let challengeDuration = 15; // seconds per challenge
+let countdownInterval;
 
 let sessionResults = [];
-let canRecord = false;
+let deviceId = "device_" + Math.floor(Math.random()*100000);
+let userAgent = navigator.userAgent;
+let trustedDevice = false;
 
-/* ========================
-   TRUSTED DEVICE CHECK
-======================== */
-async function checkTrustedDevice() {
-    const res = await fetch("http://127.0.0.1:8000/v1/check_trusted", {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({
-            device_id: DEVICE_ID,
-            user_agent: USER_AGENT
-        })
-    });
-
-    return res.ok ? await res.json() : { trusted: false };
-}
-
-/* ========================
-   CAMERA
-======================== */
+/* ======================== CAMERA ======================== */
 async function initCamera() {
     const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     video.srcObject = stream;
+    video.onloadeddata = () => { overlay.width = video.videoWidth; overlay.height = video.videoHeight; };
 }
 
-/* ========================
-   LOAD CHALLENGES
-======================== */
+/* ======================== FACE CHECK ======================== */
+let lastHeadPosition = null;
+let blinkCount = 0;
+
+async function startFaceCheck() {
+    faceCheckInterval = setInterval(async () => {
+        if (verificationCompleted) return;
+        const predictions = await faceModel.estimateFaces(video);
+        overlayCtx.clearRect(0,0,overlay.width,overlay.height);
+
+        if(predictions.length !== 1){
+            canRecord = false;
+            statusEl.innerText = "⚠️ Ensure one face is visible";
+            return;
+        }
+
+        canRecord = true;
+        const face = predictions[0];
+        const [x1,y1] = face.topLeft;
+        const [x2,y2] = face.bottomRight;
+
+        overlayCtx.strokeStyle = "lime";
+        overlayCtx.lineWidth = 2;
+        overlayCtx.strokeRect(x1,y1,x2-x1,y2-y1);
+
+        const currentHead = {x: (x1+x2)/2, y: (y1+y2)/2};
+        if(lastHeadPosition){
+            const dx = currentHead.x - lastHeadPosition.x;
+            const dy = currentHead.y - lastHeadPosition.y;
+            const movement = Math.sqrt(dx*dx + dy*dy);
+            lastHeadPosition.stability = lastHeadPosition.stability ? lastHeadPosition.stability + movement : movement;
+
+            const eyeHeight = y2 - y1;
+            if(!lastHeadPosition.prevEyeHeight) lastHeadPosition.prevEyeHeight = eyeHeight;
+            if(eyeHeight < lastHeadPosition.prevEyeHeight*0.5) blinkCount += 1;
+            lastHeadPosition.prevEyeHeight = eyeHeight;
+        } else {
+            lastHeadPosition = currentHead;
+            lastHeadPosition.stability = 0;
+            lastHeadPosition.prevEyeHeight = y2 - y1;
+        }
+        lastHeadPosition.x = currentHead.x;
+        lastHeadPosition.y = currentHead.y;
+    }, 200);
+}
+
+/* ======================== LOAD CHALLENGES ======================== */
 async function loadChallenges(){
-    const res = await fetch("http://127.0.0.1:8000/v1/challenge");
+    const res = await fetch(`http://127.0.0.1:8000/v1/challenge?device_id=${deviceId}`);
     const data = await res.json();
+
+    trustedDevice = data.trusted_device;
+
+    if(trustedDevice){
+        // Shortcut: show final verdict immediately
+        const fakeResult = {
+            trust_score: 100,
+            trust_level: "high"
+        };
+        showVerdict(fakeResult.trust_score, fakeResult.trust_level);
+        verificationCompleted = true;
+        return;
+    }
+
     challenges = data.challenges || [];
     challengeIndex = 0;
     sessionResults = [];
     loadNextChallenge();
 }
 
-/* ========================
-   LOAD NEXT CHALLENGE
-======================== */
+/* ======================== LOAD NEXT CHALLENGE ======================== */
 function loadNextChallenge(){
     if(challengeIndex >= challenges.length){
         finalizeSession();
@@ -133,101 +160,119 @@ function loadNextChallenge(){
     }
 
     currentChallenge = challenges[challengeIndex++];
-    statusEl.innerText = "🧠 " + currentChallenge.instruction;
-    challengeProgress.innerText = `Challenge ${challengeIndex} of ${challenges.length}`;
+    challengeShownAt = Date.now();
 
-    setTimeout(startRecording, 800);
+    blinkCount = 0;
+    lastHeadPosition = null;
+
+    challengeProgress.innerText = `Challenge ${challengeIndex} of ${challenges.length}`;
+    statusEl.innerText = "🧠 Challenge: " + currentChallenge.instruction;
+    startCountdown(challengeDuration);
+
+    waitForFaceThenRecord();
 }
 
-/* ========================
-   RECORD & VERIFY
-======================== */
+/* ======================== COUNTDOWN TIMER ======================== */
+function startCountdown(seconds){
+    clearInterval(countdownInterval);
+    let remaining = seconds;
+    challengeTimer.innerText = `Time left: ${remaining}s`;
+
+    countdownInterval = setInterval(()=>{
+        remaining--;
+        if(remaining <= 0){
+            clearInterval(countdownInterval);
+            challengeTimer.innerText = "⏰ Time up!";
+        } else challengeTimer.innerText = `Time left: ${remaining}s`;
+    }, 1000);
+}
+
+/* ======================== RECORD ======================== */
 function startRecording(){
     recordedChunks = [];
     mediaRecorder = new MediaRecorder(video.srcObject);
     mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
     mediaRecorder.onstop = submitRecording;
     mediaRecorder.start();
-    setTimeout(()=>mediaRecorder.stop(), 3000);
+    setTimeout(()=>mediaRecorder.stop(), 3000); // record 3s
 }
 
+/* ======================== SUBMIT PER CHALLENGE ======================== */
 async function submitRecording(){
     const blob = new Blob(recordedChunks,{type:"video/webm"});
     const formData = new FormData();
-
     formData.append("video", blob);
     formData.append("challenge_id", currentChallenge.challenge_id);
-    formData.append("device_id", DEVICE_ID);
-    formData.append("user_agent", USER_AGENT);
+    formData.append("device_id", deviceId);
 
     const res = await fetch("http://127.0.0.1:8000/v1/verify",{
         method:"POST",
         body: formData
     });
+    const result = await res.json();
 
-    const r = await res.json();
+    const reactionTime = Math.min(1, (Date.now() - challengeShownAt)/10000);
+    const stability = lastHeadPosition?.stability ? Math.min(1, 1/(1 + lastHeadPosition.stability/50)) : 1;
 
     sessionResults.push({
-        challenge_passed: r.challenge_passed,
-        liveness_score: r.liveness_score,
-        lip_sync_score: r.lip_sync_score,
-        reaction_time: 0.8,
-        facial_stability: 0.9,
-        blink_count: 1
+        challenge_id: currentChallenge.challenge_id,
+        challenge_passed: result.challenge_passed,
+        liveness_score: result.liveness_score,
+        lip_sync_score: result.lip_sync_score,
+        reaction_time: reactionTime,
+        facial_stability: stability,
+        blink_count: blinkCount
     });
 
-    setTimeout(loadNextChallenge, 700);
+    statusEl.innerText = result.challenge_passed ? "✅ Challenge passed" : "❌ Challenge failed";
+    setTimeout(loadNextChallenge, 1500);
 }
 
-/* ========================
-   FINALIZE
-======================== */
+/* ======================== FINALIZE SESSION ======================== */
 async function finalizeSession(){
     statusEl.innerText = "🔐 Calculating trust score...";
 
     const res = await fetch("http://127.0.0.1:8000/v1/finalize",{
         method:"POST",
         headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({
-            device_id: DEVICE_ID,
-            user_agent: USER_AGENT,
-            results: sessionResults
-        })
+        body: JSON.stringify({results: sessionResults, device_id: deviceId, user_agent: userAgent})
     });
 
-    const final = await res.json();
-    showVerdict(final.trust_score, final.trust_level);
+    const finalResult = await res.json();
+    showVerdict(finalResult.trust_score, finalResult.trust_level);
+    verificationCompleted = true;
+    clearInterval(faceCheckInterval);
 }
 
-/* ========================
-   VERDICT UI
-======================== */
+/* ======================== VERDICT UI ======================== */
 function showVerdict(score, level){
     verdictScreen.style.display = "block";
+    let color = "#22c55e";
+    if(level === "medium") color = "#facc15";
+    if(level === "low") color = "#ef4444";
+    trustBar.style.background = color;
     trustBar.style.width = score + "%";
-    trustBar.style.background =
-        level === "high" ? "#22c55e" :
-        level === "medium" ? "#facc15" : "#ef4444";
-
     trustLabel.innerText = `${level.toUpperCase()} TRUST (${score}%)`;
 }
 
-/* ========================
-   START FLOW
-======================== */
+/* ======================== FLOW ======================== */
+function waitForFaceThenRecord(){
+    const i = setInterval(()=>{
+        if(canRecord){
+            clearInterval(i);
+            startRecording();
+        }
+    },300);
+}
+
+/* ======================== INIT ======================== */
 startBtn.onclick = async ()=>{
     startBtn.disabled = true;
-
-    const trust = await checkTrustedDevice();
-    if(trust.trusted){
-        showVerdict(trust.trust_score, trust.trust_level);
-        return;
-    }
-
     await initCamera();
+    faceModel = await facemesh.load();
     await loadChallenges();
+    startFaceCheck();
 };
 </script>
-
 </body>
 </html>
