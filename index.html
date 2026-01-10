@@ -135,16 +135,6 @@ async function loadChallenges(){
 
     trustedDevice = data.trusted_device;
 
-    if(trustedDevice){
-        // Shortcut: show final verdict immediately
-        const fakeResult = {
-            trust_score: 100,
-            trust_level: "high"
-        };
-        showVerdict(fakeResult.trust_score, fakeResult.trust_level);
-        verificationCompleted = true;
-        return;
-    }
 
     challenges = data.challenges || [];
     challengeIndex = 0;
