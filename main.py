@@ -51,20 +51,39 @@ Base.metadata.create_all(bind=engine)
 # -------------------- IN-MEMORY TRUSTED DEVICE STORE --------------------
 trusted_devices = {}  # {device_id: trusted_token}
 
+
 # -------------------- GET CHALLENGES --------------------
 @app.get("/v1/challenge")
 async def get_challenge(request: Request, device_id: str = Query(...)):
     """
-    Phase 3 rules:
-    - Fetch multiple challenges
+    Phase 3.5 rule:
+    - Adaptive challenge difficulty based on prior performance
     - Trusted devices get fast-track (fewer/shorter)
     """
     user_agent = request.headers.get("user-agent", "unknown")
     is_trusted = device_id in trusted_devices
+
+    # default challenge count
     challenge_count = 1 if is_trusted else 3
 
-    challenges = generate_challenges(num=challenge_count)
+    # Fetch previous session history (in SQLite)
+    db = SessionLocal()
+    sessions = db.query(SessionRecord).filter(SessionRecord.device_id == device_id).all()
+    db.close()
 
+    last_failed = sessions[-1].failed_challenges if sessions else 0
+
+    # Determine challenge difficulty
+    if last_failed >= 2:
+        difficulty = "hard"
+    elif last_failed == 1:
+        difficulty = "medium"
+    else:
+        difficulty = "easy"
+
+    challenges = generate_challenges(num=challenge_count, difficulty=difficulty)
+
+    # Adjust expiration for fast-track users
     return {
         "trusted_device": is_trusted,
         "challenges": [
@@ -72,10 +91,12 @@ async def get_challenge(request: Request, device_id: str = Query(...)):
                 "challenge_id": ch["challenge_id"],
                 "challenge_type": ch["challenge_type"],
                 "instruction": ch["challenge_value"],
+                "difficulty": difficulty,
                 "expires_in": 30 if is_trusted else 60
             } for ch in challenges
         ]
     }
+
 
 # -------------------- VERIFY CHALLENGE --------------------
 @app.post("/v1/verify")

@@ -151,6 +151,7 @@ async function loadChallenges(){
 }
 
 /* ======================== LOAD NEXT CHALLENGE ======================== */
+/* ======================== LOAD NEXT CHALLENGE ======================== */
 function loadNextChallenge(){
     if(challengeIndex >= challenges.length){
         finalizeSession();
@@ -166,17 +167,27 @@ function loadNextChallenge(){
     challengeProgress.innerText = `Challenge ${challengeIndex} of ${challenges.length}`;
     statusEl.innerText = "🧠 Challenge: " + currentChallenge.instruction;
 
-    const duration = currentChallenge.fast_track ? 10 : challengeDuration;
+    // Determine duration based on difficulty & fast-track
+    let duration = challengeDuration; // default 15s
+    let label = "";
 
     if(currentChallenge.fast_track){
-        fastTrackLabel.style.display = "block";
+        duration = 10;
+        label = "⚡ Fast-Track Mode";
     } else {
-        fastTrackLabel.style.display = "none";
+        if(currentChallenge.difficulty === "easy") duration = 12;
+        if(currentChallenge.difficulty === "medium") duration = 15;
+        if(currentChallenge.difficulty === "hard") duration = 20;
+        label = currentChallenge.difficulty === "hard" ? "🔥 Hard Challenge" : "";
     }
+
+    fastTrackLabel.innerText = label;
+    fastTrackLabel.style.display = label ? "block" : "none";
 
     startCountdown(duration);
     waitForFaceThenRecord();
 }
+
 
 /* ======================== COUNTDOWN TIMER ======================== */
 function startCountdown(seconds){
