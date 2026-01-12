@@ -3,51 +3,45 @@
 import uuid
 import random
 
-def generate_challenges(num=3, difficulty=None):
+def generate_adaptive_challenges(prev_results=None, num=3, trusted=False):
+    """
+    Generate challenges with adaptive difficulty based on previous results.
+    Trusted devices get easier/faster challenges (fast-track).
+    """
     challenges = []
 
+    # Determine difficulty based on previous results
+    avg_score = None
+    if prev_results:
+        avg_score = sum(r.get("liveness_score", 0) for r in prev_results) / len(prev_results)
+
     for _ in range(num):
-        # Example challenge types
+        # Base difficulty
+        difficulty = "medium"
+        if avg_score is not None:
+            if avg_score > 0.8:
+                difficulty = "hard"
+            elif avg_score < 0.5:
+                difficulty = "easy"
+
+        # Trusted devices adjustment
+        if trusted:
+            difficulty = random.choice(["easy", "medium"])  # keep easier/faster for fast-track
+
         challenge_type = random.choice(["smile", "blink", "head_turn", "say_phrase"])
 
-        # Determine difficulty if not provided
-        ch_difficulty = difficulty or random.choice(["easy", "medium", "hard"])
-
-        # Adjust challenge value based on difficulty and type
-        if challenge_type == "smile":
-            if ch_difficulty == "easy":
-                value = "Smile once"
-            elif ch_difficulty == "medium":
-                value = "Smile twice"
-            else:  # hard
-                value = "Smile and turn head"
-        elif challenge_type == "blink":
-            if ch_difficulty == "easy":
-                value = "Blink once"
-            elif ch_difficulty == "medium":
-                value = "Blink twice"
-            else:
-                value = "Blink three times quickly"
-        elif challenge_type == "head_turn":
-            if ch_difficulty == "easy":
-                value = "Turn head left"
-            elif ch_difficulty == "medium":
-                value = "Turn head left and right"
-            else:
-                value = "Turn head full circle slowly"
-        else:  # say_phrase
-            if ch_difficulty == "easy":
-                value = "Say 'Hello'"
-            elif ch_difficulty == "medium":
-                value = "Say 'I am human'"
-            else:
-                value = "Say 'Certivo verification complete'"
+        value_map = {
+            "easy": ["Smile once", "Blink once", "Turn head left", "Say 'Hi'"],
+            "medium": ["Smile twice", "Blink twice", "Turn head both sides", "Say 'Hello there'"],
+            "hard": ["Smile and turn head", "Blink rapidly twice", "Rotate head full circle", "Say 'Verification challenge'"]
+        }
 
         challenges.append({
             "challenge_id": str(uuid.uuid4()),
             "challenge_type": challenge_type,
-            "challenge_value": value,
-            "difficulty": ch_difficulty
+            "challenge_value": random.choice(value_map[difficulty]),
+            "difficulty": difficulty,
+            "fast_track": trusted
         })
 
     return challenges

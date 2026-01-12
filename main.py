@@ -8,8 +8,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 import time, uuid, hashlib, os
-
-from challenge_engine import generate_challenges
+from challenge_engine import generate_adaptive_challenges
 from human_verification import run_human_verification
 
 # -------------------- FASTAPI APP --------------------
@@ -57,31 +56,54 @@ trusted_devices = {}  # {device_id: trusted_token}
 @app.get("/v1/challenge")
 async def get_challenge(request: Request, device_id: str = Query(...)):
     """
-    Phase 3.5 rules:
-    - Trusted devices get fast-track (fewer/shorter)
-    - Include difficulty for each challenge
+    Phase 3.8 adaptive challenge fetching
+    FIXED: returns a single active challenge (not array)
     """
+
     user_agent = request.headers.get("user-agent", "unknown")
     is_trusted = device_id in trusted_devices
-    challenge_count = 1 if is_trusted else 3
 
-    # None = random difficulty inside generate_challenges
-    challenges = generate_challenges(num=challenge_count, difficulty=None)
+    # Fetch previous sessions (for future adaptive tuning)
+    db = SessionLocal()
+    prev_sessions = db.query(SessionRecord).filter(
+        SessionRecord.device_id == device_id
+    ).all()
+    db.close()
+
+    prev_results = []  # placeholder (safe)
+
+    # Generate adaptive challenges
+    challenges = generate_adaptive_challenges(
+        prev_results=prev_results,
+        num=3,
+        trusted=is_trusted
+    )
+
+    # 🚨 SAFETY CHECK
+    if not challenges or not isinstance(challenges, list):
+        return {
+            "trusted_device": is_trusted,
+            "challenge": None,
+            "error": "No challenges generated"
+        }
+
+    # ✅ PICK ONE ACTIVE CHALLENGE
+    active = challenges[0]
+
+    # ✅ NORMALIZE STRUCTURE (VERY IMPORTANT)
+    normalized_challenge = {
+        "id": active.get("id", str(uuid.uuid4())),
+        "type": active.get("type", "generic"),
+        "instruction": active.get("instruction", "Follow the on-screen instruction"),
+        "time_limit": active.get("time_limit", 7),
+        "difficulty": active.get("difficulty", "medium")
+    }
 
     return {
         "trusted_device": is_trusted,
-        "challenges": [
-            {
-                "challenge_id": ch["challenge_id"],
-                "challenge_type": ch["challenge_type"],
-                "instruction": ch["challenge_value"],
-                "difficulty": ch["difficulty"],   # used for frontend
-                "fast_track": is_trusted,
-                "expires_in": 30 if is_trusted else 60
-            }
-            for ch in challenges
-        ]
+        "challenge": normalized_challenge
     }
+
 
 # -------------------- VERIFY CHALLENGE --------------------
 @app.post("/v1/verify")
