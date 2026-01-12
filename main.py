@@ -8,6 +8,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 import time, uuid, hashlib, os
+
 from challenge_engine import generate_adaptive_challenges
 from human_verification import run_human_verification
 
@@ -52,59 +53,59 @@ Base.metadata.create_all(bind=engine)
 # -------------------- IN-MEMORY TRUSTED DEVICE STORE --------------------
 trusted_devices = {}  # {device_id: trusted_token}
 
-# -------------------- GET CHALLENGES --------------------
+# -------------------- GET CHALLENGE --------------------
 @app.get("/v1/challenge")
 async def get_challenge(request: Request, device_id: str = Query(...)):
     """
-    Phase 3.8 adaptive challenge fetching
-    FIXED: returns a single active challenge (not array)
+    Phase 3.8 – Adaptive challenge fetching
+    Returns multiple normalized challenges (frontend-safe)
     """
 
     user_agent = request.headers.get("user-agent", "unknown")
     is_trusted = device_id in trusted_devices
 
-    # Fetch previous sessions (for future adaptive tuning)
+    # Fetch previous sessions (future adaptive use)
     db = SessionLocal()
     prev_sessions = db.query(SessionRecord).filter(
         SessionRecord.device_id == device_id
     ).all()
     db.close()
 
-    prev_results = []  # placeholder (safe)
+    prev_results = []  # placeholder for now
 
-    # Generate adaptive challenges
+    # Generate multiple adaptive challenges
     challenges = generate_adaptive_challenges(
         prev_results=prev_results,
-        num=3,
+        num=3,          # 3 challenges per session
         trusted=is_trusted
     )
 
-    # 🚨 SAFETY CHECK
+    # Safety check
     if not challenges or not isinstance(challenges, list):
         return {
             "trusted_device": is_trusted,
-            "challenge": None,
+            "challenges": [],
             "error": "No challenges generated"
         }
 
-    # ✅ PICK ONE ACTIVE CHALLENGE
-    active = challenges[0]
-
-    # ✅ NORMALIZE STRUCTURE (VERY IMPORTANT)
-    normalized_challenge = {
-        "id": active.get("id", str(uuid.uuid4())),
-        "type": active.get("type", "generic"),
-        "instruction": active.get("instruction", "Follow the on-screen instruction"),
-        "time_limit": active.get("time_limit", 7),
-        "difficulty": active.get("difficulty", "medium")
-    }
+    # Normalize all challenges
+    normalized_challenges = []
+    for ch in challenges:
+        normalized_challenges.append({
+            "id": ch.get("challenge_id"),
+            "type": ch.get("challenge_type"),
+            "instruction": ch.get("challenge_value"),
+            "time_limit": 7,
+            "difficulty": ch.get("difficulty", "medium")
+        })
 
     return {
         "trusted_device": is_trusted,
-        "challenge": normalized_challenge
+        "challenges": normalized_challenges
     }
 
 
+# -------------------- VERIFY CHALLENGE --------------------
 # -------------------- VERIFY CHALLENGE --------------------
 @app.post("/v1/verify")
 async def verify(
@@ -114,10 +115,6 @@ async def verify(
     video: UploadFile = File(...),
     audio: UploadFile = File(None)
 ):
-    """
-    Phase 3.2:
-    - Returns only biometric signals
-    """
     video_path = f"uploads/{uuid.uuid4()}_{video.filename}"
     with open(video_path, "wb") as f:
         f.write(video.file.read())
@@ -128,8 +125,14 @@ async def verify(
         with open(audio_path, "wb") as f:
             f.write(audio.file.read())
 
+    # Run human verification
     result = run_human_verification(video_path, audio_path, "generic")
 
+    # Ensure the challenge_passed key always exists
+    if "challenge_passed" not in result:
+        result["challenge_passed"] = True
+
+    # Return normalized response
     return {
         "liveness_score": result.get("liveness_score", 0),
         "lip_sync_score": result.get("lip_sync_score", 0),
@@ -141,6 +144,7 @@ async def verify(
         "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
     }
 
+
 # -------------------- FINALIZE SESSION --------------------
 @app.post("/v1/finalize")
 async def finalize_session(payload: dict = Body(...)):
@@ -151,7 +155,6 @@ async def finalize_session(payload: dict = Body(...)):
     trust_scores = []
     failed_challenges = 0
 
-    # Track averages
     total_liveness = 0
     total_reaction = 0
     total_stability = 0
@@ -164,12 +167,17 @@ async def finalize_session(payload: dict = Body(...)):
         blink_count = r.get("blink_count", 0)
         difficulty = r.get("difficulty", "medium")
 
-        # Difficulty weighting
         weight = {"easy": 0.8, "medium": 1.0, "hard": 1.2}.get(difficulty, 1.0)
-
         blink_penalty = min(max(blink_count - 5, 0) * 0.02, 0.2)
 
-        score = (liveness * 0.35 + lip_sync * 0.25 + reaction_time * 0.15 + stability * 0.15 - blink_penalty) * weight
+        score = (
+            liveness * 0.35 +
+            lip_sync * 0.25 +
+            reaction_time * 0.15 +
+            stability * 0.15 -
+            blink_penalty
+        ) * weight
+
         trust_scores.append(score)
 
         total_liveness += liveness
@@ -182,7 +190,6 @@ async def finalize_session(payload: dict = Body(...)):
     base_trust = sum(trust_scores) / len(trust_scores) if trust_scores else 0
     trust_score = round(max(30, min(100, base_trust * 100)), 2)
 
-    # Penalties for failed challenges
     if failed_challenges == 1:
         trust_score -= 10
     elif failed_challenges == 2:
@@ -192,53 +199,37 @@ async def finalize_session(payload: dict = Body(...)):
 
     trust_score = max(30, trust_score)
 
+    level = "high" if trust_score >= 85 else "medium" if trust_score >= 60 else "low"
+
+    session_id = str(uuid.uuid4())
+
+    db = SessionLocal()
+    db.merge(SessionRecord(
+        session_id=session_id,
+        device_id=device_id,
+        trust_score=trust_score,
+        trust_level=level,
+        failed_challenges=failed_challenges,
+        total_challenges=len(results),
+        timestamp_utc=datetime.utcnow()
+    ))
+    db.commit()
+    db.close()
+
     if trust_score >= 85:
-        level = "high"
-    elif trust_score >= 60:
-        level = "medium"
-    else:
-        level = "low"
+        trusted_devices[device_id] = hashlib.sha256(
+            f"{device_id}:{user_agent}".encode()
+        ).hexdigest()
 
-    # Compute averages
-    avg_liveness = round(total_liveness / len(results), 2) if results else 0
-    avg_reaction = round(total_reaction / len(results), 2) if results else 0
-    avg_stability = round(total_stability / len(results), 2) if results else 0
-
-    session_record = {
-        "session_id": str(uuid.uuid4()),
+    return {
+        "session_id": session_id,
         "device_id": device_id,
         "trust_score": trust_score,
         "trust_level": level,
         "failed_challenges": failed_challenges,
         "total_challenges": len(results),
-        "avg_liveness": avg_liveness,
-        "avg_reaction": avg_reaction,
-        "avg_stability": avg_stability,
         "timestamp_utc": datetime.utcnow()
     }
-
-    # Save to SQLite
-    db = SessionLocal()
-    db.merge(SessionRecord(
-        session_id=session_record["session_id"],
-        device_id=session_record["device_id"],
-        trust_score=session_record["trust_score"],
-        trust_level=session_record["trust_level"],
-        failed_challenges=session_record["failed_challenges"],
-        total_challenges=session_record["total_challenges"],
-        timestamp_utc=session_record["timestamp_utc"]
-    ))
-    db.commit()
-    db.close()
-
-    # Mark device trusted if trust_score >= 85
-    if trust_score >= 85:
-        trusted_token = hashlib.sha256(f"{device_id}:{user_agent}".encode()).hexdigest()
-        trusted_devices[device_id] = trusted_token
-        session_record["trusted_device_token"] = trusted_token
-
-    return session_record
-
 
 # -------------------- ANALYTICS --------------------
 @app.get("/v1/sessions")

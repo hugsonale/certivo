@@ -82,14 +82,12 @@ button:disabled {
     <video id="video" autoplay muted></video>
 </div>
 
-
 <!-- STAGE 0 -->
 <button id="startFaceBtn">Start Face Verification</button>
 
 <!-- STAGE 1: FACE VERIFICATION -->
 <div id="faceSection" style="display:none;">
     <p id="faceStatus">📷 Please show your face clearly</p>
-
     <br>
     <button id="proceedBtn" disabled>Proceed to Challenge</button>
 </div>
@@ -174,27 +172,49 @@ function startFaceVerification() {
 proceedBtn.onclick = async () => {
     faceSection.style.display = "none";
     challengeSection.style.display = "block";
+
+    statusEl.innerText = "⏳ Loading challenges...";
+    challengeProgress.innerText = "";
+    challengeTimer.innerText = "";
+    fastTrackLabel.style.display = "none";
+
     await loadChallenges();
 };
 
 /* ================= LOAD CHALLENGES ================= */
 async function loadChallenges() {
-    const res = await fetch(`http://127.0.0.1:8000/v1/challenge?device_id=${deviceId}`);
-    const data = await res.json();
+    let data;
 
-    trustedDevice = data.trusted_device;
+    try {
+        const res = await fetch(
+            `http://127.0.0.1:8000/v1/challenge?device_id=${deviceId}`
+        );
+        data = await res.json();
+    } catch (e) {
+        statusEl.innerText = "❌ Failed to load challenges";
+        return;
+    }
 
+    if (!data || !Array.isArray(data.challenges) || data.challenges.length === 0) {
+        statusEl.innerText = "❌ No challenges received";
+        return;
+    }
+
+    trustedDevice = !!data.trusted_device;
+
+    // Map backend challenges to frontend-friendly format
     challenges = data.challenges.map(ch => ({
-        id: ch.challenge_id,
-        text: ch.challenge_value,     // ✅ CORRECT FIELD
-        difficulty: ch.difficulty,
+        id: ch.id,
+        text: ch.instruction,
+        difficulty: ch.difficulty || "medium",
         fast_track: trustedDevice
     }));
 
     challengeIndex = 0;
     sessionResults = [];
 
-    loadNextChallenge();
+    // 🔑 Force render AFTER state is ready
+    setTimeout(loadNextChallenge, 100);
 }
 
 /* ================= LOAD NEXT CHALLENGE ================= */
@@ -252,19 +272,34 @@ async function submitRecording(challengeId) {
     formData.append("challenge_id", challengeId);
     formData.append("device_id", deviceId);
 
-    const res = await fetch("http://127.0.0.1:8000/v1/verify", {
-        method: "POST",
-        body: formData
-    });
+    try {
+        const res = await fetch("http://127.0.0.1:8000/v1/verify", {
+            method: "POST",
+            body: formData
+        });
 
-    const result = await res.json();
+        if (!res.ok) throw new Error("Server error");
 
-    statusEl.innerText = result.challenge_passed
-        ? "✅ Challenge passed"
-        : "❌ Challenge failed";
+        const result = await res.json();
 
-    sessionResults.push(result);
+        if (typeof result.challenge_passed === "undefined") {
+            statusEl.innerText = "❌ Invalid verification response";
+            sessionResults.push({ challenge_passed: false });
+        } else {
+            statusEl.innerText = result.challenge_passed
+                ? "✅ Challenge passed"
+                : "❌ Challenge failed";
 
+            sessionResults.push(result);
+        }
+
+    } catch (e) {
+        console.error(e);
+        statusEl.innerText = "❌ Failed to verify challenge";
+        sessionResults.push({ challenge_passed: false });
+    }
+
+    // Move to next challenge after small delay
     setTimeout(loadNextChallenge, 1200);
 }
 
@@ -302,7 +337,6 @@ function showVerdict(score, level) {
     label.innerText = `${level.toUpperCase()} TRUST (${score}%)`;
 }
 </script>
-
 
 </body>
 </html>
