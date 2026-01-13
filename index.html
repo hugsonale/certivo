@@ -198,7 +198,6 @@ async function loadChallenges() {
         challenges = data.challenges.map(ch => ({
             id: ch.id,
             text: ch.instruction,
-            type: ch.type || ch.challenge_type, // <- make sure type exists
             difficulty: ch.difficulty || "medium",
             fast_track: trustedDevice
         }));
@@ -230,8 +229,7 @@ function loadNextChallenge() {
     fastTrackLabel.style.display = ch.fast_track ? "block" : "none";
 
     const duration = ch.fast_track ? 10 : 15;
-    startCountdown(duration);
-    startRecording(ch.id, ch.type, duration);
+    startRecording(ch.id, duration);
 }
 
 /* ================= REPLACE CURRENT (ON FAIL) ================= */
@@ -240,52 +238,62 @@ function replaceCurrentChallenge() {
     loadNextChallenge();
 }
 
-/* ================= COUNTDOWN ================= */
-function startCountdown(seconds) {
-    let t = seconds;
-    challengeTimer.innerText = `Time left: ${t}s`;
-
-    countdownInterval = setInterval(() => {
-        t--;
-        challengeTimer.innerText = `Time left: ${t}s`;
-        if (t <= 0) clearInterval(countdownInterval);
-    }, 1000);
-}
-
-/* ================= RECORD ================= */
-function startRecording(challengeId, challengeType, duration) {
+/* ================= RECORDING & COUNTDOWN FIXED ================= */
+function startRecording(challengeId, duration) {
     recordedChunks = [];
     recordingActive = true;
 
     mediaRecorder = new MediaRecorder(video.srcObject);
-    mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
 
-    mediaRecorder.onstop = () => {
-        if (recordingActive) {
-            recordingActive = false;
-            submitRecording(challengeId, challengeType);
+    mediaRecorder.ondataavailable = e => {
+        if (e.data.size > 0) recordedChunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+        if (!recordingActive) return;
+        recordingActive = false;
+
+        if (countdownInterval) {
+            clearInterval(countdownInterval);
+            countdownInterval = null;
         }
+
+        await submitRecording(challengeId);
     };
 
     mediaRecorder.start();
 
+    // Stop after duration seconds
     setTimeout(() => {
-        if (mediaRecorder.state !== "inactive") {
-            mediaRecorder.stop();
-        }
+        if (mediaRecorder.state !== "inactive") mediaRecorder.stop();
     }, duration * 1000);
+
+    // Countdown purely visual
+    startCountdown(duration);
+}
+
+function startCountdown(seconds) {
+    let t = seconds;
+    challengeTimer.innerText = `Time left: ${t}s`;
+
+    if (countdownInterval) clearInterval(countdownInterval);
+
+    countdownInterval = setInterval(() => {
+        t--;
+        challengeTimer.innerText = `Time left: ${t}s`;
+        if (t <= 0) {
+            clearInterval(countdownInterval);
+            countdownInterval = null;
+        }
+    }, 1000);
 }
 
 /* ================= SUBMIT ================= */
-async function submitRecording(challengeId, challengeType) {
-    recordingActive = false;
-    clearInterval(countdownInterval);
-
+async function submitRecording(challengeId) {
     const blob = new Blob(recordedChunks, { type: "video/webm" });
     const formData = new FormData();
     formData.append("video", blob);
     formData.append("challenge_id", challengeId);
-    formData.append("challenge_type", challengeType); // <- send correct type
     formData.append("device_id", deviceId);
 
     try {
@@ -296,18 +304,18 @@ async function submitRecording(challengeId, challengeType) {
 
         const result = await res.json();
 
-        if (result.challenge_passed === true) {
+        if (result.challenge_passed) {
             statusEl.innerText = "✅ Challenge passed";
             sessionResults.push(result);
             setTimeout(loadNextChallenge, 600);
-
         } else {
             statusEl.innerText = "❌ Challenge failed";
             sessionResults.push(result);
             setTimeout(replaceCurrentChallenge, 800);
         }
 
-    } catch {
+    } catch (err) {
+        console.error(err);
         statusEl.innerText = "❌ Verification error";
         sessionResults.push({ challenge_passed: false });
         setTimeout(replaceCurrentChallenge, 800);

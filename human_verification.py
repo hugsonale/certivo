@@ -3,18 +3,16 @@ import os
 import cv2
 import numpy as np
 
-# ---------------- V1 FRIENDLY THRESHOLDS ----------------
-MIN_AUDIO_SIZE = 1_000          # bytes (smaller to pass short audio)
-MIN_VIDEO_FRAMES = 3            # allow very short clips
-MOTION_THRESHOLD = 1.0          # slightly less aggressive
-
-BLINK_MOTION_THRESHOLD = 0.5
-HEAD_MOTION_THRESHOLD = 1.0
+# ---------------- V2 FRIENDLY THRESHOLDS (FASTER) ----------------
+MIN_AUDIO_SIZE = 1_500          # bytes (browser-safe)
+MIN_VIDEO_FRAMES = 3            # fewer frames needed
+MOTION_THRESHOLD = 1.2
+BLINK_MOTION_THRESHOLD = 0.8
+HEAD_MOTION_THRESHOLD = 1.5
+MAX_FRAMES_TO_CHECK = 15        # speed up by sampling first 15 frames
 
 def _video_motion_profile(video_path: str):
-    """
-    Analyze video motion and return basic movement stats
-    """
+    """Analyze video motion and return basic movement stats (faster)."""
     if not video_path or not os.path.exists(video_path):
         return None
 
@@ -25,13 +23,12 @@ def _video_motion_profile(video_path: str):
         return None
 
     prev_gray = cv2.cvtColor(prev, cv2.COLOR_BGR2GRAY)
-
     total_motion = 0
     x_motion = 0.0
     y_motion = 0.0
-    frames = 0
+    frames = 1
 
-    while True:
+    while frames < MAX_FRAMES_TO_CHECK:
         ret, frame = cap.read()
         if not ret:
             break
@@ -43,17 +40,20 @@ def _video_motion_profile(video_path: str):
         if mean_diff > MOTION_THRESHOLD:
             total_motion += 1
 
-        # Optical flow for motion direction
+        # Optical flow (simplified)
         flow = cv2.calcOpticalFlowFarneback(
             prev_gray, gray, None,
             0.5, 3, 15, 3, 5, 1.2, 0
         )
-
         x_motion += float(np.mean(flow[..., 0]))
         y_motion += float(np.mean(flow[..., 1]))
 
         prev_gray = gray
         frames += 1
+
+        # Early exit: enough motion detected
+        if total_motion >= MIN_VIDEO_FRAMES:
+            break
 
     cap.release()
 
@@ -68,26 +68,20 @@ def _video_motion_profile(video_path: str):
     }
 
 def run_human_verification(video_path: str, audio_path: str, challenge_type: str):
-    """
-    Certivo V1 Verification Engine (Updated for faster challenge pass/fail)
-    """
+    """Certivo V2 Verification Engine (Faster)."""
     motion = _video_motion_profile(video_path)
 
     # ---------------- SPEAK PHRASE ----------------
     if challenge_type == "speak_phrase":
         if not audio_path or not os.path.exists(audio_path):
             return _fail("missing_audio")
-
         if os.path.getsize(audio_path) < MIN_AUDIO_SIZE:
             return _fail("audio_too_small")
-
         if not motion or motion["total_motion"] < 2:
             return _fail("no_face_motion")
-
-        # ✅ Boost confidence for successful speech challenge
         return _pass(confidence=0.97)
 
-    # Video required for other challenges
+    # Video required from here
     if not motion:
         return _fail("no_video")
 
@@ -105,15 +99,15 @@ def run_human_verification(video_path: str, audio_path: str, challenge_type: str
             return _fail("head_turn_not_detected")
         return _pass(confidence=0.95)
 
-    # ---------------- SMILE ----------------
-    if challenge_type == "smile":
-        if motion["total_motion"] < MIN_VIDEO_FRAMES:
-            return _fail("insufficient_motion_for_smile")
-        return _pass(confidence=0.94)
+    # ---------------- NOD ----------------
+    if challenge_type == "nod":
+        if abs(motion["y_motion"]) < HEAD_MOTION_THRESHOLD:
+            return _fail("nod_not_detected")
+        return _pass(confidence=0.95)
 
-    # ---------------- GENERIC / FALLBACK ----------------
+    # ---------------- SMILE or GENERIC ----------------
     if motion["total_motion"] >= MIN_VIDEO_FRAMES:
-        return _pass(confidence=0.93)
+        return _pass(confidence=0.94)
 
     return _fail("challenge_failed")
 

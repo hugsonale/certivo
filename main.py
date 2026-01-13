@@ -12,7 +12,6 @@ import time, uuid, hashlib, os
 from challenge_engine import generate_adaptive_challenges
 from human_verification import run_human_verification
 
-# -------------------- FASTAPI APP --------------------
 app = FastAPI()
 
 origins = [
@@ -32,7 +31,7 @@ app.add_middleware(
 # -------------------- STORAGE --------------------
 os.makedirs("uploads", exist_ok=True)
 
-# -------------------- SQLITE / SQLALCHEMY --------------------
+# -------------------- SQLITE --------------------
 DATABASE_URL = "sqlite:///./certivo_v1.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -50,7 +49,7 @@ class SessionRecord(Base):
 
 Base.metadata.create_all(bind=engine)
 
-# -------------------- IN-MEMORY TRUSTED DEVICE STORE --------------------
+# -------------------- TRUSTED DEVICE STORE --------------------
 trusted_devices = {}  # {device_id: trusted_token}
 
 # -------------------- GET CHALLENGE --------------------
@@ -59,30 +58,23 @@ async def get_challenge(request: Request, device_id: str = Query(...)):
     user_agent = request.headers.get("user-agent", "unknown")
     is_trusted = device_id in trusted_devices
 
-    # Fetch previous sessions (for future adaptive logic)
     db = SessionLocal()
     prev_sessions = db.query(SessionRecord).filter(
         SessionRecord.device_id == device_id
     ).all()
     db.close()
 
-    prev_results = []  # placeholder for now
+    prev_results = []  # placeholder
 
-    # Generate multiple adaptive challenges
     challenges = generate_adaptive_challenges(
         prev_results=prev_results,
-        num=3,          # 3 challenges per session
+        num=3,
         trusted=is_trusted
     )
 
     if not challenges or not isinstance(challenges, list):
-        return {
-            "trusted_device": is_trusted,
-            "challenges": [],
-            "error": "No challenges generated"
-        }
+        return {"trusted_device": is_trusted, "challenges": [], "error": "No challenges generated"}
 
-    # Normalize challenges for frontend
     normalized_challenges = []
     for ch in challenges:
         normalized_challenges.append({
@@ -93,10 +85,7 @@ async def get_challenge(request: Request, device_id: str = Query(...)):
             "difficulty": ch.get("difficulty", "medium")
         })
 
-    return {
-        "trusted_device": is_trusted,
-        "challenges": normalized_challenges
-    }
+    return {"trusted_device": is_trusted, "challenges": normalized_challenges}
 
 # -------------------- VERIFY CHALLENGE --------------------
 @app.post("/v1/verify")
@@ -104,7 +93,6 @@ async def verify(
     request: Request,
     challenge_id: str = Form(...),
     device_id: str = Form(...),
-    challenge_type: str = Form(...),
     video: UploadFile = File(...),
     audio: UploadFile = File(None)
 ):
@@ -118,19 +106,8 @@ async def verify(
         with open(audio_path, "wb") as f:
             f.write(audio.file.read())
 
-    # Map challenge_type for human_verification.py
-    type_map = {
-        "say_phrase": "speak_phrase",
-        "blink": "blink",
-        "head_turn": "head_turn",
-        "smile": "smile"
-    }
-    hv_type = type_map.get(challenge_type, "generic")
+    result = run_human_verification(video_path, audio_path, "generic")
 
-    # Run human verification
-    result = run_human_verification(video_path, audio_path, hv_type)
-
-    # Ensure challenge_passed always exists
     if "challenge_passed" not in result:
         result["challenge_passed"] = True
 
@@ -166,14 +143,7 @@ async def finalize_session(payload: dict = Body(...)):
         weight = {"easy": 0.8, "medium": 1.0, "hard": 1.2}.get(difficulty, 1.0)
         blink_penalty = min(max(blink_count - 5, 0) * 0.02, 0.2)
 
-        score = (
-            liveness * 0.35 +
-            lip_sync * 0.25 +
-            reaction_time * 0.15 +
-            stability * 0.15 -
-            blink_penalty
-        ) * weight
-
+        score = (liveness * 0.35 + lip_sync * 0.25 + reaction_time * 0.15 + stability * 0.15 - blink_penalty) * weight
         trust_scores.append(score)
 
         if not r.get("challenge_passed", True):
@@ -208,9 +178,7 @@ async def finalize_session(payload: dict = Body(...)):
     db.close()
 
     if trust_score >= 85:
-        trusted_devices[device_id] = hashlib.sha256(
-            f"{device_id}:{user_agent}".encode()
-        ).hexdigest()
+        trusted_devices[device_id] = hashlib.sha256(f"{device_id}:{user_agent}".encode()).hexdigest()
 
     return {
         "session_id": session_id,
