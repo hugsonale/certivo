@@ -113,15 +113,27 @@ button:disabled {
 
 <script>
 /* ================= GLOBAL STATE ================= */
+const startFaceBtn = document.getElementById("startFaceBtn");
+const faceSection = document.getElementById("faceSection");
+const challengeSection = document.getElementById("challengeSection");
+const proceedBtn = document.getElementById("proceedBtn");
+
+const video = document.getElementById("video");
+const faceStatus = document.getElementById("faceStatus");
+const statusEl = document.getElementById("status");
+const challengeProgress = document.getElementById("challengeProgress");
+const challengeTimer = document.getElementById("challengeTimer");
+const fastTrackLabel = document.getElementById("fastTrackLabel");
+
 let faceModel;
 let mediaRecorder;
 let recordedChunks = [];
 let recordingActive = false;
-let countdownInterval = null;
 
 let challenges = [];
 let challengeIndex = 0;
 let sessionResults = [];
+let countdownInterval = null;
 
 let deviceId = "device_" + Math.floor(Math.random() * 100000);
 let userAgent = navigator.userAgent;
@@ -137,9 +149,16 @@ startFaceBtn.onclick = async () => {
     startFaceVerification();
 };
 
+/* ================= CAMERA ================= */
+async function initCamera() {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    video.srcObject = stream;
+}
+
 /* ================= FACE VERIFICATION ================= */
 function startFaceVerification() {
     faceStatus.innerText = "📷 Looking for your face...";
+
     const interval = setInterval(async () => {
         const predictions = await faceModel.estimateFaces(video);
         if (predictions.length === 1) {
@@ -179,6 +198,7 @@ async function loadChallenges() {
         challenges = data.challenges.map(ch => ({
             id: ch.id,
             text: ch.instruction,
+            type: ch.type || ch.challenge_type, // <- make sure type exists
             difficulty: ch.difficulty || "medium",
             fast_track: trustedDevice
         }));
@@ -211,7 +231,13 @@ function loadNextChallenge() {
 
     const duration = ch.fast_track ? 10 : 15;
     startCountdown(duration);
-    startRecording(ch.id, duration);
+    startRecording(ch.id, ch.type, duration);
+}
+
+/* ================= REPLACE CURRENT (ON FAIL) ================= */
+function replaceCurrentChallenge() {
+    challengeIndex--;
+    loadNextChallenge();
 }
 
 /* ================= COUNTDOWN ================= */
@@ -222,34 +248,36 @@ function startCountdown(seconds) {
     countdownInterval = setInterval(() => {
         t--;
         challengeTimer.innerText = `Time left: ${t}s`;
-        if (t <= 0) {
-            clearInterval(countdownInterval);
-        }
+        if (t <= 0) clearInterval(countdownInterval);
     }, 1000);
 }
 
 /* ================= RECORD ================= */
-function startRecording(challengeId, duration) {
+function startRecording(challengeId, challengeType, duration) {
     recordedChunks = [];
     recordingActive = true;
 
     mediaRecorder = new MediaRecorder(video.srcObject);
     mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
+
     mediaRecorder.onstop = () => {
         if (recordingActive) {
             recordingActive = false;
-            submitRecording(challengeId);
+            submitRecording(challengeId, challengeType);
         }
     };
 
     mediaRecorder.start();
+
     setTimeout(() => {
-        if (mediaRecorder.state !== "inactive") mediaRecorder.stop();
+        if (mediaRecorder.state !== "inactive") {
+            mediaRecorder.stop();
+        }
     }, duration * 1000);
 }
 
 /* ================= SUBMIT ================= */
-async function submitRecording(challengeId) {
+async function submitRecording(challengeId, challengeType) {
     recordingActive = false;
     clearInterval(countdownInterval);
 
@@ -257,6 +285,7 @@ async function submitRecording(challengeId) {
     const formData = new FormData();
     formData.append("video", blob);
     formData.append("challenge_id", challengeId);
+    formData.append("challenge_type", challengeType); // <- send correct type
     formData.append("device_id", deviceId);
 
     try {
@@ -270,19 +299,18 @@ async function submitRecording(challengeId) {
         if (result.challenge_passed === true) {
             statusEl.innerText = "✅ Challenge passed";
             sessionResults.push(result);
-            loadNextChallenge(); // immediately go to next
+            setTimeout(loadNextChallenge, 600);
+
         } else {
             statusEl.innerText = "❌ Challenge failed";
             sessionResults.push(result);
-            challengeIndex--; // retry the same challenge
-            loadNextChallenge();
+            setTimeout(replaceCurrentChallenge, 800);
         }
 
     } catch {
         statusEl.innerText = "❌ Verification error";
         sessionResults.push({ challenge_passed: false });
-        challengeIndex--; // retry
-        loadNextChallenge();
+        setTimeout(replaceCurrentChallenge, 800);
     }
 }
 
@@ -319,9 +347,7 @@ function showVerdict(score, level) {
 
     label.innerText = `${level.toUpperCase()} TRUST (${score}%)`;
 }
-
 </script>
-
 
 </body>
 </html>
