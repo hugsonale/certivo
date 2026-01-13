@@ -104,8 +104,6 @@ async def get_challenge(request: Request, device_id: str = Query(...)):
         "challenges": normalized_challenges
     }
 
-
-# -------------------- VERIFY CHALLENGE --------------------
 # -------------------- VERIFY CHALLENGE --------------------
 @app.post("/v1/verify")
 async def verify(
