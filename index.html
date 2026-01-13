@@ -113,32 +113,21 @@ button:disabled {
 
 <script>
 /* ================= GLOBAL STATE ================= */
-const startFaceBtn = document.getElementById("startFaceBtn");
-const faceSection = document.getElementById("faceSection");
-const challengeSection = document.getElementById("challengeSection");
-const proceedBtn = document.getElementById("proceedBtn");
-
-const video = document.getElementById("video");
-const faceStatus = document.getElementById("faceStatus");
-const statusEl = document.getElementById("status");
-const challengeProgress = document.getElementById("challengeProgress");
-const challengeTimer = document.getElementById("challengeTimer");
-const fastTrackLabel = document.getElementById("fastTrackLabel");
-
 let faceModel;
 let mediaRecorder;
 let recordedChunks = [];
+let recordingActive = false;
+let countdownInterval = null;
 
 let challenges = [];
 let challengeIndex = 0;
 let sessionResults = [];
-let countdownTimer = null;
 
 let deviceId = "device_" + Math.floor(Math.random() * 100000);
 let userAgent = navigator.userAgent;
 let trustedDevice = false;
 
-/* ================= STAGE 0 → STAGE 1 ================= */
+/* ================= STAGE 0 → FACE ================= */
 startFaceBtn.onclick = async () => {
     startFaceBtn.style.display = "none";
     faceSection.style.display = "block";
@@ -148,16 +137,9 @@ startFaceBtn.onclick = async () => {
     startFaceVerification();
 };
 
-/* ================= CAMERA ================= */
-async function initCamera() {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-    video.srcObject = stream;
-}
-
 /* ================= FACE VERIFICATION ================= */
 function startFaceVerification() {
     faceStatus.innerText = "📷 Looking for your face...";
-
     const interval = setInterval(async () => {
         const predictions = await faceModel.estimateFaces(video);
         if (predictions.length === 1) {
@@ -168,7 +150,7 @@ function startFaceVerification() {
     }, 400);
 }
 
-/* ================= STAGE 1 → STAGE 2 ================= */
+/* ================= PROCEED TO CHALLENGE ================= */
 proceedBtn.onclick = async () => {
     faceSection.style.display = "none";
     challengeSection.style.display = "block";
@@ -183,43 +165,37 @@ proceedBtn.onclick = async () => {
 
 /* ================= LOAD CHALLENGES ================= */
 async function loadChallenges() {
-    let data;
-
     try {
-        const res = await fetch(
-            `http://127.0.0.1:8000/v1/challenge?device_id=${deviceId}`
-        );
-        data = await res.json();
-    } catch (e) {
+        const res = await fetch(`http://127.0.0.1:8000/v1/challenge?device_id=${deviceId}`);
+        const data = await res.json();
+
+        if (!Array.isArray(data.challenges) || data.challenges.length === 0) {
+            statusEl.innerText = "❌ No challenges received";
+            return;
+        }
+
+        trustedDevice = !!data.trusted_device;
+
+        challenges = data.challenges.map(ch => ({
+            id: ch.id,
+            text: ch.instruction,
+            difficulty: ch.difficulty || "medium",
+            fast_track: trustedDevice
+        }));
+
+        challengeIndex = 0;
+        sessionResults = [];
+
+        loadNextChallenge();
+
+    } catch {
         statusEl.innerText = "❌ Failed to load challenges";
-        return;
     }
-
-    if (!data || !Array.isArray(data.challenges) || data.challenges.length === 0) {
-        statusEl.innerText = "❌ No challenges received";
-        return;
-    }
-
-    trustedDevice = !!data.trusted_device;
-
-    // Map backend challenges to frontend-friendly format
-    challenges = data.challenges.map(ch => ({
-        id: ch.id,
-        text: ch.instruction,
-        difficulty: ch.difficulty || "medium",
-        fast_track: trustedDevice
-    }));
-
-    challengeIndex = 0;
-    sessionResults = [];
-
-    // 🔑 Force render AFTER state is ready
-    setTimeout(loadNextChallenge, 100);
 }
 
 /* ================= LOAD NEXT CHALLENGE ================= */
 function loadNextChallenge() {
-    clearInterval(countdownTimer);
+    clearInterval(countdownInterval);
 
     if (challengeIndex >= challenges.length) {
         finalizeSession();
@@ -231,7 +207,6 @@ function loadNextChallenge() {
 
     challengeProgress.innerText = `Challenge ${challengeIndex} of ${challenges.length}`;
     statusEl.innerText = "🧠 " + ch.text;
-
     fastTrackLabel.style.display = ch.fast_track ? "block" : "none";
 
     const duration = ch.fast_track ? 10 : 15;
@@ -244,30 +219,42 @@ function startCountdown(seconds) {
     let t = seconds;
     challengeTimer.innerText = `Time left: ${t}s`;
 
-    countdownTimer = setInterval(() => {
+    countdownInterval = setInterval(() => {
         t--;
         challengeTimer.innerText = `Time left: ${t}s`;
-        if (t <= 0) clearInterval(countdownTimer);
+        if (t <= 0) {
+            clearInterval(countdownInterval);
+        }
     }, 1000);
 }
 
 /* ================= RECORD ================= */
 function startRecording(challengeId, duration) {
     recordedChunks = [];
+    recordingActive = true;
 
     mediaRecorder = new MediaRecorder(video.srcObject);
     mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
-    mediaRecorder.onstop = () => submitRecording(challengeId);
+    mediaRecorder.onstop = () => {
+        if (recordingActive) {
+            recordingActive = false;
+            submitRecording(challengeId);
+        }
+    };
 
     mediaRecorder.start();
-    setTimeout(() => mediaRecorder.stop(), duration * 1000);
+    setTimeout(() => {
+        if (mediaRecorder.state !== "inactive") mediaRecorder.stop();
+    }, duration * 1000);
 }
 
 /* ================= SUBMIT ================= */
 async function submitRecording(challengeId) {
+    recordingActive = false;
+    clearInterval(countdownInterval);
+
     const blob = new Blob(recordedChunks, { type: "video/webm" });
     const formData = new FormData();
-
     formData.append("video", blob);
     formData.append("challenge_id", challengeId);
     formData.append("device_id", deviceId);
@@ -278,29 +265,25 @@ async function submitRecording(challengeId) {
             body: formData
         });
 
-        if (!res.ok) throw new Error("Server error");
-
         const result = await res.json();
 
-        if (typeof result.challenge_passed === "undefined") {
-            statusEl.innerText = "❌ Invalid verification response";
-            sessionResults.push({ challenge_passed: false });
-        } else {
-            statusEl.innerText = result.challenge_passed
-                ? "✅ Challenge passed"
-                : "❌ Challenge failed";
-
+        if (result.challenge_passed === true) {
+            statusEl.innerText = "✅ Challenge passed";
             sessionResults.push(result);
+            loadNextChallenge(); // immediately go to next
+        } else {
+            statusEl.innerText = "❌ Challenge failed";
+            sessionResults.push(result);
+            challengeIndex--; // retry the same challenge
+            loadNextChallenge();
         }
 
-    } catch (e) {
-        console.error(e);
-        statusEl.innerText = "❌ Failed to verify challenge";
+    } catch {
+        statusEl.innerText = "❌ Verification error";
         sessionResults.push({ challenge_passed: false });
+        challengeIndex--; // retry
+        loadNextChallenge();
     }
-
-    // Move to next challenge after small delay
-    setTimeout(loadNextChallenge, 1200);
 }
 
 /* ================= FINALIZE ================= */
@@ -336,7 +319,9 @@ function showVerdict(score, level) {
 
     label.innerText = `${level.toUpperCase()} TRUST (${score}%)`;
 }
+
 </script>
+
 
 </body>
 </html>
