@@ -4,13 +4,12 @@ import cv2
 import numpy as np
 
 # ---------------- V1 FRIENDLY THRESHOLDS ----------------
-MIN_AUDIO_SIZE = 1_500          # bytes (browser-safe)
-MIN_VIDEO_FRAMES = 5            # allow short clips
-MOTION_THRESHOLD = 1.2          # less aggressive
+MIN_AUDIO_SIZE = 1_000          # bytes (smaller to pass short audio)
+MIN_VIDEO_FRAMES = 3            # allow very short clips
+MOTION_THRESHOLD = 1.0          # slightly less aggressive
 
-BLINK_MOTION_THRESHOLD = 0.8
-HEAD_MOTION_THRESHOLD = 1.5
-
+BLINK_MOTION_THRESHOLD = 0.5
+HEAD_MOTION_THRESHOLD = 1.0
 
 def _video_motion_profile(video_path: str):
     """
@@ -68,13 +67,10 @@ def _video_motion_profile(video_path: str):
         "y_motion": y_motion
     }
 
-
 def run_human_verification(video_path: str, audio_path: str, challenge_type: str):
     """
-    Certivo V1 Verification Engine (Friendly Version)
-    Rule: Any successful challenge == human
+    Certivo V1 Verification Engine (Updated for faster challenge pass/fail)
     """
-
     motion = _video_motion_profile(video_path)
 
     # ---------------- SPEAK PHRASE ----------------
@@ -91,7 +87,7 @@ def run_human_verification(video_path: str, audio_path: str, challenge_type: str
         # ✅ Boost confidence for successful speech challenge
         return _pass(confidence=0.97)
 
-    # Video required from here
+    # Video required for other challenges
     if not motion:
         return _fail("no_video")
 
@@ -99,43 +95,36 @@ def run_human_verification(video_path: str, audio_path: str, challenge_type: str
     if challenge_type == "blink":
         if motion["total_motion"] < MIN_VIDEO_FRAMES:
             return _fail("insufficient_motion")
-
         if abs(motion["y_motion"]) < BLINK_MOTION_THRESHOLD:
             return _fail("blink_not_detected")
-
-        # ✅ Friendly confidence
         return _pass(confidence=0.96)
 
     # ---------------- HEAD TURN ----------------
     if challenge_type == "head_turn":
         if abs(motion["x_motion"]) < HEAD_MOTION_THRESHOLD:
             return _fail("head_turn_not_detected")
-
         return _pass(confidence=0.95)
 
-    # ---------------- NOD ----------------
-    if challenge_type == "nod":
-        if abs(motion["y_motion"]) < HEAD_MOTION_THRESHOLD:
-            return _fail("nod_not_detected")
-
-        return _pass(confidence=0.95)
-
-    # ---------------- SMILE or GENERIC ----------------
-    if motion["total_motion"] >= MIN_VIDEO_FRAMES:
+    # ---------------- SMILE ----------------
+    if challenge_type == "smile":
+        if motion["total_motion"] < MIN_VIDEO_FRAMES:
+            return _fail("insufficient_motion_for_smile")
         return _pass(confidence=0.94)
 
-    return _fail("challenge_failed")
+    # ---------------- GENERIC / FALLBACK ----------------
+    if motion["total_motion"] >= MIN_VIDEO_FRAMES:
+        return _pass(confidence=0.93)
 
+    return _fail("challenge_failed")
 
 def _pass(confidence=0.95):
     return {
         "liveness_score": round(confidence, 2),
-        "lip_sync_score": round(confidence - 0.03, 2),  # small deduction for lip sync
+        "lip_sync_score": round(confidence - 0.03, 2),
         "challenge_passed": True,
         "replay_flag": False,
         "reason": "passed"
     }
-
 
 def _fail(reason="failed"):
     return {

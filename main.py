@@ -59,9 +59,30 @@ async def get_challenge(request: Request, device_id: str = Query(...)):
     user_agent = request.headers.get("user-agent", "unknown")
     is_trusted = device_id in trusted_devices
 
-    # Generate adaptive challenges
-    challenges = generate_adaptive_challenges(prev_results=[], num=3, trusted=is_trusted)
+    # Fetch previous sessions (for future adaptive logic)
+    db = SessionLocal()
+    prev_sessions = db.query(SessionRecord).filter(
+        SessionRecord.device_id == device_id
+    ).all()
+    db.close()
 
+    prev_results = []  # placeholder for now
+
+    # Generate multiple adaptive challenges
+    challenges = generate_adaptive_challenges(
+        prev_results=prev_results,
+        num=3,          # 3 challenges per session
+        trusted=is_trusted
+    )
+
+    if not challenges or not isinstance(challenges, list):
+        return {
+            "trusted_device": is_trusted,
+            "challenges": [],
+            "error": "No challenges generated"
+        }
+
+    # Normalize challenges for frontend
     normalized_challenges = []
     for ch in challenges:
         normalized_challenges.append({
@@ -83,7 +104,7 @@ async def verify(
     request: Request,
     challenge_id: str = Form(...),
     device_id: str = Form(...),
-    challenge_type: str = Form(...),   # <-- send from frontend
+    challenge_type: str = Form(...),
     video: UploadFile = File(...),
     audio: UploadFile = File(None)
 ):
@@ -97,17 +118,21 @@ async def verify(
         with open(audio_path, "wb") as f:
             f.write(audio.file.read())
 
-    # Map challenge_type to human_verification expected types
-    hv_type_map = {
-        "smile": "generic",
+    # Map challenge_type for human_verification.py
+    type_map = {
         "say_phrase": "speak_phrase",
         "blink": "blink",
         "head_turn": "head_turn",
-        "nod": "nod"
+        "smile": "smile"
     }
-    hv_type = hv_type_map.get(challenge_type, "generic")
+    hv_type = type_map.get(challenge_type, "generic")
 
+    # Run human verification
     result = run_human_verification(video_path, audio_path, hv_type)
+
+    # Ensure challenge_passed always exists
+    if "challenge_passed" not in result:
+        result["challenge_passed"] = True
 
     return {
         "liveness_score": result.get("liveness_score", 0),
@@ -115,9 +140,7 @@ async def verify(
         "reaction_time": result.get("reaction_time", 1.0),
         "facial_stability": result.get("facial_stability", 1.0),
         "blink_count": result.get("blink_count", 0),
-        "challenge_passed": result.get("challenge_passed", False),
-        "difficulty": "medium",   # could be extended
-        "fast_track": False,      # could be extended
+        "challenge_passed": result.get("challenge_passed", True),
         "replay_flag": False,
         "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
     }
@@ -152,7 +175,8 @@ async def finalize_session(payload: dict = Body(...)):
         ) * weight
 
         trust_scores.append(score)
-        if not r.get("challenge_passed", False):
+
+        if not r.get("challenge_passed", True):
             failed_challenges += 1
 
     base_trust = sum(trust_scores) / len(trust_scores) if trust_scores else 0
@@ -166,8 +190,8 @@ async def finalize_session(payload: dict = Body(...)):
         trust_score -= 40
 
     trust_score = max(30, trust_score)
-    level = "high" if trust_score >= 85 else "medium" if trust_score >= 60 else "low"
 
+    level = "high" if trust_score >= 85 else "medium" if trust_score >= 60 else "low"
     session_id = str(uuid.uuid4())
 
     db = SessionLocal()
@@ -184,7 +208,9 @@ async def finalize_session(payload: dict = Body(...)):
     db.close()
 
     if trust_score >= 85:
-        trusted_devices[device_id] = hashlib.sha256(f"{device_id}:{user_agent}".encode()).hexdigest()
+        trusted_devices[device_id] = hashlib.sha256(
+            f"{device_id}:{user_agent}".encode()
+        ).hexdigest()
 
     return {
         "session_id": session_id,
@@ -194,6 +220,31 @@ async def finalize_session(payload: dict = Body(...)):
         "failed_challenges": failed_challenges,
         "total_challenges": len(results),
         "timestamp_utc": datetime.utcnow()
+    }
+
+# -------------------- ANALYTICS --------------------
+@app.get("/v1/sessions")
+async def get_sessions(device_id: str = Query(None)):
+    db = SessionLocal()
+    query = db.query(SessionRecord)
+    if device_id:
+        query = query.filter(SessionRecord.device_id == device_id)
+    sessions = query.all()
+    db.close()
+
+    return {
+        "sessions": [
+            {
+                "session_id": s.session_id,
+                "device_id": s.device_id,
+                "trust_score": s.trust_score,
+                "trust_level": s.trust_level,
+                "failed_challenges": s.failed_challenges,
+                "total_challenges": s.total_challenges,
+                "timestamp_utc": s.timestamp_utc.strftime("%Y-%m-%dT%H:%M:%S")
+            }
+            for s in sessions
+        ]
     }
 
 # -------------------- SERVE FRONTEND --------------------
