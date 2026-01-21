@@ -1,361 +1,185 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Certivo Prime Verification</title>
+# main.py
 
-<style>
-body {
-    font-family: Arial, sans-serif;
-    background: #0f172a;
-    color: #e5e7eb;
-    text-align: center;
-    padding: 20px;
-}
+from fastapi import FastAPI, UploadFile, File, Form, Body, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from sqlalchemy import create_engine, Column, String, Float, Integer, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from datetime import datetime
+import time, uuid, hashlib, os
 
-video {
-    width: 320px;
-    border-radius: 12px;
-    margin-top: 10px;
-}
+from challenge_engine import generate_adaptive_challenges
+from human_verification import run_human_verification
 
-button {
-    margin-top: 15px;
-    padding: 10px 22px;
-    border-radius: 8px;
-    border: none;
-    cursor: pointer;
-    font-weight: bold;
-    background: #3b82f6;
-    color: #fff;
-}
+# -------------------- FASTAPI APP --------------------
+app = FastAPI()
 
-button:disabled {
-    background: #64748b;
-    cursor: not-allowed;
-}
+origins = ["http://127.0.0.1:5500", "http://localhost:5500", "http://127.0.0.1:8000"]
 
-#status, #faceStatus {
-    margin-top: 15px;
-    font-weight: bold;
-    min-height: 24px;
-}
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-#challengeProgress, #challengeTimer {
-    margin-top: 8px;
-    font-weight: bold;
-}
+# -------------------- STORAGE --------------------
+os.makedirs("uploads", exist_ok=True)
 
-#fastTrackLabel {
-    display: none;
-    color: #facc15;
-    margin-top: 8px;
-    font-weight: bold;
-}
+# -------------------- SQLITE / SQLALCHEMY --------------------
+DATABASE_URL = "sqlite:///./certivo_v1.db"
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+Base = declarative_base()
 
-#verdictScreen {
-    display: none;
-    margin-top: 25px;
-}
+class SessionRecord(Base):
+    __tablename__ = "sessions"
+    session_id = Column(String, primary_key=True, index=True)
+    device_id = Column(String)
+    trust_score = Column(Float)
+    trust_level = Column(String)
+    failed_challenges = Column(Integer)
+    total_challenges = Column(Integer)
+    timestamp_utc = Column(DateTime, default=datetime.utcnow)
 
-#trustBarOuter {
-    width: 320px;
-    margin: 0 auto;
-    background: #1e293b;
-    border-radius: 12px;
-    overflow: hidden;
-}
+Base.metadata.create_all(bind=engine)
 
-#trustBar {
-    height: 18px;
-    width: 0%;
-    transition: width 0.8s ease;
-}
-</style>
-</head>
+# -------------------- TRUSTED DEVICES --------------------
+trusted_devices = {}  # {device_id: trusted_token}
 
-<body>
+# -------------------- GET CHALLENGE --------------------
+@app.get("/v1/challenge")
+async def get_challenge(request: Request, device_id: str = Query(...)):
+    user_agent = request.headers.get("user-agent", "unknown")
+    is_trusted = device_id in trusted_devices
 
-<h1>Certivo Prime Verification</h1>
+    db = SessionLocal()
+    prev_sessions = db.query(SessionRecord).filter(SessionRecord.device_id == device_id).all()
+    db.close()
 
-<div id="cameraContainer">
-    <video id="video" autoplay muted></video>
-</div>
+    prev_results = []  # placeholder
+    challenges = generate_adaptive_challenges(prev_results=prev_results, num=3, trusted=is_trusted)
 
-<!-- STAGE 0 -->
-<button id="startFaceBtn">Start Face Verification</button>
-
-<!-- STAGE 1: FACE VERIFICATION -->
-<div id="faceSection" style="display:none;">
-    <p id="faceStatus">📷 Please show your face clearly</p>
-    <br>
-    <button id="proceedBtn" disabled>Proceed to Challenge</button>
-</div>
-
-<!-- STAGE 2: CHALLENGE -->
-<div id="challengeSection" style="display:none;">
-    <p id="fastTrackLabel">⚡ Fast-Track Mode</p>
-    <p id="challengeProgress"></p>
-    <p id="status"></p>
-    <p id="challengeTimer"></p>
-</div>
-
-<!-- FINAL VERDICT -->
-<div id="verdictScreen">
-    <h2>✅ HUMAN VERIFIED</h2>
-    <p>Trust Confidence</p>
-    <div id="trustBarOuter"><div id="trustBar"></div></div>
-    <p id="trustLabel" style="margin-top:10px;font-weight:bold;"></p>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/facemesh"></script>
-
-<script>
-/* ================= GLOBAL STATE ================= */
-const startFaceBtn = document.getElementById("startFaceBtn");
-const faceSection = document.getElementById("faceSection");
-const challengeSection = document.getElementById("challengeSection");
-const proceedBtn = document.getElementById("proceedBtn");
-
-const video = document.getElementById("video");
-const faceStatus = document.getElementById("faceStatus");
-const statusEl = document.getElementById("status");
-const challengeProgress = document.getElementById("challengeProgress");
-const challengeTimer = document.getElementById("challengeTimer");
-const fastTrackLabel = document.getElementById("fastTrackLabel");
-
-let faceModel;
-let mediaRecorder;
-let recordedChunks = [];
-let recordingActive = false;
-
-let challenges = [];
-let challengeIndex = 0;
-let sessionResults = [];
-let countdownInterval = null;
-
-let deviceId = "device_" + Math.floor(Math.random() * 100000);
-let userAgent = navigator.userAgent;
-let trustedDevice = false;
-
-/* ================= STAGE 0 → FACE ================= */
-startFaceBtn.onclick = async () => {
-    startFaceBtn.style.display = "none";
-    faceSection.style.display = "block";
-
-    await initCamera();
-    faceModel = await facemesh.load();
-    startFaceVerification();
-};
-
-/* ================= CAMERA ================= */
-async function initCamera() {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-    video.srcObject = stream;
-}
-
-/* ================= FACE VERIFICATION ================= */
-function startFaceVerification() {
-    faceStatus.innerText = "📷 Looking for your face...";
-
-    const interval = setInterval(async () => {
-        const predictions = await faceModel.estimateFaces(video);
-        if (predictions.length === 1) {
-            clearInterval(interval);
-            faceStatus.innerText = "✅ Face verified";
-            proceedBtn.disabled = false;
+    normalized = [
+        {
+            "id": ch.get("challenge_id"),
+            "type": ch.get("challenge_type"),
+            "instruction": ch.get("challenge_value"),
+            "time_limit": 7,
+            "difficulty": ch.get("difficulty", "medium")
         }
-    }, 400);
-}
+        for ch in challenges
+    ]
 
-/* ================= PROCEED TO CHALLENGE ================= */
-proceedBtn.onclick = async () => {
-    faceSection.style.display = "none";
-    challengeSection.style.display = "block";
+    return {"trusted_device": is_trusted, "challenges": normalized}
 
-    statusEl.innerText = "⏳ Loading challenges...";
-    challengeProgress.innerText = "";
-    challengeTimer.innerText = "";
-    fastTrackLabel.style.display = "none";
+# -------------------- VERIFY CHALLENGE --------------------
+@app.post("/v1/verify")
+async def verify(
+    request: Request,
+    challenge_id: str = Form(...),
+    device_id: str = Form(...),
+    video: UploadFile = File(...),
+    audio: UploadFile = File(None)
+):
+    video_path = f"uploads/{uuid.uuid4()}_{video.filename}"
+    with open(video_path, "wb") as f:
+        f.write(video.file.read())
 
-    await loadChallenges();
-};
+    audio_path = None
+    if audio:
+        audio_path = f"uploads/{uuid.uuid4()}_{audio.filename}"
+        with open(audio_path, "wb") as f:
+            f.write(audio.file.read())
 
-/* ================= LOAD CHALLENGES ================= */
-async function loadChallenges() {
-    try {
-        const res = await fetch(`http://127.0.0.1:8000/v1/challenge?device_id=${deviceId}`);
-        const data = await res.json();
+    # Run human verification
+    result = run_human_verification(video_path, audio_path, "generic")
 
-        if (!Array.isArray(data.challenges) || data.challenges.length === 0) {
-            statusEl.innerText = "❌ No challenges received";
-            return;
-        }
+    if "challenge_passed" not in result:
+        result["challenge_passed"] = True
 
-        trustedDevice = !!data.trusted_device;
-
-        challenges = data.challenges.map(ch => ({
-            id: ch.id,
-            text: ch.instruction,
-            difficulty: ch.difficulty || "medium",
-            fast_track: trustedDevice
-        }));
-
-        challengeIndex = 0;
-        sessionResults = [];
-
-        loadNextChallenge();
-
-    } catch {
-        statusEl.innerText = "❌ Failed to load challenges";
-    }
-}
-
-/* ================= LOAD NEXT CHALLENGE ================= */
-function loadNextChallenge() {
-    clearInterval(countdownInterval);
-
-    if (challengeIndex >= challenges.length) {
-        finalizeSession();
-        return;
+    return {
+        "liveness_score": result.get("liveness_score", 0),
+        "lip_sync_score": result.get("lip_sync_score", 0),
+        "reaction_time": result.get("reaction_time", 1.0),
+        "facial_stability": result.get("facial_stability", 1.0),
+        "blink_count": result.get("blink_count", 0),
+        "challenge_passed": result.get("challenge_passed", True),
+        "replay_flag": False,
+        "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
     }
 
-    const ch = challenges[challengeIndex];
-    challengeIndex++;
+# -------------------- FINALIZE SESSION --------------------
+@app.post("/v1/finalize")
+async def finalize_session(payload: dict = Body(...)):
+    results = payload.get("results", [])
+    device_id = payload.get("device_id", "web")
+    user_agent = payload.get("user_agent", "unknown")
 
-    challengeProgress.innerText = `Challenge ${challengeIndex} of ${challenges.length}`;
-    statusEl.innerText = "🧠 " + ch.text;
-    fastTrackLabel.style.display = ch.fast_track ? "block" : "none";
+    trust_scores = []
+    failed_challenges = 0
 
-    const duration = ch.fast_track ? 10 : 15;
-    startRecording(ch.id, duration);
-}
+    for r in results:
+        liveness = max(0, min(1, r.get("liveness_score", 0)))
+        lip_sync = max(0, min(1, r.get("lip_sync_score", 0)))
+        reaction_time = max(0, min(1, r.get("reaction_time", 1)))
+        stability = max(0, min(1, r.get("facial_stability", 1)))
+        blink_count = r.get("blink_count", 0)
+        difficulty = r.get("difficulty", "medium")
 
-/* ================= REPLACE CURRENT (ON FAIL) ================= */
-function replaceCurrentChallenge() {
-    challengeIndex--;
-    loadNextChallenge();
-}
+        weight = {"easy": 0.8, "medium": 1.0, "hard": 1.2}.get(difficulty, 1.0)
+        blink_penalty = min(max(blink_count - 5, 0) * 0.02, 0.2)
 
-/* ================= RECORDING & COUNTDOWN FIXED ================= */
-function startRecording(challengeId, duration) {
-    recordedChunks = [];
-    recordingActive = true;
+        score = (liveness * 0.35 + lip_sync * 0.25 + reaction_time * 0.15 + stability * 0.15 - blink_penalty) * weight
+        trust_scores.append(score)
 
-    mediaRecorder = new MediaRecorder(video.srcObject);
+        if not r.get("challenge_passed", True):
+            failed_challenges += 1
 
-    mediaRecorder.ondataavailable = e => {
-        if (e.data.size > 0) recordedChunks.push(e.data);
-    };
+    base_trust = sum(trust_scores) / len(trust_scores) if trust_scores else 0
+    trust_score = round(max(30, min(100, base_trust * 100)), 2)
 
-    mediaRecorder.onstop = async () => {
-        if (!recordingActive) return;
-        recordingActive = false;
+    if failed_challenges == 1:
+        trust_score -= 10
+    elif failed_challenges == 2:
+        trust_score -= 25
+    elif failed_challenges >= 3:
+        trust_score -= 40
 
-        if (countdownInterval) {
-            clearInterval(countdownInterval);
-            countdownInterval = null;
-        }
+    trust_score = max(30, trust_score)
+    level = "high" if trust_score >= 85 else "medium" if trust_score >= 60 else "low"
 
-        await submitRecording(challengeId);
-    };
+    session_id = str(uuid.uuid4())
 
-    mediaRecorder.start();
+    db = SessionLocal()
+    db.merge(SessionRecord(
+        session_id=session_id,
+        device_id=device_id,
+        trust_score=trust_score,
+        trust_level=level,
+        failed_challenges=failed_challenges,
+        total_challenges=len(results),
+        timestamp_utc=datetime.utcnow()
+    ))
+    db.commit()
+    db.close()
 
-    // Stop after duration seconds
-    setTimeout(() => {
-        if (mediaRecorder.state !== "inactive") mediaRecorder.stop();
-    }, duration * 1000);
+    if trust_score >= 85:
+        trusted_devices[device_id] = hashlib.sha256(f"{device_id}:{user_agent}".encode()).hexdigest()
 
-    // Countdown purely visual
-    startCountdown(duration);
-}
-
-function startCountdown(seconds) {
-    let t = seconds;
-    challengeTimer.innerText = `Time left: ${t}s`;
-
-    if (countdownInterval) clearInterval(countdownInterval);
-
-    countdownInterval = setInterval(() => {
-        t--;
-        challengeTimer.innerText = `Time left: ${t}s`;
-        if (t <= 0) {
-            clearInterval(countdownInterval);
-            countdownInterval = null;
-        }
-    }, 1000);
-}
-
-/* ================= SUBMIT ================= */
-async function submitRecording(challengeId) {
-    const blob = new Blob(recordedChunks, { type: "video/webm" });
-    const formData = new FormData();
-    formData.append("video", blob);
-    formData.append("challenge_id", challengeId);
-    formData.append("device_id", deviceId);
-
-    try {
-        const res = await fetch("http://127.0.0.1:8000/v1/verify", {
-            method: "POST",
-            body: formData
-        });
-
-        const result = await res.json();
-
-        if (result.challenge_passed) {
-            statusEl.innerText = "✅ Challenge passed";
-            sessionResults.push(result);
-            setTimeout(loadNextChallenge, 600);
-        } else {
-            statusEl.innerText = "❌ Challenge failed";
-            sessionResults.push(result);
-            setTimeout(replaceCurrentChallenge, 800);
-        }
-
-    } catch (err) {
-        console.error(err);
-        statusEl.innerText = "❌ Verification error";
-        sessionResults.push({ challenge_passed: false });
-        setTimeout(replaceCurrentChallenge, 800);
+    return {
+        "session_id": session_id,
+        "device_id": device_id,
+        "trust_score": trust_score,
+        "trust_level": level,
+        "failed_challenges": failed_challenges,
+        "total_challenges": len(results),
+        "timestamp_utc": datetime.utcnow()
     }
-}
 
-/* ================= FINALIZE ================= */
-async function finalizeSession() {
-    statusEl.innerText = "🔐 Calculating trust score...";
-    challengeTimer.innerText = "";
-
-    const res = await fetch("http://127.0.0.1:8000/v1/finalize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            results: sessionResults,
-            device_id: deviceId,
-            user_agent: userAgent
-        })
-    });
-
-    const final = await res.json();
-    showVerdict(final.trust_score, final.trust_level);
-}
-
-/* ================= VERDICT ================= */
-function showVerdict(score, level) {
-    document.getElementById("verdictScreen").style.display = "block";
-
-    const bar = document.getElementById("trustBar");
-    const label = document.getElementById("trustLabel");
-
-    bar.style.width = score + "%";
-    bar.style.background =
-        level === "high" ? "#22c55e" :
-        level === "medium" ? "#facc15" : "#ef4444";
-
-    label.innerText = `${level.toUpperCase()} TRUST (${score}%)`;
-}
-</script>
-
-</body>
-</html>
+# -------------------- SERVE FRONTEND --------------------
+@app.get("/")
+def read_index():
+    return FileResponse("index.html")
