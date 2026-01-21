@@ -12,13 +12,10 @@ import time, uuid, hashlib, os
 from challenge_engine import generate_adaptive_challenges
 from human_verification import run_human_verification
 
+# -------------------- FASTAPI APP --------------------
 app = FastAPI()
 
-origins = [
-    "http://127.0.0.1:5500",
-    "http://localhost:5500",
-    "http://127.0.0.1:8000"
-]
+origins = ["http://127.0.0.1:5500", "http://localhost:5500", "http://127.0.0.1:8000"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -31,7 +28,7 @@ app.add_middleware(
 # -------------------- STORAGE --------------------
 os.makedirs("uploads", exist_ok=True)
 
-# -------------------- SQLITE --------------------
+# -------------------- SQLITE / SQLALCHEMY --------------------
 DATABASE_URL = "sqlite:///./certivo_v1.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -49,7 +46,7 @@ class SessionRecord(Base):
 
 Base.metadata.create_all(bind=engine)
 
-# -------------------- TRUSTED DEVICE STORE --------------------
+# -------------------- TRUSTED DEVICES --------------------
 trusted_devices = {}  # {device_id: trusted_token}
 
 # -------------------- GET CHALLENGE --------------------
@@ -59,33 +56,24 @@ async def get_challenge(request: Request, device_id: str = Query(...)):
     is_trusted = device_id in trusted_devices
 
     db = SessionLocal()
-    prev_sessions = db.query(SessionRecord).filter(
-        SessionRecord.device_id == device_id
-    ).all()
+    prev_sessions = db.query(SessionRecord).filter(SessionRecord.device_id == device_id).all()
     db.close()
 
     prev_results = []  # placeholder
+    challenges = generate_adaptive_challenges(prev_results=prev_results, num=3, trusted=is_trusted)
 
-    challenges = generate_adaptive_challenges(
-        prev_results=prev_results,
-        num=3,
-        trusted=is_trusted
-    )
-
-    if not challenges or not isinstance(challenges, list):
-        return {"trusted_device": is_trusted, "challenges": [], "error": "No challenges generated"}
-
-    normalized_challenges = []
-    for ch in challenges:
-        normalized_challenges.append({
+    normalized = [
+        {
             "id": ch.get("challenge_id"),
             "type": ch.get("challenge_type"),
             "instruction": ch.get("challenge_value"),
             "time_limit": 7,
             "difficulty": ch.get("difficulty", "medium")
-        })
+        }
+        for ch in challenges
+    ]
 
-    return {"trusted_device": is_trusted, "challenges": normalized_challenges}
+    return {"trusted_device": is_trusted, "challenges": normalized}
 
 # -------------------- VERIFY CHALLENGE --------------------
 @app.post("/v1/verify")
@@ -106,6 +94,7 @@ async def verify(
         with open(audio_path, "wb") as f:
             f.write(audio.file.read())
 
+    # Run human verification
     result = run_human_verification(video_path, audio_path, "generic")
 
     if "challenge_passed" not in result:
@@ -160,8 +149,8 @@ async def finalize_session(payload: dict = Body(...)):
         trust_score -= 40
 
     trust_score = max(30, trust_score)
-
     level = "high" if trust_score >= 85 else "medium" if trust_score >= 60 else "low"
+
     session_id = str(uuid.uuid4())
 
     db = SessionLocal()
@@ -188,31 +177,6 @@ async def finalize_session(payload: dict = Body(...)):
         "failed_challenges": failed_challenges,
         "total_challenges": len(results),
         "timestamp_utc": datetime.utcnow()
-    }
-
-# -------------------- ANALYTICS --------------------
-@app.get("/v1/sessions")
-async def get_sessions(device_id: str = Query(None)):
-    db = SessionLocal()
-    query = db.query(SessionRecord)
-    if device_id:
-        query = query.filter(SessionRecord.device_id == device_id)
-    sessions = query.all()
-    db.close()
-
-    return {
-        "sessions": [
-            {
-                "session_id": s.session_id,
-                "device_id": s.device_id,
-                "trust_score": s.trust_score,
-                "trust_level": s.trust_level,
-                "failed_challenges": s.failed_challenges,
-                "total_challenges": s.total_challenges,
-                "timestamp_utc": s.timestamp_utc.strftime("%Y-%m-%dT%H:%M:%S")
-            }
-            for s in sessions
-        ]
     }
 
 # -------------------- SERVE FRONTEND --------------------
