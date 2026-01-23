@@ -1,3 +1,4 @@
+# human_verification.py
 import os
 import cv2
 import numpy as np
@@ -32,8 +33,8 @@ def _video_motion_profile(video_path: str):
             total_motion += 1
 
         flow = cv2.calcOpticalFlowFarneback(prev_gray, gray, None, 0.5, 3, 15, 3, 5, 1.2, 0)
-        x_motion += float(np.mean(flow[...,0]))
-        y_motion += float(np.mean(flow[...,1]))
+        x_motion += float(np.mean(flow[..., 0]))
+        y_motion += float(np.mean(flow[..., 1]))
         prev_gray = gray
         frames += 1
 
@@ -45,6 +46,7 @@ def _video_motion_profile(video_path: str):
 
 def run_human_verification(video_path: str, audio_path: str, challenge_type: str):
     motion = _video_motion_profile(video_path)
+
     if challenge_type == "speak_phrase":
         if not audio_path or os.path.getsize(audio_path) < MIN_AUDIO_SIZE:
             return _fail("audio_missing_or_small")
@@ -69,10 +71,23 @@ def run_human_verification(video_path: str, audio_path: str, challenge_type: str
         return _pass(confidence=0.95)
     if motion["total_motion"] >= MIN_VIDEO_FRAMES and abs(motion["x_motion"]) > 0.5:
         return _pass(confidence=0.94)
+
     return _fail("challenge_failed")
 
 def _pass(confidence=0.95):
-    return {"liveness_score": round(confidence,2), "lip_sync_score": round(confidence-0.03,2),
-            "challenge_passed": True, "replay_flag": False, "reason":"passed"}
+    return {
+        "liveness_score": round(confidence, 2),
+        "lip_sync_score": round(confidence-0.03, 2),
+        "challenge_passed": True,
+        "replay_flag": False,
+        "reason": "passed"
+    }
+
 def _fail(reason="failed"):
-    return {"liveness_score":0.0,"lip_sync_score":0.0,"challenge_passed":False,"replay_flag":False,"reason":reason}
+    return {
+        "liveness_score": 0.0,
+        "lip_sync_score": 0.0,
+        "challenge_passed": False,
+        "replay_flag": False,
+        "reason": reason
+    }
