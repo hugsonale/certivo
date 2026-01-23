@@ -4,8 +4,10 @@
 <meta charset="UTF-8">
 <title>Certivo Prime Verification</title>
 <style>
+    
 body { font-family: Arial; background:#0f172a; color:#e5e7eb; text-align:center; padding:20px; }
 video { width: 320px; border-radius:12px; margin-top:10px; }
+canvas { position: absolute; left: 50%; top: 120px; transform: translateX(-50%); width: 320px; height:240px; pointer-events:none; }
 button { margin-top:15px; padding:10px 22px; border-radius:8px; border:none; cursor:pointer; font-weight:bold; background:#3b82f6; color:#fff; }
 button:disabled { background:#64748b; cursor:not-allowed; }
 #status,#faceStatus { margin-top:15px; font-weight:bold; min-height:24px; }
@@ -20,8 +22,10 @@ button:disabled { background:#64748b; cursor:not-allowed; }
 <body>
 
 <h1>Certivo Prime Verification</h1>
-<div id="cameraContainer">
+
+<div id="cameraContainer" style="position:relative;">
     <video id="video" autoplay muted></video>
+    <canvas id="overlayCanvas"></canvas>
 </div>
 
 <button id="startFaceBtn">Start Face Verification</button>
@@ -46,7 +50,6 @@ button:disabled { background:#64748b; cursor:not-allowed; }
     <p id="trustLabel" style="margin-top:10px;font-weight:bold;"></p>
 </div>
 
-<!-- Test sandbox controls -->
 <div id="testControls">
     <h3>Test Plan Controls (Sandbox)</h3>
     <button id="simulateFailBtn">Simulate Challenge Failure</button>
@@ -64,6 +67,8 @@ const faceSection = document.getElementById("faceSection");
 const challengeSection = document.getElementById("challengeSection");
 const proceedBtn = document.getElementById("proceedBtn");
 const video = document.getElementById("video");
+const overlayCanvas = document.getElementById("overlayCanvas");
+const overlayCtx = overlayCanvas.getContext("2d");
 const faceStatus = document.getElementById("faceStatus");
 const statusEl = document.getElementById("status");
 const challengeProgress = document.getElementById("challengeProgress");
@@ -92,8 +97,11 @@ startFaceBtn.onclick = async () => {
     faceSection.style.display="block";
     const stream = await navigator.mediaDevices.getUserMedia({video:true});
     video.srcObject = stream;
+    overlayCanvas.width = video.videoWidth || 320;
+    overlayCanvas.height = video.videoHeight || 240;
     faceModel = await facemesh.load();
     startFaceVerification();
+    drawFaceKeypoints();
 };
 
 function startFaceVerification() {
@@ -106,6 +114,74 @@ function startFaceVerification() {
             proceedBtn.disabled=false;
         }
     },400);
+}
+
+// ---------------- Interactive Overlay ----------------
+async function drawFaceKeypoints() {
+    if (!faceModel || video.paused || video.ended) return;
+    const predictions = await faceModel.estimateFaces(video);
+    overlayCtx.clearRect(0,0,overlayCanvas.width,overlayCanvas.height);
+
+    predictions.forEach(pred=>{
+        const keypoints = pred.scaledMesh;
+
+        // Eyes
+        drawRegion(keypoints.slice(33,133), "rgba(0,255,255,0.7)");
+        drawRegion(keypoints.slice(362,263), "rgba(0,255,255,0.7)");
+
+        // Mouth
+        drawRegion(keypoints.slice(78,308), "rgba(255,165,0,0.7)");
+
+        // Nose tip
+        const nose = keypoints[1];
+        overlayCtx.fillStyle = "red";
+        overlayCtx.beginPath();
+        overlayCtx.arc(nose[0]/2, nose[1]/2, 4,0,2*Math.PI);
+        overlayCtx.fill();
+
+        // Blink detection
+        const leftEyeOpen = calcEyeOpen(keypoints.slice(33,133));
+        const rightEyeOpen = calcEyeOpen(keypoints.slice(362,263));
+        if(leftEyeOpen < 0.2 || rightEyeOpen < 0.2){
+            faceStatus.innerText = "😴 Blink detected! Keep eyes open!";
+        } else {
+            faceStatus.innerText = "✅ Face detected and active!";
+        }
+
+        // Smile detection
+        const mouthOpen = calcMouthOpen(keypoints.slice(78,308));
+        if(mouthOpen > 0.5) faceStatus.innerText += " 😃 Nice smile!";
+
+        // Head movement
+        if(!pred.prevNose){ pred.prevNose = nose; } 
+        else {
+            const dx = Math.abs(nose[0]-pred.prevNose[0]);
+            const dy = Math.abs(nose[1]-pred.prevNose[1]);
+            if(dx+dy>20) faceStatus.innerText += " ⚡ Moving!";
+            pred.prevNose = nose;
+        }
+    });
+
+    requestAnimationFrame(drawFaceKeypoints);
+}
+
+function drawRegion(points, color){
+    overlayCtx.fillStyle=color;
+    points.forEach(pt=>{
+        overlayCtx.beginPath();
+        overlayCtx.arc(pt[0]/2, pt[1]/2,2,0,2*Math.PI);
+        overlayCtx.fill();
+    });
+}
+
+function calcEyeOpen(points){
+    const top = points[12], bottom=points[4], left=points[0], right=points[8];
+    return Math.abs(top[1]-bottom[1])/Math.abs(left[0]-right[0]);
+}
+
+function calcMouthOpen(points){
+    const top=points[13], bottom=points[14], left=points[0], right=points[6];
+    return Math.abs(top[1]-bottom[1])/Math.abs(left[0]-right[0]);
 }
 
 // ---------------- Proceed to Challenge ----------------
@@ -123,30 +199,21 @@ async function loadChallenges(){
         const data = await res.json();
         trustedDevice = !!data.trusted_device;
         challenges = data.challenges.map(ch=>({...ch, fast_track:trustedDevice}));
-        challengeIndex=0;
-        sessionResults=[];
+        challengeIndex=0; sessionResults=[];
         loadNextChallenge();
-    }catch{
-        statusEl.innerText="❌ Failed to load challenges";
-    }
+    }catch{ statusEl.innerText="❌ Failed to load challenges"; }
 }
 
 // ---------------- Challenge Flow ----------------
 function loadNextChallenge(){
     clearInterval(countdownInterval);
-    if(challengeIndex>=challenges.length){
-        finalizeSession();
-        return;
-    }
+    if(challengeIndex>=challenges.length){ finalizeSession(); return; }
 
-    let ch = challenges[challengeIndex];
-    challengeIndex++;
+    let ch = challenges[challengeIndex]; challengeIndex++;
 
     if(testMode.skip){
         statusEl.innerText="⚡ Challenge skipped!";
-        testMode.skip=false;
-        setTimeout(loadNextChallenge,600);
-        return;
+        testMode.skip=false; setTimeout(loadNextChallenge,600); return;
     }
 
     challengeProgress.innerText=`Challenge ${challengeIndex} of ${challenges.length}`;
@@ -162,16 +229,13 @@ function startRecording(challengeId,duration){
     mediaRecorder = new MediaRecorder(video.srcObject);
     mediaRecorder.ondataavailable=e=>{if(e.data.size>0) recordedChunks.push(e.data)};
     mediaRecorder.onstop=async ()=>{
-        if(!recordingActive) return;
-        recordingActive=false;
+        if(!recordingActive) return; recordingActive=false;
         clearInterval(countdownInterval); countdownInterval=null;
 
         if(testMode.fail){
-            sessionResults.push({challenge_passed:false, liveness_score:0, lip_sync_score:0});
-            statusEl.innerText="❌ Challenge failed (Simulated)";
-            testMode.fail=false;
-            setTimeout(loadNextChallenge,800);
-            return;
+            sessionResults.push({challenge_passed:false,liveness_score:0,lip_sync_score:0});
+            statusEl.innerText="❌ Challenge failed (Simulated)"; testMode.fail=false;
+            setTimeout(loadNextChallenge,800); return;
         }
 
         await submitRecording(challengeId);
@@ -184,7 +248,7 @@ function startRecording(challengeId,duration){
     challengeTimer.innerText=`Time left: ${t}s`;
     countdownInterval=setInterval(()=>{
         t--; challengeTimer.innerText=`Time left: ${t}s`;
-        if(t<=0){clearInterval(countdownInterval); countdownInterval=null;}
+        if(t<=0){ clearInterval(countdownInterval); countdownInterval=null; }
     },1000);
 }
 
@@ -195,7 +259,6 @@ async function submitRecording(challengeId){
     formData.append("video",blob);
     formData.append("challenge_id",challengeId);
     formData.append("device_id",deviceId);
-    formData.append("token_id",challenges[challengeIndex-1].token_id);
 
     try{
         const res = await fetch("http://127.0.0.1:8000/v1/verify",{method:"POST",body:formData});
@@ -213,21 +276,16 @@ async function submitRecording(challengeId){
 
 // ---------------- Finalize Session ----------------
 async function finalizeSession(){
-    statusEl.innerText="🔐 Calculating trust score...";
-    challengeTimer.innerText="";
+    statusEl.innerText="🔐 Calculating trust score..."; challengeTimer.innerText="";
     const res = await fetch("http://127.0.0.1:8000/v1/finalize",{method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({results:sessionResults,device_id:deviceId,user_agent:navigator.userAgent})
     });
     const final = await res.json();
-    showVerdict(final.trust_score,final.trust_level);
-}
-
-function showVerdict(score,level){
     verdictScreen.style.display="block";
-    trustBar.style.width=score+"%";
-    trustBar.style.background=level==="high"?"#22c55e":level==="medium"?"#facc15":"#ef4444";
-    trustLabel.innerText=`${level.toUpperCase()} TRUST (${score}%)`;
+    trustBar.style.width=final.trust_score+"%";
+    trustBar.style.background=final.trust_level==="high"?"#22c55e":final.trust_level==="medium"?"#facc15":"#ef4444";
+    trustLabel.innerText=`${final.trust_level.toUpperCase()} TRUST (${final.trust_score}%)`;
 }
 
 // ---------------- Test Sandbox ----------------
@@ -238,5 +296,6 @@ document.getElementById("toggleTrustedBtn").onclick=()=>{
     testStatus.innerText=trustedDevice?"Mode: Trusted Device ON":"Mode: Trusted Device OFF";
 };
 </script>
+
 </body>
 </html>
