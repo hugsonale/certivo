@@ -4,38 +4,85 @@
 <meta charset="UTF-8">
 <title>Certivo Prime Verification</title>
 <style>
-    
-body { font-family: Arial; background:#0f172a; color:#e5e7eb; text-align:center; padding:20px; }
-video { width: 320px; border-radius:12px; margin-top:10px; }
-canvas { position: absolute; left: 50%; top: 120px; transform: translateX(-50%); width: 320px; height:240px; pointer-events:none; }
-button { margin-top:15px; padding:10px 22px; border-radius:8px; border:none; cursor:pointer; font-weight:bold; background:#3b82f6; color:#fff; }
-button:disabled { background:#64748b; cursor:not-allowed; }
-#status,#faceStatus { margin-top:15px; font-weight:bold; min-height:24px; }
-#challengeProgress,#challengeTimer { margin-top:8px; font-weight:bold; }
-#fastTrackLabel { display:none; color:#facc15; margin-top:8px; font-weight:bold; }
-#verdictScreen { display:none; margin-top:25px; }
-#trustBarOuter { width:320px; margin:0 auto; background:#1e293b; border-radius:12px; overflow:hidden; }
-#trustBar { height:18px; width:0%; transition: width 0.8s ease; }
-#testControls { margin-top:20px; border:1px solid #64748b; padding:10px; border-radius:8px; }
+body {
+    font-family: Arial, sans-serif;
+    background: #0f172a;
+    color: #e5e7eb;
+    text-align: center;
+    padding: 20px;
+}
+
+video {
+    width: 320px;
+    border-radius: 12px;
+    margin-top: 10px;
+}
+
+button {
+    margin-top: 15px;
+    padding: 10px 22px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-weight: bold;
+    background: #3b82f6;
+    color: #fff;
+}
+
+button:disabled {
+    background: #64748b;
+    cursor: not-allowed;
+}
+
+#status, #faceStatus, #challengeProgress, #challengeTimer {
+    margin-top: 15px;
+    font-weight: bold;
+    min-height: 24px;
+}
+
+#fastTrackLabel {
+    display: none;
+    color: #facc15;
+    margin-top: 8px;
+    font-weight: bold;
+}
+
+#verdictScreen {
+    display: none;
+    margin-top: 25px;
+}
+
+#trustBarOuter {
+    width: 320px;
+    margin: 0 auto;
+    background: #1e293b;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+#trustBar {
+    height: 18px;
+    width: 0%;
+    transition: width 0.8s ease;
+}
 </style>
 </head>
 <body>
 
 <h1>Certivo Prime Verification</h1>
 
-<div id="cameraContainer" style="position:relative;">
+<!-- Camera & Face Verification -->
+<div id="cameraContainer">
     <video id="video" autoplay muted></video>
-    <canvas id="overlayCanvas"></canvas>
 </div>
-
 <button id="startFaceBtn">Start Face Verification</button>
 
 <div id="faceSection" style="display:none;">
     <p id="faceStatus">📷 Please show your face clearly</p>
-    <br>
     <button id="proceedBtn" disabled>Proceed to Challenge</button>
 </div>
 
+<!-- Challenges -->
 <div id="challengeSection" style="display:none;">
     <p id="fastTrackLabel">⚡ Fast-Track Mode</p>
     <p id="challengeProgress"></p>
@@ -43,19 +90,12 @@ button:disabled { background:#64748b; cursor:not-allowed; }
     <p id="challengeTimer"></p>
 </div>
 
+<!-- Verdict -->
 <div id="verdictScreen">
     <h2>✅ HUMAN VERIFIED</h2>
     <p>Trust Confidence</p>
     <div id="trustBarOuter"><div id="trustBar"></div></div>
     <p id="trustLabel" style="margin-top:10px;font-weight:bold;"></p>
-</div>
-
-<div id="testControls">
-    <h3>Test Plan Controls (Sandbox)</h3>
-    <button id="simulateFailBtn">Simulate Challenge Failure</button>
-    <button id="simulateSkipBtn">Simulate Skip Challenge</button>
-    <button id="toggleTrustedBtn">Toggle Trusted Device</button>
-    <p id="testStatus">Mode: Normal</p>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0"></script>
@@ -67,8 +107,6 @@ const faceSection = document.getElementById("faceSection");
 const challengeSection = document.getElementById("challengeSection");
 const proceedBtn = document.getElementById("proceedBtn");
 const video = document.getElementById("video");
-const overlayCanvas = document.getElementById("overlayCanvas");
-const overlayCtx = overlayCanvas.getContext("2d");
 const faceStatus = document.getElementById("faceStatus");
 const statusEl = document.getElementById("status");
 const challengeProgress = document.getElementById("challengeProgress");
@@ -77,225 +115,144 @@ const fastTrackLabel = document.getElementById("fastTrackLabel");
 const verdictScreen = document.getElementById("verdictScreen");
 const trustBar = document.getElementById("trustBar");
 const trustLabel = document.getElementById("trustLabel");
-const testStatus = document.getElementById("testStatus");
 
-let faceModel;
-let mediaRecorder;
-let recordedChunks = [];
-let recordingActive = false;
-let challenges = [];
-let challengeIndex = 0;
-let sessionResults = [];
+let faceModel, mediaRecorder;
+let recordedChunks = [], recordingActive = false;
+let challenges = [], challengeIndex = 0, sessionResults = [];
 let countdownInterval = null;
-let deviceId = "device_" + Math.floor(Math.random()*100000);
+let deviceId = "device_" + Math.floor(Math.random() * 100000);
 let trustedDevice = false;
-let testMode = {fail:false, skip:false};
 
 // ---------------- Camera & Face Verification ----------------
 startFaceBtn.onclick = async () => {
-    startFaceBtn.style.display="none";
-    faceSection.style.display="block";
+    startFaceBtn.style.display = "none";
+    faceSection.style.display = "block";
     const stream = await navigator.mediaDevices.getUserMedia({video:true});
     video.srcObject = stream;
-    overlayCanvas.width = video.videoWidth || 320;
-    overlayCanvas.height = video.videoHeight || 240;
     faceModel = await facemesh.load();
     startFaceVerification();
-    drawFaceKeypoints();
 };
 
 function startFaceVerification() {
-    faceStatus.innerText="📷 Looking for your face...";
-    const interval = setInterval(async ()=>{
+    faceStatus.innerText = "📷 Looking for your face...";
+    const interval = setInterval(async () => {
         const predictions = await faceModel.estimateFaces(video);
-        if(predictions.length===1){
+        if(predictions.length === 1){
             clearInterval(interval);
-            faceStatus.innerText="✅ Face verified";
-            proceedBtn.disabled=false;
+            faceStatus.innerText = "✅ Face verified";
+            proceedBtn.disabled = false;
         }
-    },400);
-}
-
-// ---------------- Interactive Overlay ----------------
-async function drawFaceKeypoints() {
-    if (!faceModel || video.paused || video.ended) return;
-    const predictions = await faceModel.estimateFaces(video);
-    overlayCtx.clearRect(0,0,overlayCanvas.width,overlayCanvas.height);
-
-    predictions.forEach(pred=>{
-        const keypoints = pred.scaledMesh;
-
-        // Eyes
-        drawRegion(keypoints.slice(33,133), "rgba(0,255,255,0.7)");
-        drawRegion(keypoints.slice(362,263), "rgba(0,255,255,0.7)");
-
-        // Mouth
-        drawRegion(keypoints.slice(78,308), "rgba(255,165,0,0.7)");
-
-        // Nose tip
-        const nose = keypoints[1];
-        overlayCtx.fillStyle = "red";
-        overlayCtx.beginPath();
-        overlayCtx.arc(nose[0]/2, nose[1]/2, 4,0,2*Math.PI);
-        overlayCtx.fill();
-
-        // Blink detection
-        const leftEyeOpen = calcEyeOpen(keypoints.slice(33,133));
-        const rightEyeOpen = calcEyeOpen(keypoints.slice(362,263));
-        if(leftEyeOpen < 0.2 || rightEyeOpen < 0.2){
-            faceStatus.innerText = "😴 Blink detected! Keep eyes open!";
-        } else {
-            faceStatus.innerText = "✅ Face detected and active!";
-        }
-
-        // Smile detection
-        const mouthOpen = calcMouthOpen(keypoints.slice(78,308));
-        if(mouthOpen > 0.5) faceStatus.innerText += " 😃 Nice smile!";
-
-        // Head movement
-        if(!pred.prevNose){ pred.prevNose = nose; } 
-        else {
-            const dx = Math.abs(nose[0]-pred.prevNose[0]);
-            const dy = Math.abs(nose[1]-pred.prevNose[1]);
-            if(dx+dy>20) faceStatus.innerText += " ⚡ Moving!";
-            pred.prevNose = nose;
-        }
-    });
-
-    requestAnimationFrame(drawFaceKeypoints);
-}
-
-function drawRegion(points, color){
-    overlayCtx.fillStyle=color;
-    points.forEach(pt=>{
-        overlayCtx.beginPath();
-        overlayCtx.arc(pt[0]/2, pt[1]/2,2,0,2*Math.PI);
-        overlayCtx.fill();
-    });
-}
-
-function calcEyeOpen(points){
-    const top = points[12], bottom=points[4], left=points[0], right=points[8];
-    return Math.abs(top[1]-bottom[1])/Math.abs(left[0]-right[0]);
-}
-
-function calcMouthOpen(points){
-    const top=points[13], bottom=points[14], left=points[0], right=points[6];
-    return Math.abs(top[1]-bottom[1])/Math.abs(left[0]-right[0]);
+    }, 400);
 }
 
 // ---------------- Proceed to Challenge ----------------
-proceedBtn.onclick = async ()=>{
-    faceSection.style.display="none";
-    challengeSection.style.display="block";
-    statusEl.innerText="⏳ Loading challenges...";
+proceedBtn.onclick = async () => {
+    faceSection.style.display = "none";
+    challengeSection.style.display = "block";
+    statusEl.innerText = "⏳ Loading challenges...";
     await loadChallenges();
 };
 
 // ---------------- Load Challenges ----------------
-async function loadChallenges(){
-    try{
+async function loadChallenges() {
+    try {
         const res = await fetch(`http://127.0.0.1:8000/v1/challenge?device_id=${deviceId}`);
         const data = await res.json();
         trustedDevice = !!data.trusted_device;
-        challenges = data.challenges.map(ch=>({...ch, fast_track:trustedDevice}));
-        challengeIndex=0; sessionResults=[];
+        challenges = data.challenges.map(ch => ({...ch, fast_track: trustedDevice}));
+        challengeIndex = 0;
+        sessionResults = [];
         loadNextChallenge();
-    }catch{ statusEl.innerText="❌ Failed to load challenges"; }
+    } catch {
+        statusEl.innerText = "❌ Failed to load challenges";
+    }
 }
 
 // ---------------- Challenge Flow ----------------
-function loadNextChallenge(){
+function loadNextChallenge() {
     clearInterval(countdownInterval);
-    if(challengeIndex>=challenges.length){ finalizeSession(); return; }
-
-    let ch = challenges[challengeIndex]; challengeIndex++;
-
-    if(testMode.skip){
-        statusEl.innerText="⚡ Challenge skipped!";
-        testMode.skip=false; setTimeout(loadNextChallenge,600); return;
+    if(challengeIndex >= challenges.length){
+        finalizeSession();
+        return;
     }
 
-    challengeProgress.innerText=`Challenge ${challengeIndex} of ${challenges.length}`;
-    statusEl.innerText="🧠 "+ch.instruction;
-    fastTrackLabel.style.display=ch.fast_track?"block":"none";
-    const duration = ch.fast_track?10:15;
-    startRecording(ch.challenge_id,duration);
+    const ch = challenges[challengeIndex];
+    challengeIndex++;
+
+    challengeProgress.innerText = `Challenge ${challengeIndex} of ${challenges.length}`;
+    statusEl.innerText = "🧠 " + ch.instruction;
+    fastTrackLabel.style.display = ch.fast_track ? "block" : "none";
+
+    const duration = ch.fast_track ? 10 : 15;
+    startRecording(ch.challenge_id, duration);
 }
 
 // ---------------- Recording & Countdown ----------------
-function startRecording(challengeId,duration){
-    recordedChunks=[]; recordingActive=true;
+function startRecording(challengeId, duration){
+    recordedChunks = [];
+    recordingActive = true;
     mediaRecorder = new MediaRecorder(video.srcObject);
-    mediaRecorder.ondataavailable=e=>{if(e.data.size>0) recordedChunks.push(e.data)};
-    mediaRecorder.onstop=async ()=>{
-        if(!recordingActive) return; recordingActive=false;
-        clearInterval(countdownInterval); countdownInterval=null;
-
-        if(testMode.fail){
-            sessionResults.push({challenge_passed:false,liveness_score:0,lip_sync_score:0});
-            statusEl.innerText="❌ Challenge failed (Simulated)"; testMode.fail=false;
-            setTimeout(loadNextChallenge,800); return;
-        }
+    mediaRecorder.ondataavailable = e => { if(e.data.size>0) recordedChunks.push(e.data) };
+    mediaRecorder.onstop = async () => {
+        if(!recordingActive) return;
+        recordingActive = false;
+        clearInterval(countdownInterval);
+        countdownInterval = null;
 
         await submitRecording(challengeId);
     };
     mediaRecorder.start();
-    setTimeout(()=>{if(mediaRecorder.state!=="inactive") mediaRecorder.stop()},duration*1000);
+    setTimeout(()=>{if(mediaRecorder.state!=="inactive") mediaRecorder.stop()}, duration*1000);
 
-    // countdown
-    let t=duration;
-    challengeTimer.innerText=`Time left: ${t}s`;
-    countdownInterval=setInterval(()=>{
-        t--; challengeTimer.innerText=`Time left: ${t}s`;
+    let t = duration;
+    challengeTimer.innerText = `Time left: ${t}s`;
+    countdownInterval = setInterval(()=>{
+        t--;
+        challengeTimer.innerText = `Time left: ${t}s`;
         if(t<=0){ clearInterval(countdownInterval); countdownInterval=null; }
     },1000);
 }
 
 // ---------------- Submit Recording ----------------
 async function submitRecording(challengeId){
-    const blob = new Blob(recordedChunks,{type:"video/webm"});
+    const blob = new Blob(recordedChunks, {type:"video/webm"});
     const formData = new FormData();
-    formData.append("video",blob);
-    formData.append("challenge_id",challengeId);
-    formData.append("device_id",deviceId);
+    formData.append("video", blob);
+    formData.append("challenge_id", challengeId);
+    formData.append("device_id", deviceId);
 
-    try{
-        const res = await fetch("http://127.0.0.1:8000/v1/verify",{method:"POST",body:formData});
+    try {
+        const res = await fetch("http://127.0.0.1:8000/v1/verify", {method:"POST", body:formData});
         const result = await res.json();
         sessionResults.push(result);
-        statusEl.innerText=result.challenge_passed?"✅ Challenge passed":"❌ Challenge failed";
-        setTimeout(loadNextChallenge,600);
-    }catch(err){
-        console.error(err);
-        statusEl.innerText="❌ Verification error"; 
+        statusEl.innerText = result.challenge_passed ? "✅ Challenge passed" : "❌ Challenge failed";
+        setTimeout(loadNextChallenge, 600);
+    } catch {
+        statusEl.innerText = "❌ Verification error";
         sessionResults.push({challenge_passed:false});
-        setTimeout(loadNextChallenge,800);
+        setTimeout(loadNextChallenge, 800);
     }
 }
 
 // ---------------- Finalize Session ----------------
-async function finalizeSession(){
-    statusEl.innerText="🔐 Calculating trust score..."; challengeTimer.innerText="";
-    const res = await fetch("http://127.0.0.1:8000/v1/finalize",{method:"POST",
+async function finalizeSession() {
+    statusEl.innerText = "🔐 Calculating trust score...";
+    challengeTimer.innerText = "";
+    const res = await fetch("http://127.0.0.1:8000/v1/finalize", {
+        method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({results:sessionResults,device_id:deviceId,user_agent:navigator.userAgent})
+        body: JSON.stringify({results: sessionResults, device_id: deviceId, user_agent: navigator.userAgent})
     });
     const final = await res.json();
-    verdictScreen.style.display="block";
-    trustBar.style.width=final.trust_score+"%";
-    trustBar.style.background=final.trust_level==="high"?"#22c55e":final.trust_level==="medium"?"#facc15":"#ef4444";
-    trustLabel.innerText=`${final.trust_level.toUpperCase()} TRUST (${final.trust_score}%)`;
+    showVerdict(final.trust_score, final.trust_level);
 }
 
-// ---------------- Test Sandbox ----------------
-document.getElementById("simulateFailBtn").onclick=()=>{testMode.fail=true; testStatus.innerText="Mode: Simulate Fail";}
-document.getElementById("simulateSkipBtn").onclick=()=>{testMode.skip=true; testStatus.innerText="Mode: Simulate Skip";}
-document.getElementById("toggleTrustedBtn").onclick=()=>{
-    trustedDevice=!trustedDevice;
-    testStatus.innerText=trustedDevice?"Mode: Trusted Device ON":"Mode: Trusted Device OFF";
-};
+function showVerdict(score, level){
+    verdictScreen.style.display = "block";
+    trustBar.style.width = score + "%";
+    trustBar.style.background = level==="high" ? "#22c55e" : level==="medium" ? "#facc15" : "#ef4444";
+    trustLabel.innerText = `${level.toUpperCase()} TRUST (${score}%)`;
+}
 </script>
-
 </body>
 </html>

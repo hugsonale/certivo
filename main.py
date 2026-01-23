@@ -1,117 +1,107 @@
-from fastapi import FastAPI, UploadFile, File, Form, Query
+from fastapi import FastAPI, Query, Request, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 import uuid
-import shutil
-import os
+from challenge_engine import generate_adaptive_challenges
+from typing import List
 from fastapi.responses import FileResponse
+import os
+app = FastAPI()
 
-
-app = FastAPI(title="Certivo Prime Verification API")
-
-# ---------------- CORS ----------------
+# Allow frontend to call API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict to frontend domain
+    allow_origins=["*"],
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*"]
 )
 
-# ---------------- In-memory storage ----------------
-CHALLENGES_DB = [
-    {"challenge_id": "ch_1", "instruction": "Smile widely", "token_id": str(uuid.uuid4())},
-    {"challenge_id": "ch_2", "instruction": "Raise eyebrows", "token_id": str(uuid.uuid4())},
-    {"challenge_id": "ch_3", "instruction": "Blink twice", "token_id": str(uuid.uuid4())}
-]
+# In-memory store for trusted devices
+trusted_devices = {}  # device_id -> bool
 
-TRUSTED_DEVICES = set()  # store trusted device IDs
-
-SESSIONS = {}  # device_id -> session results
-
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-# ---------------- Endpoints ----------------
+# In-memory store for session results (for demo)
+session_results_store = {}  # device_id -> List of results
 
 @app.get("/v1/challenge")
-async def get_challenges(device_id: str = Query(...)):
+async def get_challenge(request: Request, device_id: str = Query(...)):
     """
-    Load challenges for the device.
-    Returns the challenges + whether device is trusted.
+    Returns 3 adaptive challenges with unique token_id for verification.
+    Trusted devices get Fast-Track mode.
     """
-    trusted_device = device_id in TRUSTED_DEVICES
-    challenges = [{"challenge_id": ch["challenge_id"], "instruction": ch["instruction"], "token_id": ch["token_id"]} for ch in CHALLENGES_DB]
-    return {"challenges": challenges, "trusted_device": trusted_device}
+    user_agent = request.headers.get("user-agent", "unknown")
+    is_trusted = trusted_devices.get(device_id, False)
 
+    # Generate challenges
+    challenges = generate_adaptive_challenges(prev_results=[], num=3, trusted=is_trusted)
+
+    # Normalize challenges with token_id
+    normalized = [
+        {
+            "challenge_id": ch.get("challenge_id"),
+            "token_id": str(uuid.uuid4()),
+            "instruction": ch.get("challenge_value"),
+            "difficulty": ch.get("difficulty", "medium"),
+            "fast_track": is_trusted
+        }
+        for ch in challenges
+    ]
+
+    return {"trusted_device": is_trusted, "challenges": normalized}
 
 @app.post("/v1/verify")
 async def verify_challenge(
-    video: UploadFile = File(...),
-    challenge_id: str = Form(...),
     device_id: str = Form(...),
+    challenge_id: str = Form(...),
+    token_id: str = Form(...),
+    video: UploadFile = File(...)
 ):
     """
-    Verify the uploaded video for a challenge.
-    Simulated liveness & success logic.
+    Receives video submission for a challenge. For demo, just accepts it and
+    randomly passes/fails (replace with real ML liveness verification later).
     """
-    # Save video temporarily
-    tmp_path = os.path.join(UPLOAD_DIR, f"{uuid.uuid4()}.webm")
-    with open(tmp_path, "wb") as f:
-        shutil.copyfileobj(video.file, f)
+    # For demo purposes, assume all videos pass
+    result = {"challenge_passed": True, "liveness_score": 0.95, "lip_sync_score": 0.9}
 
-    # --------- Simulate verification logic ---------
-    # Here you could integrate ML models for lip sync/liveness
-    result = {
-        "challenge_passed": True,  # assume pass
-        "liveness_score": 0.95,
-        "lip_sync_score": 0.9
-    }
+    # Store in session results
+    session_results_store.setdefault(device_id, []).append({
+        "challenge_id": challenge_id,
+        "token_id": token_id,
+        "result": result
+    })
 
-    # Update session results
-    if device_id not in SESSIONS:
-        SESSIONS[device_id] = []
-    SESSIONS[device_id].append(result)
-
-    return JSONResponse(result)
-
+    return result
 
 @app.post("/v1/finalize")
-async def finalize_session(
-    device_id: str = Form(...),
-):
+async def finalize_verification(request: Request):
     """
-    Calculate overall trust score based on session results.
+    Calculates final trust score based on all challenges for the device.
     """
-    results = SESSIONS.get(device_id, [])
+    data = await request.json()
+    results = data.get("results", [])
+    device_id = data.get("device_id", "unknown")
+
     if not results:
-        return JSONResponse({"trust_score": 0, "trust_level": "low"})
+        return {"trust_score": 0, "trust_level": "low"}
 
-    # Simple scoring logic
-    score = sum(r.get("liveness_score",0)*100 for r in results) / len(results)
-    if score >= 80: level = "high"
-    elif score >= 50: level = "medium"
-    else: level = "low"
+    # Simple scoring: pass=100, fail=0, average all
+    score = int(sum(100 if r.get("challenge_passed") else 0 for r in results) / len(results))
 
-    # Mark device as trusted if score is high
+    if score >= 80:
+        level = "high"
+    elif score >= 50:
+        level = "medium"
+    else:
+        level = "low"
+
+    # Mark device as trusted if high
     if level == "high":
-        TRUSTED_DEVICES.add(device_id)
+        trusted_devices[device_id] = True
 
-    return JSONResponse({"trust_score": round(score,1), "trust_level": level})
+    return {"trust_score": score, "trust_level": level}
 
-
-# ---------------- Test / Admin ----------------
-@app.get("/v1/reset")
-async def reset_sessions():
-    """
-    Reset all sessions & trusted devices (for testing purposes).
-    """
-    SESSIONS.clear()
-    TRUSTED_DEVICES.clear()
-    # Clear uploads
-    for f in os.listdir(UPLOAD_DIR):
-        os.remove(os.path.join(UPLOAD_DIR, f))
-    return {"status":"reset done"}
-
+# Serve index.html at root
 @app.get("/")
-async def serve_index():
-    return FileResponse("index.html")
+def read_index():
+    html_path = "index.html"  # make sure index.html is in the same folder as main.py
+    if os.path.exists(html_path):
+        return FileResponse(html_path)
+    return {"detail": "index.html not found"}

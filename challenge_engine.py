@@ -1,44 +1,42 @@
-# challenge_engine.py
 import uuid
 import random
-from logger import log_event
 
-def generate_adaptive_challenges(session_id, prev_results=None, num=3, trusted=False):
-    challenges = []
-    avg_score = None
-    if prev_results:
-        avg_score = sum(r.get("liveness_score",0) for r in prev_results)/len(prev_results)
+def generate_adaptive_challenges(prev_results=[], num=3, trusted=False):
+    """
+    Generates a list of challenges for a verification session.
 
-    for _ in range(num):
-        difficulty = "medium"
-        if avg_score is not None:
-            if avg_score>0.8: difficulty="hard"
-            elif avg_score<0.5: difficulty="easy"
-        if trusted:
-            difficulty=random.choice(["easy","medium"])
+    Parameters:
+    - prev_results: List of previous challenge results (for adaptive logic)
+    - num: Number of challenges to generate
+    - trusted: Boolean, whether device is trusted (fast-track easier challenges)
 
-        challenge_type=random.choice(["smile","blink","head_turn","say_phrase"])
-        value_map = {
-            "easy":["Smile once","Blink once","Turn head left","Say 'Hi'"],
-            "medium":["Smile twice","Blink twice","Turn head both sides","Say 'Hello there'"],
-            "hard":["Smile and turn head","Blink rapidly twice","Rotate head full circle","Say 'Verification challenge'"]
-        }
-        challenge_value = random.choice(value_map[difficulty])
-        challenge_id = str(uuid.uuid4())
-        challenge = {
-            "challenge_id": challenge_id,
-            "challenge_type": challenge_type,
-            "challenge_value": challenge_value,
-            "difficulty": difficulty,
-            "fast_track": trusted
-        }
-        challenges.append(challenge)
+    Returns:
+    - List of dicts with challenge_id, challenge_value, difficulty
+    """
 
-        # Log challenge issuance
-        log_event(
-            event="challenge_issued",
-            session_id=session_id,
-            challenge_id=challenge_id,
-            details={"type": challenge_type, "instruction": challenge_value, "difficulty": difficulty}
-        )
-    return challenges
+    # Base pool of challenge instructions
+    base_challenges = [
+        {"challenge_value": "Blink your eyes twice quickly", "difficulty": "medium"},
+        {"challenge_value": "Turn your head to the left then right", "difficulty": "medium"},
+        {"challenge_value": "Say 'Certivo is secure' clearly", "difficulty": "hard"},
+        {"challenge_value": "Smile widely for 3 seconds", "difficulty": "easy"},
+        {"challenge_value": "Raise your eyebrows once", "difficulty": "easy"},
+        {"challenge_value": "Open your mouth and say 'I am human'", "difficulty": "hard"},
+        {"challenge_value": "Nod your head up and down", "difficulty": "medium"},
+        {"challenge_value": "Stick your tongue out for 2 seconds", "difficulty": "easy"}
+    ]
+
+    # Adjust challenge pool for trusted devices (easier)
+    if trusted:
+        adjusted_pool = [ch for ch in base_challenges if ch["difficulty"] in ("easy", "medium")]
+    else:
+        adjusted_pool = base_challenges
+
+    # Randomly pick `num` unique challenges
+    selected = random.sample(adjusted_pool, k=min(num, len(adjusted_pool)))
+
+    # Assign unique challenge_id to each
+    for ch in selected:
+        ch["challenge_id"] = str(uuid.uuid4())
+
+    return selected
