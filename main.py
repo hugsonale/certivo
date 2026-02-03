@@ -6,6 +6,9 @@ from typing import List
 from fastapi.responses import FileResponse
 import os
 app = FastAPI()
+from human_verification import run_human_verification
+import tempfile
+
 
 # Allow frontend to call API
 app.add_middleware(
