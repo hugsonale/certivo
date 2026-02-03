@@ -3,11 +3,13 @@ import os
 import cv2
 from logger import log_event
 
-MIN_VIDEO_FRAMES = 5
-MOTION_THRESHOLD = 1.5
+MIN_VIDEO_FRAMES = 1
+MOTION_THRESHOLD = 0.2
 
 def _video_motion_profile(video_path: str):
     if not os.path.exists(video_path):
+        print("DEBUG MOTION:", {"frames": frames, "total_motion": total_motion})
+
         return None
     cap = cv2.VideoCapture(video_path)
     ret, prev = cap.read()

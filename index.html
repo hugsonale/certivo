@@ -229,8 +229,8 @@ async function trackHeadMovement() {
     }
 
     const delta = noseX - initialNoseX;
-    if (activeInstruction.includes("left") && delta < -15) movementDetected = true;
-    if (activeInstruction.includes("right") && delta > 15) movementDetected = true;
+    if (activeInstruction.includes("left") && delta < -8) movementDetected = true;
+    if (activeInstruction.includes("right") && delta > -8) movementDetected = true;
 }
 
 /* Recording */
@@ -244,12 +244,17 @@ function startRecording(challengeId, duration) {
         clearInterval(movementInterval);
         overlay.innerHTML = "";
 
-        if (!movementDetected) {
-            statusEl.innerText = "❌ No movement detected";
-            sessionResults.push({ challenge_passed: false });
-            setTimeout(loadNextChallenge, 800);
-            return;
-        }
+    const requiresMovement =
+    activeInstruction.includes("left") ||
+    activeInstruction.includes("right");
+
+    if (requiresMovement && !movementDetected) {
+    statusEl.innerText = "❌ No movement detected";
+    sessionResults.push({ challenge_passed: false });
+    setTimeout(loadNextChallenge, 800);
+    return;
+    }
+
 
         await submitRecording(challengeId);
     };
