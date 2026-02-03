@@ -58,20 +58,39 @@ async def verify_challenge(
     video: UploadFile = File(...)
 ):
     """
-    Receives video submission for a challenge. For demo, just accepts it and
-    randomly passes/fails (replace with real ML liveness verification later).
+    Receives video submission and runs real human verification.
     """
-    # For demo purposes, assume all videos pass
-    result = {"challenge_passed": True, "liveness_score": 0.95, "lip_sync_score": 0.9}
 
-    # Store in session results
+    # 1. Save uploaded video to a temp file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
+        video_bytes = await video.read()
+        tmp.write(video_bytes)
+        video_path = tmp.name
+
+    # 2. Run human verification logic
+    session_id = device_id  # V1 simplification
+    result = run_human_verification(
+        session_id=session_id,
+        challenge_id=challenge_id,
+        video_path=video_path
+    )
+
+    # 3. Cleanup temp file
+    try:
+        os.remove(video_path)
+    except:
+        pass
+
+    # 4. Store result for session
     session_results_store.setdefault(device_id, []).append({
         "challenge_id": challenge_id,
         "token_id": token_id,
-        "result": result
+        "challenge_passed": result.get("challenge_passed", False),
+        "liveness_score": result.get("liveness_score", 0.0)
     })
 
     return result
+
 
 @app.post("/v1/finalize")
 async def finalize_verification(request: Request):
