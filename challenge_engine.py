@@ -1,46 +1,45 @@
 import uuid
 import random
 
-def generate_adaptive_challenges(prev_results=[], num=3, trusted=False):
+def generate_adaptive_challenges(prev_results=None, num=2, trusted=False):
     """
-    Generates a list of head-movement-only challenges for MVP v1.
+    Generates simple, reliable head-movement challenges ONLY.
 
-    Supported challenges:
-    - Turn head left
-    - Turn head right
+    Allowed challenges:
+    - Move head to the left
+    - Move head to the right
     """
 
-    # ONLY supported challenges for now
+    if prev_results is None:
+        prev_results = []
+
+    # STRICT challenge pool (movement-only)
     base_challenges = [
         {
             "challenge_value": "Turn your head to the left",
             "difficulty": "easy",
-            "type": "head_movement",
-            "direction": "left"
+            "expected_movement": "left"
         },
         {
             "challenge_value": "Turn your head to the right",
             "difficulty": "easy",
-            "type": "head_movement",
-            "direction": "right"
+            "expected_movement": "right"
         }
     ]
 
-    # For MVP, trusted vs untrusted makes no difference yet
+    # Trusted devices still use same pool for now
     adjusted_pool = base_challenges
 
     # Pick challenges (allow repetition if num > pool size)
     selected = random.choices(adjusted_pool, k=num)
 
-    # Assign unique challenge_id
     challenges = []
     for ch in selected:
         challenges.append({
             "challenge_id": str(uuid.uuid4()),
             "challenge_value": ch["challenge_value"],
             "difficulty": ch["difficulty"],
-            "type": ch["type"],
-            "direction": ch["direction"]
+            "expected_movement": ch["expected_movement"]
         })
 
     return challenges

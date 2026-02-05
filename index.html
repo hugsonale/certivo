@@ -214,7 +214,7 @@ async function trackHeadMovement() {
     const delta = noseX - initialNoseX;
 
     // NOTE: webcam is mirrored
-    if (activeInstruction.includes("left") && delta > 8) {
+        if (activeInstruction.includes("left") && delta > 8) {
         movementDetected = true;
     }
 
