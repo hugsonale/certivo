@@ -332,10 +332,14 @@ proceedBtn.onclick = async () => {
         console.log("🚀 Fast-Track Mode:", data.challenges.length, "challenge(s)");
     }
     
-    challenges = data.challenges;
-    challengeIndex = 0;
-    sessionResults = [];
-    loadNextChallenge();
+    // STORE CHALLENGES WITH TOKEN_ID
+    challenges = data.challenges.map(ch => ({
+        challenge_id: ch.challenge_id,
+        token_id: ch.token_id,
+        instruction: ch.instruction,
+        difficulty: ch.difficulty,
+        fast_track: ch.fast_track
+    }));
 };
 
 function loadNextChallenge() {
@@ -362,7 +366,7 @@ function loadNextChallenge() {
     
     // Fast-track gets shorter time (8s vs 12s)
     const duration = ch.fast_track ? 8 : 12;
-    startRecording(ch.challenge_id, duration);
+    startRecording(ch.challenge_id, ch.token_id, duration);
 }
 
 /* Head movement detection */
@@ -398,7 +402,7 @@ async function trackHeadMovement() {
 }
 
 /* Recording */
-function startRecording(challengeId, duration) {
+function startRecording(challengeId, tokenId, duration) {
     recordedChunks = [];
     mediaRecorder = new MediaRecorder(video.srcObject);
 
@@ -419,7 +423,7 @@ function startRecording(challengeId, duration) {
             return;
         }
 
-        await submitRecording(challengeId);
+        await submitRecording(challengeId, tokenId);
     };
 
     mediaRecorder.start();
