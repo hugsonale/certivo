@@ -54,7 +54,6 @@ async def get_challenge(request: Request, device_id: str = Query(...)):
 async def verify_challenge(
     device_id: str = Form(...),
     challenge_id: str = Form(...),
-    token_id: str = Form(...),
     video: UploadFile = File(...)
 ):
     """
@@ -67,26 +66,30 @@ async def verify_challenge(
         tmp.write(video_bytes)
         video_path = tmp.name
 
-    # 2. Run human verification logic
-    session_id = device_id  # V1 simplification
+    # 2. Check if device is trusted (for fast-track)
+    is_trusted = trusted_devices.get(device_id, False)
+
+    # 3. Run human verification logic
+    session_id = device_id
     result = run_human_verification(
         session_id=session_id,
         challenge_id=challenge_id,
-        video_path=video_path
+        video_path=video_path,
+        fast_track=is_trusted  # Pass fast-track flag
     )
 
-    # 3. Cleanup temp file
+    # 4. Cleanup temp file
     try:
         os.remove(video_path)
     except:
         pass
 
-    # 4. Store result for session
+    # 5. Store result for session
     session_results_store.setdefault(device_id, []).append({
         "challenge_id": challenge_id,
-        "token_id": token_id,
         "challenge_passed": result.get("challenge_passed", False),
-        "liveness_score": result.get("liveness_score", 0.0)
+        "liveness_score": result.get("liveness_score", 0.0),
+        "fast_track": is_trusted
     })
 
     return result
