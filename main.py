@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query, Request, UploadFile, File, Form
+from fastapi import FastAPI, Query, Request, UploadFile, File, Form, Depends
 from fastapi.middleware.cors import CORSMiddleware
 import uuid
 from challenge_engine import generate_adaptive_challenges
@@ -8,8 +8,17 @@ import os
 from human_verification import run_human_verification
 import tempfile
 from logger import log_event
-from datetime import datetime, timedelta  # ✅ Added timedelta
+from datetime import datetime, timedelta
 import cv2
+
+# Database imports
+from sqlalchemy.orm import Session
+from database import (
+    get_db, store_challenge, get_challenge, delete_challenge,
+    store_challenge_result, get_session_results, store_session,
+    is_device_trusted, update_device_trust, cleanup_expired_challenges,
+    get_device_stats
+)
 
 app = FastAPI()
 
@@ -22,26 +31,23 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# In-memory store for trusted devices
-trusted_devices = {}  # device_id -> bool
-
-# In-memory store for session results (for demo)
-session_results_store = {}  # device_id -> List of results
-
-# ✅ NEW: In-memory store for active challenges (for direction validation)
-active_challenges = {}  # challenge_id -> {instruction, expected_direction, device_id, expires_at}
-
 
 @app.get("/v1/challenge")
-async def get_challenge(request: Request, device_id: str = Query(...)):
+async def get_challenge_endpoint(request: Request, device_id: str = Query(...), db: Session = Depends(get_db)):
     """
     Returns adaptive challenges with unique token_id for verification.
     Trusted devices get Fast-Track mode (fewer challenges).
+    ALL DATA STORED IN DATABASE.
     """
     user_agent = request.headers.get("user-agent", "unknown")
-    is_trusted = trusted_devices.get(device_id, False)
+    
+    # Check if device is trusted (from DATABASE)
+    is_trusted = is_device_trusted(db, device_id)
+    
+    # Cleanup expired challenges periodically
+    cleanup_expired_challenges(db)
 
-    # ✅ UPDATED: Adjust challenge count based on trust
+    # Adjust challenge count based on trust
     num_challenges = 1 if is_trusted else 3
     
     # Generate challenges
@@ -51,13 +57,13 @@ async def get_challenge(request: Request, device_id: str = Query(...)):
         trusted=is_trusted
     )
 
-    # Normalize challenges with token_id
+    # Normalize challenges and STORE IN DATABASE
     normalized = []
     for ch in challenges:
         challenge_id = ch.get("challenge_id")
         instruction = ch.get("challenge_value", "")
         
-        # ✅ NEW: Extract expected direction from instruction
+        # Extract expected direction from instruction
         expected_direction = None
         instruction_lower = instruction.lower()
         
@@ -66,18 +72,37 @@ async def get_challenge(request: Request, device_id: str = Query(...)):
         elif "right" in instruction_lower:
             expected_direction = "right"
         
-        # ✅ NEW: Store challenge info for later validation
-        active_challenges[challenge_id] = {
-            "instruction": instruction,
-            "expected_direction": expected_direction,
-            "device_id": device_id,
-            "expires_at": datetime.utcnow() + timedelta(minutes=5),
-            "expected_movement": ch.get("expected_movement")
-        }
+        # Generate token
+        token_id = str(uuid.uuid4())
+        expires_at = datetime.utcnow() + timedelta(minutes=5)
+        
+        # STORE CHALLENGE IN DATABASE (replaces in-memory storage)
+        store_challenge(
+            db=db,
+            challenge_id=challenge_id,
+            device_id=device_id,
+            instruction=instruction,
+            expected_direction=expected_direction,
+            token_id=token_id,
+            expires_at=expires_at,
+            difficulty=ch.get("difficulty", "medium"),
+            expected_movement=ch.get("expected_movement")
+        )
+        
+        log_event(
+            event="challenge_generated",
+            session_id=device_id,
+            challenge_id=challenge_id,
+            details={
+                "instruction": instruction,
+                "expected_direction": expected_direction,
+                "fast_track": is_trusted
+            }
+        )
         
         normalized.append({
             "challenge_id": challenge_id,
-            "token_id": str(uuid.uuid4()),
+            "token_id": token_id,
             "instruction": instruction,
             "difficulty": ch.get("difficulty", "medium"),
             "fast_track": ch.get("fast_track", False)
@@ -85,9 +110,9 @@ async def get_challenge(request: Request, device_id: str = Query(...)):
 
     return {
         "trusted_device": is_trusted,
-        "fast_track_enabled": is_trusted,  # ✅ NEW
+        "fast_track_enabled": is_trusted,
         "challenges": normalized,
-        "message": "🚀 Fast-Track Mode Active" if is_trusted else "Standard Verification"  # ✅ NEW
+        "message": "🚀 Fast-Track Mode Active" if is_trusted else "Standard Verification"
     }
 
 
@@ -95,12 +120,15 @@ async def get_challenge(request: Request, device_id: str = Query(...)):
 async def verify_challenge(
     device_id: str = Form(...),
     challenge_id: str = Form(...),
-    video: UploadFile = File(...)
+    video: UploadFile = File(...),
+    db: Session = Depends(get_db)
 ):
     """
     Receives video submission and runs real human verification with direction validation.
+    ALL RESULTS STORED IN DATABASE.
     """
     video_path = None
+    video_size_bytes = 0
     
     try:
         # 1. Validate video file
@@ -122,13 +150,14 @@ async def verify_challenge(
         # 2. Check video size (prevent DoS attacks)
         MAX_VIDEO_SIZE = 10 * 1024 * 1024  # 10MB
         video_bytes = await video.read()
+        video_size_bytes = len(video_bytes)
         
-        if len(video_bytes) > MAX_VIDEO_SIZE:
+        if video_size_bytes > MAX_VIDEO_SIZE:
             log_event(
                 event="verification_rejected",
                 session_id=device_id,
                 challenge_id=challenge_id,
-                details={"reason": "file_too_large", "size_bytes": len(video_bytes)}
+                details={"reason": "file_too_large", "size_bytes": video_size_bytes}
             )
             return {
                 "challenge_passed": False,
@@ -138,12 +167,12 @@ async def verify_challenge(
                 "error": "Video file too large"
             }
         
-        if len(video_bytes) < 1000:  # Too small to be valid
+        if video_size_bytes < 1000:
             log_event(
                 event="verification_rejected",
                 session_id=device_id,
                 challenge_id=challenge_id,
-                details={"reason": "file_too_small", "size_bytes": len(video_bytes)}
+                details={"reason": "file_too_small", "size_bytes": video_size_bytes}
             )
             return {
                 "challenge_passed": False,
@@ -162,69 +191,93 @@ async def verify_challenge(
             event="video_received",
             session_id=device_id,
             challenge_id=challenge_id,
-            details={"video_size_bytes": len(video_bytes), "temp_path": video_path}
+            details={"video_size_bytes": video_size_bytes, "temp_path": video_path}
         )
 
-        # ✅ NEW: Get expected direction from stored challenge
-        expected_direction = None
-        if challenge_id in active_challenges:
-            challenge_info = active_challenges[challenge_id]
-            expected_direction = challenge_info.get("expected_direction")
-            
-            # Validate challenge belongs to this device
-            if challenge_info.get("device_id") != device_id:
-                log_event(
-                    event="verification_rejected",
-                    session_id=device_id,
-                    challenge_id=challenge_id,
-                    details={"reason": "device_mismatch"}
-                )
-                return {
-                    "challenge_passed": False,
-                    "liveness_score": 0.0,
-                    "direction_detected": "none",
-                    "direction_matched": False,
-                    "error": "Challenge does not belong to this device"
-                }
-            
-            # Check if challenge expired
-            if datetime.utcnow() > challenge_info.get("expires_at"):
-                log_event(
-                    event="verification_rejected",
-                    session_id=device_id,
-                    challenge_id=challenge_id,
-                    details={"reason": "challenge_expired"}
-                )
-                return {
-                    "challenge_passed": False,
-                    "liveness_score": 0.0,
-                    "direction_detected": "none",
-                    "direction_matched": False,
-                    "error": "Challenge has expired"
-                }
-        else:
+        # GET CHALLENGE FROM DATABASE
+        challenge_record = get_challenge(db, challenge_id)
+        
+        if not challenge_record:
             log_event(
-                event="verification_warning",
+                event="verification_rejected",
                 session_id=device_id,
                 challenge_id=challenge_id,
-                details={"reason": "challenge_not_found_in_active_store"}
+                details={"reason": "challenge_not_found"}
             )
+            return {
+                "challenge_passed": False,
+                "liveness_score": 0.0,
+                "direction_detected": "none",
+                "direction_matched": False,
+                "error": "Challenge not found"
+            }
+        
+        # Validate challenge belongs to this device
+        if challenge_record.device_id != device_id:
+            log_event(
+                event="verification_rejected",
+                session_id=device_id,
+                challenge_id=challenge_id,
+                details={"reason": "device_mismatch"}
+            )
+            return {
+                "challenge_passed": False,
+                "liveness_score": 0.0,
+                "direction_detected": "none",
+                "direction_matched": False,
+                "error": "Challenge does not belong to this device"
+            }
+        
+        # Check if challenge expired
+        if datetime.utcnow() > challenge_record.expires_at:
+            log_event(
+                event="verification_rejected",
+                session_id=device_id,
+                challenge_id=challenge_id,
+                details={"reason": "challenge_expired"}
+            )
+            return {
+                "challenge_passed": False,
+                "liveness_score": 0.0,
+                "direction_detected": "none",
+                "direction_matched": False,
+                "error": "Challenge has expired"
+            }
+        
+        # Check if challenge already used
+        if challenge_record.used:
+            log_event(
+                event="verification_rejected",
+                session_id=device_id,
+                challenge_id=challenge_id,
+                details={"reason": "challenge_already_used"}
+            )
+            return {
+                "challenge_passed": False,
+                "liveness_score": 0.0,
+                "direction_detected": "none",
+                "direction_matched": False,
+                "error": "Challenge already used"
+            }
+        
+        expected_direction = challenge_record.expected_direction
+        instruction = challenge_record.instruction
+        difficulty = challenge_record.difficulty
 
-        # 4. Check if device is trusted (for fast-track)
-        is_trusted = trusted_devices.get(device_id, False)
+        # Check if device is trusted (from DATABASE)
+        is_trusted = is_device_trusted(db, device_id)
 
         # 5. Run human verification logic with error handling and direction validation
         try:
-            # ✅ UPDATED: Pass expected_direction parameter
             result = run_human_verification(
                 session_id=device_id,
                 challenge_id=challenge_id,
                 video_path=video_path,
                 fast_track=is_trusted,
-                expected_direction=expected_direction  # ✅ NEW PARAMETER
+                expected_direction=expected_direction
             )
             
-            # ✅ UPDATED: Validate result structure (now includes direction fields)
+            # Validate result structure
             if not isinstance(result, dict):
                 raise ValueError("Verification returned invalid result type")
             
@@ -314,20 +367,25 @@ async def verify_challenge(
                 "error": "Verification failed due to unexpected error"
             }
 
-        # ✅ NEW: Clean up used challenge (prevent replay)
-        if challenge_id in active_challenges:
-            del active_challenges[challenge_id]
+        # DELETE USED CHALLENGE FROM DATABASE (prevents replay attacks)
+        delete_challenge(db, challenge_id)
 
-        # 6. Store result for session
-        session_results_store.setdefault(device_id, []).append({
-            "challenge_id": challenge_id,
-            "challenge_passed": result.get("challenge_passed", False),
-            "liveness_score": result.get("liveness_score", 0.0),
-            "direction_detected": result.get("direction_detected", "none"),  # ✅ NEW
-            "direction_matched": result.get("direction_matched", False),  # ✅ NEW
-            "fast_track": is_trusted,
-            "timestamp": datetime.utcnow().isoformat()
-        })
+        # STORE CHALLENGE RESULT IN DATABASE
+        store_challenge_result(
+            db=db,
+            session_id=device_id,  # Using device_id as session_id for now
+            device_id=device_id,
+            challenge_id=challenge_id,
+            instruction=instruction,
+            expected_direction=expected_direction,
+            challenge_passed=result["challenge_passed"],
+            liveness_score=result["liveness_score"],
+            direction_detected=result["direction_detected"],
+            direction_matched=result["direction_matched"],
+            fast_track=is_trusted,
+            video_size_bytes=video_size_bytes,
+            difficulty=difficulty
+        )
 
         return result
 
@@ -348,7 +406,7 @@ async def verify_challenge(
         }
     
     finally:
-        # 7. Always cleanup temp file, even if errors occurred
+        # Always cleanup temp file, even if errors occurred
         if video_path and os.path.exists(video_path):
             try:
                 os.remove(video_path)
@@ -368,9 +426,10 @@ async def verify_challenge(
 
 
 @app.post("/v1/finalize")
-async def finalize_verification(request: Request):
+async def finalize_verification(request: Request, db: Session = Depends(get_db)):
     """
     Calculates final trust score based on all challenges for the device.
+    STORES SESSION IN DATABASE.
     """
     data = await request.json()
     results = data.get("results", [])
@@ -379,8 +438,20 @@ async def finalize_verification(request: Request):
     if not results:
         return {"trust_score": 0, "trust_level": "low"}
 
-    # Simple scoring: pass=100, fail=0, average all
-    score = int(sum(100 if r.get("challenge_passed") else 0 for r in results) / len(results))
+    # GET RESULTS FROM DATABASE instead of relying on frontend
+    db_results = get_session_results(db, device_id)
+    
+    if not db_results:
+        # Fallback to frontend results if database query returns nothing
+        total_challenges = len(results)
+        failed_challenges = sum(1 for r in results if not r.get("challenge_passed"))
+        score = int(sum(100 if r.get("challenge_passed") else 0 for r in results) / total_challenges)
+    else:
+        # Use database results (more reliable)
+        total_challenges = len(db_results)
+        failed_challenges = sum(1 for r in db_results if not r.challenge_passed)
+        passed_challenges = total_challenges - failed_challenges
+        score = int((passed_challenges / total_challenges) * 100) if total_challenges > 0 else 0
 
     if score >= 80:
         level = "high"
@@ -389,17 +460,62 @@ async def finalize_verification(request: Request):
     else:
         level = "low"
 
-    # Mark device as trusted if high
-    if level == "high":
-        trusted_devices[device_id] = True
+    # STORE SESSION IN DATABASE
+    session_id = f"session_{device_id}_{int(datetime.utcnow().timestamp())}"
+    is_fast_track = is_device_trusted(db, device_id)
+    
+    store_session(
+        db=db,
+        session_id=session_id,
+        device_id=device_id,
+        trust_score=float(score),
+        trust_level=level,
+        failed_challenges=failed_challenges,
+        total_challenges=total_challenges,
+        fast_track=is_fast_track
+    )
 
-    return {"trust_score": score, "trust_level": level}
+    # UPDATE DEVICE TRUST IN DATABASE
+    verification_passed = (level in ["high", "medium"])
+    update_device_trust(
+        db=db,
+        device_id=device_id,
+        trust_level=level,
+        verification_passed=verification_passed
+    )
+
+    log_event(
+        event="session_finalized",
+        session_id=session_id,
+        challenge_id=None,
+        details={
+            "device_id": device_id,
+            "trust_score": score,
+            "trust_level": level,
+            "total_challenges": total_challenges,
+            "failed_challenges": failed_challenges
+        }
+    )
+
+    return {"trust_score": score, "trust_level": level, "session_id": session_id}
 
 
-# Serve index.html at root
+@app.get("/v1/device/{device_id}/stats")
+async def get_device_statistics(device_id: str, db: Session = Depends(get_db)):
+    """
+    Get statistics for a specific device.
+    Returns verification history, success rates, and trust metrics.
+    """
+    stats = get_device_stats(db, device_id)
+    if not stats:
+        return {"error": "Device not found", "device_id": device_id}
+    return stats
+
+
 @app.get("/")
 def read_index():
-    html_path = "index.html"  # make sure index.html is in the same folder as main.py
+    """Serve index.html at root"""
+    html_path = "index.html"
     if os.path.exists(html_path):
         return FileResponse(html_path)
     return {"detail": "index.html not found"}
