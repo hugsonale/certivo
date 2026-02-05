@@ -120,6 +120,7 @@ async def get_challenge_endpoint(request: Request, device_id: str = Query(...), 
 async def verify_challenge(
     device_id: str = Form(...),
     challenge_id: str = Form(...),
+    token_id: str = Form(...),
     video: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
