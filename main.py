@@ -5,9 +5,13 @@ from challenge_engine import generate_adaptive_challenges
 from typing import List
 from fastapi.responses import FileResponse
 import os
-app = FastAPI()
 from human_verification import run_human_verification
 import tempfile
+from logger import log_event  # ✅ ADD THIS
+from datetime import datetime  # ✅ ADD THIS
+import cv2  # ✅ ADD THIS for error handling
+
+app = FastAPI()
 
 
 # Allow frontend to call API
@@ -57,42 +61,197 @@ async def verify_challenge(
     video: UploadFile = File(...)
 ):
     """
-    Receives video submission and runs real human verification.
+    Receives video submission and runs real human verification with full error handling.
     """
-
-    # 1. Save uploaded video to a temp file
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
-        video_bytes = await video.read()
-        tmp.write(video_bytes)
-        video_path = tmp.name
-
-    # 2. Check if device is trusted (for fast-track)
-    is_trusted = trusted_devices.get(device_id, False)
-
-    # 3. Run human verification logic
-    session_id = device_id
-    result = run_human_verification(
-        session_id=session_id,
-        challenge_id=challenge_id,
-        video_path=video_path,
-        fast_track=is_trusted  # Pass fast-track flag
-    )
-
-    # 4. Cleanup temp file
+    video_path = None
+    
     try:
-        os.remove(video_path)
-    except:
-        pass
+        # 1. Validate video file
+        if not video.content_type or not video.content_type.startswith('video/'):
+            log_event(
+                event="verification_rejected",
+                session_id=device_id,
+                challenge_id=challenge_id,
+                details={"reason": "invalid_content_type", "content_type": video.content_type}
+            )
+            return {
+                "challenge_passed": False,
+                "liveness_score": 0.0,
+                "error": "Invalid video format"
+            }
+        
+        # 2. Check video size (prevent DoS attacks)
+        MAX_VIDEO_SIZE = 10 * 1024 * 1024  # 10MB
+        video_bytes = await video.read()
+        
+        if len(video_bytes) > MAX_VIDEO_SIZE:
+            log_event(
+                event="verification_rejected",
+                session_id=device_id,
+                challenge_id=challenge_id,
+                details={"reason": "file_too_large", "size_bytes": len(video_bytes)}
+            )
+            return {
+                "challenge_passed": False,
+                "liveness_score": 0.0,
+                "error": "Video file too large"
+            }
+        
+        if len(video_bytes) < 1000:  # Too small to be valid
+            log_event(
+                event="verification_rejected",
+                session_id=device_id,
+                challenge_id=challenge_id,
+                details={"reason": "file_too_small", "size_bytes": len(video_bytes)}
+            )
+            return {
+                "challenge_passed": False,
+                "liveness_score": 0.0,
+                "error": "Video file too small or corrupted"
+            }
 
-    # 5. Store result for session
-    session_results_store.setdefault(device_id, []).append({
-        "challenge_id": challenge_id,
-        "challenge_passed": result.get("challenge_passed", False),
-        "liveness_score": result.get("liveness_score", 0.0),
-        "fast_track": is_trusted
-    })
+        # 3. Save uploaded video to temp file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
+            tmp.write(video_bytes)
+            video_path = tmp.name
+        
+        log_event(
+            event="video_received",
+            session_id=device_id,
+            challenge_id=challenge_id,
+            details={"video_size_bytes": len(video_bytes), "temp_path": video_path}
+        )
 
-    return result
+        # 4. Check if device is trusted (for fast-track)
+        is_trusted = trusted_devices.get(device_id, False)
+
+        # 5. Run human verification logic with error handling
+        try:
+            result = run_human_verification(
+                session_id=device_id,
+                challenge_id=challenge_id,
+                video_path=video_path,
+                fast_track=is_trusted
+            )
+            
+            # Validate result structure
+            if not isinstance(result, dict):
+                raise ValueError("Verification returned invalid result type")
+            
+            if "challenge_passed" not in result or "liveness_score" not in result:
+                raise ValueError("Verification result missing required fields")
+            
+            # Ensure proper types
+            result["challenge_passed"] = bool(result["challenge_passed"])
+            result["liveness_score"] = float(result["liveness_score"])
+            
+            # Log successful verification
+            log_event(
+                event="verification_completed",
+                session_id=device_id,
+                challenge_id=challenge_id,
+                details={
+                    "passed": result["challenge_passed"],
+                    "liveness_score": result["liveness_score"],
+                    "fast_track": is_trusted
+                }
+            )
+            
+        except FileNotFoundError as e:
+            log_event(
+                event="verification_error",
+                session_id=device_id,
+                challenge_id=challenge_id,
+                details={"error": "video_file_not_found", "message": str(e)}
+            )
+            return {
+                "challenge_passed": False,
+                "liveness_score": 0.0,
+                "error": "Video file not accessible"
+            }
+            
+        except cv2.error as e:
+            log_event(
+                event="verification_error",
+                session_id=device_id,
+                challenge_id=challenge_id,
+                details={"error": "opencv_error", "message": str(e)}
+            )
+            return {
+                "challenge_passed": False,
+                "liveness_score": 0.0,
+                "error": "Video processing failed"
+            }
+            
+        except ValueError as e:
+            log_event(
+                event="verification_error",
+                session_id=device_id,
+                challenge_id=challenge_id,
+                details={"error": "validation_error", "message": str(e)}
+            )
+            return {
+                "challenge_passed": False,
+                "liveness_score": 0.0,
+                "error": "Verification result validation failed"
+            }
+            
+        except Exception as e:
+            log_event(
+                event="verification_error",
+                session_id=device_id,
+                challenge_id=challenge_id,
+                details={"error": "unexpected_error", "message": str(e), "type": type(e).__name__}
+            )
+            return {
+                "challenge_passed": False,
+                "liveness_score": 0.0,
+                "error": "Verification failed due to unexpected error"
+            }
+
+        # 6. Store result for session
+        session_results_store.setdefault(device_id, []).append({
+            "challenge_id": challenge_id,
+            "challenge_passed": result.get("challenge_passed", False),
+            "liveness_score": result.get("liveness_score", 0.0),
+            "fast_track": is_trusted,
+            "timestamp": datetime.utcnow().isoformat()
+        })
+
+        return result
+
+    except Exception as e:
+        # Catch-all for any unexpected errors in the endpoint itself
+        log_event(
+            event="endpoint_error",
+            session_id=device_id,
+            challenge_id=challenge_id,
+            details={"error": str(e), "type": type(e).__name__}
+        )
+        return {
+            "challenge_passed": False,
+            "liveness_score": 0.0,
+            "error": "Server error during verification"
+        }
+    
+    finally:
+        # 7. Always cleanup temp file, even if errors occurred
+        if video_path and os.path.exists(video_path):
+            try:
+                os.remove(video_path)
+                log_event(
+                    event="temp_file_cleanup",
+                    session_id=device_id,
+                    challenge_id=challenge_id,
+                    details={"temp_path": video_path, "status": "success"}
+                )
+            except Exception as cleanup_error:
+                log_event(
+                    event="temp_file_cleanup",
+                    session_id=device_id,
+                    challenge_id=challenge_id,
+                    details={"temp_path": video_path, "status": "failed", "error": str(cleanup_error)}
+                )
 
 
 @app.post("/v1/finalize")
