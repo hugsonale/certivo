@@ -440,11 +440,12 @@ function startRecording(challengeId, tokenId, duration) {
 }
 
 /* Submit */
-async function submitRecording(challengeId) {
+async function submitRecording(challengeId, tokenId) {
     const blob = new Blob(recordedChunks, { type: "video/webm" });
     const formData = new FormData();
     formData.append("video", blob);
     formData.append("challenge_id", challengeId);
+    formData.append("token_id", tokenId);
     formData.append("device_id", deviceId);
 
     const res = await fetch("http://127.0.0.1:8000/v1/verify", {
@@ -453,8 +454,16 @@ async function submitRecording(challengeId) {
     });
 
     const result = await res.json();
+    
+    // Check for token validation errors
+    if (result.error && result.error.includes("token")) {
+        console.error("🔒 Token validation failed:", result.error);
+        statusEl.innerText = "🔒 Security validation failed";
+    } else {
+        statusEl.innerText = result.challenge_passed ? "✅ Passed" : "❌ Failed";
+    }
+    
     sessionResults.push(result);
-    statusEl.innerText = result.challenge_passed ? "✅ Passed" : "❌ Failed";
     setTimeout(loadNextChallenge, 700);
 }
 
