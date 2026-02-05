@@ -213,6 +213,28 @@ async def verify_challenge(
                 "error": "Challenge not found"
             }
         
+        # VALIDATE TOKEN_ID
+        if challenge_record.token_id != token_id:
+            log_event(
+                event="verification_rejected",
+                session_id=device_id,
+                challenge_id=challenge_id,
+                details={
+                    "reason": "invalid_token",
+                    "expected_token": challenge_record.token_id[:8] + "...",
+                    "received_token": token_id[:8] + "..."
+                }
+            )
+            return {
+                "challenge_passed": False,
+                "liveness_score": 0.0,
+                "direction_detected": "none",
+                "direction_matched": False,
+                "error": "Invalid verification token"
+            }
+        
+        # Validate challenge belongs to this device
+
         # Validate challenge belongs to this device
         if challenge_record.device_id != device_id:
             log_event(
