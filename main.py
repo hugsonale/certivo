@@ -7,9 +7,9 @@ from fastapi.responses import FileResponse
 import os
 from human_verification import run_human_verification
 import tempfile
-from logger import log_event  # ✅ ADD THIS
-from datetime import datetime  # ✅ ADD THIS
-import cv2  # ✅ ADD THIS for error handling
+from logger import log_event
+from datetime import datetime, timedelta  # ✅ Added timedelta
+import cv2
 
 app = FastAPI()
 
@@ -28,31 +28,68 @@ trusted_devices = {}  # device_id -> bool
 # In-memory store for session results (for demo)
 session_results_store = {}  # device_id -> List of results
 
+# ✅ NEW: In-memory store for active challenges (for direction validation)
+active_challenges = {}  # challenge_id -> {instruction, expected_direction, device_id, expires_at}
+
+
 @app.get("/v1/challenge")
 async def get_challenge(request: Request, device_id: str = Query(...)):
     """
-    Returns 3 adaptive challenges with unique token_id for verification.
-    Trusted devices get Fast-Track mode.
+    Returns adaptive challenges with unique token_id for verification.
+    Trusted devices get Fast-Track mode (fewer challenges).
     """
     user_agent = request.headers.get("user-agent", "unknown")
     is_trusted = trusted_devices.get(device_id, False)
 
+    # ✅ UPDATED: Adjust challenge count based on trust
+    num_challenges = 1 if is_trusted else 3
+    
     # Generate challenges
-    challenges = generate_adaptive_challenges(prev_results=[], num=3, trusted=is_trusted)
+    challenges = generate_adaptive_challenges(
+        prev_results=[], 
+        num=num_challenges, 
+        trusted=is_trusted
+    )
 
     # Normalize challenges with token_id
-    normalized = [
-        {
-            "challenge_id": ch.get("challenge_id"),
-            "token_id": str(uuid.uuid4()),
-            "instruction": ch.get("challenge_value"),
-            "difficulty": ch.get("difficulty", "medium"),
-            "fast_track": is_trusted
+    normalized = []
+    for ch in challenges:
+        challenge_id = ch.get("challenge_id")
+        instruction = ch.get("challenge_value", "")
+        
+        # ✅ NEW: Extract expected direction from instruction
+        expected_direction = None
+        instruction_lower = instruction.lower()
+        
+        if "left" in instruction_lower:
+            expected_direction = "left"
+        elif "right" in instruction_lower:
+            expected_direction = "right"
+        
+        # ✅ NEW: Store challenge info for later validation
+        active_challenges[challenge_id] = {
+            "instruction": instruction,
+            "expected_direction": expected_direction,
+            "device_id": device_id,
+            "expires_at": datetime.utcnow() + timedelta(minutes=5),
+            "expected_movement": ch.get("expected_movement")
         }
-        for ch in challenges
-    ]
+        
+        normalized.append({
+            "challenge_id": challenge_id,
+            "token_id": str(uuid.uuid4()),
+            "instruction": instruction,
+            "difficulty": ch.get("difficulty", "medium"),
+            "fast_track": ch.get("fast_track", False)
+        })
 
-    return {"trusted_device": is_trusted, "challenges": normalized}
+    return {
+        "trusted_device": is_trusted,
+        "fast_track_enabled": is_trusted,  # ✅ NEW
+        "challenges": normalized,
+        "message": "🚀 Fast-Track Mode Active" if is_trusted else "Standard Verification"  # ✅ NEW
+    }
+
 
 @app.post("/v1/verify")
 async def verify_challenge(
@@ -61,7 +98,7 @@ async def verify_challenge(
     video: UploadFile = File(...)
 ):
     """
-    Receives video submission and runs real human verification with full error handling.
+    Receives video submission and runs real human verification with direction validation.
     """
     video_path = None
     
@@ -77,6 +114,8 @@ async def verify_challenge(
             return {
                 "challenge_passed": False,
                 "liveness_score": 0.0,
+                "direction_detected": "none",
+                "direction_matched": False,
                 "error": "Invalid video format"
             }
         
@@ -94,6 +133,8 @@ async def verify_challenge(
             return {
                 "challenge_passed": False,
                 "liveness_score": 0.0,
+                "direction_detected": "none",
+                "direction_matched": False,
                 "error": "Video file too large"
             }
         
@@ -107,6 +148,8 @@ async def verify_challenge(
             return {
                 "challenge_passed": False,
                 "liveness_score": 0.0,
+                "direction_detected": "none",
+                "direction_matched": False,
                 "error": "Video file too small or corrupted"
             }
 
@@ -122,28 +165,79 @@ async def verify_challenge(
             details={"video_size_bytes": len(video_bytes), "temp_path": video_path}
         )
 
+        # ✅ NEW: Get expected direction from stored challenge
+        expected_direction = None
+        if challenge_id in active_challenges:
+            challenge_info = active_challenges[challenge_id]
+            expected_direction = challenge_info.get("expected_direction")
+            
+            # Validate challenge belongs to this device
+            if challenge_info.get("device_id") != device_id:
+                log_event(
+                    event="verification_rejected",
+                    session_id=device_id,
+                    challenge_id=challenge_id,
+                    details={"reason": "device_mismatch"}
+                )
+                return {
+                    "challenge_passed": False,
+                    "liveness_score": 0.0,
+                    "direction_detected": "none",
+                    "direction_matched": False,
+                    "error": "Challenge does not belong to this device"
+                }
+            
+            # Check if challenge expired
+            if datetime.utcnow() > challenge_info.get("expires_at"):
+                log_event(
+                    event="verification_rejected",
+                    session_id=device_id,
+                    challenge_id=challenge_id,
+                    details={"reason": "challenge_expired"}
+                )
+                return {
+                    "challenge_passed": False,
+                    "liveness_score": 0.0,
+                    "direction_detected": "none",
+                    "direction_matched": False,
+                    "error": "Challenge has expired"
+                }
+        else:
+            log_event(
+                event="verification_warning",
+                session_id=device_id,
+                challenge_id=challenge_id,
+                details={"reason": "challenge_not_found_in_active_store"}
+            )
+
         # 4. Check if device is trusted (for fast-track)
         is_trusted = trusted_devices.get(device_id, False)
 
-        # 5. Run human verification logic with error handling
+        # 5. Run human verification logic with error handling and direction validation
         try:
+            # ✅ UPDATED: Pass expected_direction parameter
             result = run_human_verification(
                 session_id=device_id,
                 challenge_id=challenge_id,
                 video_path=video_path,
-                fast_track=is_trusted
+                fast_track=is_trusted,
+                expected_direction=expected_direction  # ✅ NEW PARAMETER
             )
             
-            # Validate result structure
+            # ✅ UPDATED: Validate result structure (now includes direction fields)
             if not isinstance(result, dict):
                 raise ValueError("Verification returned invalid result type")
             
-            if "challenge_passed" not in result or "liveness_score" not in result:
-                raise ValueError("Verification result missing required fields")
+            required_fields = ["challenge_passed", "liveness_score", "direction_detected", "direction_matched"]
+            for field in required_fields:
+                if field not in result:
+                    raise ValueError(f"Verification result missing required field: {field}")
             
             # Ensure proper types
             result["challenge_passed"] = bool(result["challenge_passed"])
             result["liveness_score"] = float(result["liveness_score"])
+            result["direction_detected"] = str(result["direction_detected"])
+            result["direction_matched"] = bool(result["direction_matched"])
             
             # Log successful verification
             log_event(
@@ -153,6 +247,9 @@ async def verify_challenge(
                 details={
                     "passed": result["challenge_passed"],
                     "liveness_score": result["liveness_score"],
+                    "direction_detected": result["direction_detected"],
+                    "direction_matched": result["direction_matched"],
+                    "expected_direction": expected_direction,
                     "fast_track": is_trusted
                 }
             )
@@ -167,6 +264,8 @@ async def verify_challenge(
             return {
                 "challenge_passed": False,
                 "liveness_score": 0.0,
+                "direction_detected": "none",
+                "direction_matched": False,
                 "error": "Video file not accessible"
             }
             
@@ -180,6 +279,8 @@ async def verify_challenge(
             return {
                 "challenge_passed": False,
                 "liveness_score": 0.0,
+                "direction_detected": "none",
+                "direction_matched": False,
                 "error": "Video processing failed"
             }
             
@@ -193,6 +294,8 @@ async def verify_challenge(
             return {
                 "challenge_passed": False,
                 "liveness_score": 0.0,
+                "direction_detected": "none",
+                "direction_matched": False,
                 "error": "Verification result validation failed"
             }
             
@@ -206,14 +309,22 @@ async def verify_challenge(
             return {
                 "challenge_passed": False,
                 "liveness_score": 0.0,
+                "direction_detected": "none",
+                "direction_matched": False,
                 "error": "Verification failed due to unexpected error"
             }
+
+        # ✅ NEW: Clean up used challenge (prevent replay)
+        if challenge_id in active_challenges:
+            del active_challenges[challenge_id]
 
         # 6. Store result for session
         session_results_store.setdefault(device_id, []).append({
             "challenge_id": challenge_id,
             "challenge_passed": result.get("challenge_passed", False),
             "liveness_score": result.get("liveness_score", 0.0),
+            "direction_detected": result.get("direction_detected", "none"),  # ✅ NEW
+            "direction_matched": result.get("direction_matched", False),  # ✅ NEW
             "fast_track": is_trusted,
             "timestamp": datetime.utcnow().isoformat()
         })
@@ -231,6 +342,8 @@ async def verify_challenge(
         return {
             "challenge_passed": False,
             "liveness_score": 0.0,
+            "direction_detected": "none",
+            "direction_matched": False,
             "error": "Server error during verification"
         }
     
@@ -281,6 +394,7 @@ async def finalize_verification(request: Request):
         trusted_devices[device_id] = True
 
     return {"trust_score": score, "trust_level": level}
+
 
 # Serve index.html at root
 @app.get("/")
