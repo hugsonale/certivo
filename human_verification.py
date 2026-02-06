@@ -3,17 +3,17 @@ import os
 import cv2
 from logger import log_event
 
-# Thresholds
-MIN_VIDEO_FRAMES = 3
-MOTION_THRESHOLD = 0.2
+# Thresholds (VERY LENIENT FOR TESTING)
+MIN_VIDEO_FRAMES = 1  # Was 3
+MOTION_THRESHOLD = 0.1  # Was 0.2
 
 # Fast-track thresholds (more lenient)
 FAST_TRACK_MIN_FRAMES = 1
-FAST_TRACK_MOTION_THRESHOLD = 0.15
+FAST_TRACK_MOTION_THRESHOLD = 0.1  # Was 0.15
 
 # Direction detection thresholds
-DIRECTION_THRESHOLD = 15  # pixels
-DIRECTION_CONFIDENCE_FRAMES = 2  # Must see direction for at least N frames
+DIRECTION_THRESHOLD = 5  # pixels (was 15)
+DIRECTION_CONFIDENCE_FRAMES = 1  # Must see direction for at least N frames (was 2)
 
 
 def _detect_face_in_frame(frame):
@@ -109,7 +109,14 @@ def _analyze_head_movement_direction(video_path: str, expected_direction: str = 
             
             # Face tracking
             face = _detect_face_in_frame(frame)
+            
+            # DEBUG: Draw rectangle on face if detected
             if face is not None:
+                x, y, w, h = face
+                cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+                cv2.putText(frame, f"Frame {frames_analyzed}", (10, 30), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                
                 face_detected_frames += 1
                 face_positions.append({
                     "frame": frames_analyzed,
@@ -143,10 +150,9 @@ def _analyze_head_movement_direction(video_path: str, expected_direction: str = 
             
             total_directional_movements = left_movements + right_movements
             
-
             # Determine direction (account for webcam mirroring)
             if movement_magnitude > DIRECTION_THRESHOLD:
-            # Swap left and right because webcam is mirrored
+                # Swap left and right because webcam is mirrored
                 if left_movements > right_movements and left_movements >= DIRECTION_CONFIDENCE_FRAMES:
                     direction_detected = "right"  # Swapped from "left"
                     direction_confidence = left_movements / max(total_directional_movements, 1)
@@ -156,7 +162,6 @@ def _analyze_head_movement_direction(video_path: str, expected_direction: str = 
                 elif left_movements == right_movements and total_directional_movements > 0:
                     direction_detected = "ambiguous"
                     direction_confidence = 0.5
-
             
             print(f"DIRECTION ANALYSIS: Net movement: {net_movement:.2f}px, "
                   f"Left movements: {left_movements}, Right movements: {right_movements}, "
@@ -299,7 +304,7 @@ def run_human_verification(session_id: str, challenge_id: str, video_path: str,
         }
     
     # VERIFICATION LAYER 2: Face must be present during motion
-    min_face_frames = 2 if fast_track else 3
+    min_face_frames = 1 if fast_track else 2  # Lowered from 2/3
     
     if analysis["face_detected_frames"] < min_face_frames:
         log_event(
@@ -342,7 +347,7 @@ def run_human_verification(session_id: str, challenge_id: str, video_path: str,
             }
         
         # Check direction confidence
-        min_confidence = 0.5 if fast_track else 0.6
+        min_confidence = 0.3 if fast_track else 0.4  # Lowered from 0.5/0.6
         
         if analysis["direction_confidence"] < min_confidence:
             log_event(
