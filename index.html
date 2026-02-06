@@ -162,6 +162,344 @@ button:disabled {
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/facemesh"></script>
 
 <script>
+// ============================================================================
+// BOT DETECTION SYSTEM - 10/10
+// ============================================================================
+
+const BotDetector = {
+    checks: {},
+    
+    // Check 1: WebDriver detection
+    checkWebDriver() {
+        this.checks.webdriver = navigator.webdriver === true;
+        return this.checks.webdriver;
+    },
+    
+    // Check 2: Headless browser detection
+    checkHeadless() {
+        const checks = {
+            userAgent: /HeadlessChrome|PhantomJS|Nightmare/i.test(navigator.userAgent),
+            noPlugins: navigator.plugins.length === 0,
+            noLanguages: navigator.languages.length === 0,
+            chromeRuntime: !window.chrome && /Chrome/.test(navigator.userAgent),
+            permissions: navigator.permissions === undefined,
+            // Chrome DevTools detection
+            devtools: window.outerWidth - window.innerWidth > 160 ||
+                     window.outerHeight - window.innerHeight > 160
+        };
+        
+        this.checks.headless = Object.values(checks).filter(v => v).length >= 2;
+        this.checks.headlessDetails = checks;
+        return this.checks.headless;
+    },
+    
+    // Check 3: Automation framework detection
+    checkAutomation() {
+        const checks = {
+            // Selenium
+            selenium: window.document.$cdc_asdjflasutopfhvcZLmcfl_ !== undefined ||
+                     window.document.documentElement.getAttribute('selenium') !== null ||
+                     window.document.documentElement.getAttribute('webdriver') !== null ||
+                     window.document.documentElement.getAttribute('driver') !== null,
+            
+            // Puppeteer
+            puppeteer: window.navigator.webdriver ||
+                      window.callPhantom !== undefined ||
+                      window._phantom !== undefined,
+            
+            // Nightmare
+            nightmare: window.__nightmare !== undefined,
+            
+            // Generic automation properties
+            domAutomation: window.domAutomation !== undefined ||
+                          window.domAutomationController !== undefined
+        };
+        
+        this.checks.automation = Object.values(checks).some(v => v);
+        this.checks.automationDetails = checks;
+        return this.checks.automation;
+    },
+    
+    // Check 4: Browser features consistency
+    checkBrowserConsistency() {
+        const issues = [];
+        
+        // Chrome without chrome object
+        if (/Chrome/.test(navigator.userAgent) && !window.chrome) {
+            issues.push('chrome_missing');
+        }
+        
+        // Missing expected properties
+        if (!navigator.platform) issues.push('no_platform');
+        if (!navigator.hardwareConcurrency) issues.push('no_hardware');
+        if (!screen.colorDepth) issues.push('no_color_depth');
+        
+        // Suspicious screen dimensions
+        if (screen.width < 100 || screen.height < 100) {
+            issues.push('tiny_screen');
+        }
+        
+        // Missing Date.prototype.toJSON
+        if (typeof Date.prototype.toJSON !== 'function') {
+            issues.push('missing_date_json');
+        }
+        
+        this.checks.inconsistencies = issues;
+        return issues.length > 0;
+    },
+    
+    // Check 5: Mouse/Touch interaction
+    checkHumanInteraction() {
+        return new Promise((resolve) => {
+            let hasMouseMove = false;
+            let hasClick = false;
+            let hasTouch = false;
+            
+            const timeout = setTimeout(() => {
+                this.checks.humanInteraction = hasMouseMove || hasClick || hasTouch;
+                this.checks.interactionDetails = {
+                    mouseMove: hasMouseMove,
+                    click: hasClick,
+                    touch: hasTouch
+                };
+                cleanup();
+                resolve(this.checks.humanInteraction);
+            }, 3000); // Wait 3 seconds for interaction
+            
+            const onMouseMove = () => { hasMouseMove = true; };
+            const onClick = () => { hasClick = true; };
+            const onTouch = () => { hasTouch = true; };
+            
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('click', onClick);
+            document.addEventListener('touchstart', onTouch);
+            
+            const cleanup = () => {
+                clearTimeout(timeout);
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('click', onClick);
+                document.removeEventListener('touchstart', onTouch);
+            };
+        });
+    },
+    
+    // Check 6: Canvas fingerprinting
+    checkCanvas() {
+        try {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            if (!ctx) {
+                this.checks.canvasBlocked = true;
+                return true;
+            }
+            
+            // Draw test pattern
+            ctx.textBaseline = 'top';
+            ctx.font = '14px Arial';
+            ctx.textBaseline = 'alphabetic';
+            ctx.fillStyle = '#f60';
+            ctx.fillRect(125, 1, 62, 20);
+            ctx.fillStyle = '#069';
+            ctx.fillText('BotCheck', 2, 15);
+            ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+            ctx.fillText('BotCheck', 4, 17);
+            
+            const dataUrl = canvas.toDataURL();
+            
+            // Check if canvas is blank (some bots return blank canvas)
+            this.checks.canvasBlank = dataUrl === 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+            this.checks.canvasFingerprint = dataUrl.slice(-20); // Store last 20 chars
+            
+            return this.checks.canvasBlank;
+        } catch (e) {
+            this.checks.canvasError = true;
+            return true;
+        }
+    },
+    
+    // Check 7: WebGL fingerprinting
+    checkWebGL() {
+        try {
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            
+            if (!gl) {
+                this.checks.webglBlocked = true;
+                return true;
+            }
+            
+            const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+            if (debugInfo) {
+                this.checks.webglVendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+                this.checks.webglRenderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                
+                // Check for suspicious values
+                const suspicious = /SwiftShader|llvmpipe|Microsoft Basic Render/i.test(
+                    this.checks.webglRenderer
+                );
+                this.checks.webglSuspicious = suspicious;
+                return suspicious;
+            }
+            
+            return false;
+        } catch (e) {
+            this.checks.webglError = true;
+            return true;
+        }
+    },
+    
+    // Check 8: Timing attacks (bots often have inconsistent timing)
+    async checkTimingConsistency() {
+        const delays = [];
+        
+        for (let i = 0; i < 5; i++) {
+            const start = performance.now();
+            await new Promise(resolve => setTimeout(resolve, 100));
+            const end = performance.now();
+            delays.push(end - start);
+        }
+        
+        // Calculate variance
+        const avg = delays.reduce((a, b) => a + b) / delays.length;
+        const variance = delays.reduce((sum, delay) => sum + Math.pow(delay - avg, 2), 0) / delays.length;
+        
+        // Bots often have very low variance (too consistent) or very high variance
+        this.checks.timingVariance = variance;
+        this.checks.timingInconsistent = variance < 1 || variance > 1000;
+        
+        return this.checks.timingInconsistent;
+    },
+    
+    // Check 9: Browser window properties
+    checkWindowProperties() {
+        const issues = [];
+        
+        // Phantom detection
+        if (window.callPhantom || window._phantom) {
+            issues.push('phantom_detected');
+        }
+        
+        // Check for common bot properties
+        const botProps = [
+            '__webdriver_evaluate', '__selenium_evaluate',
+            '__webdriver_script_function', '__webdriver_script_func',
+            '__webdriver_script_fn', '__fxdriver_evaluate',
+            '__driver_unwrapped', '__webdriver_unwrapped',
+            '__driver_evaluate', '__selenium_unwrapped',
+            '__fxdriver_unwrapped'
+        ];
+        
+        botProps.forEach(prop => {
+            if (window[prop]) issues.push(`bot_prop_${prop}`);
+        });
+        
+        this.checks.windowIssues = issues;
+        return issues.length > 0;
+    },
+    
+    // Check 10: Media device availability
+    async checkMediaDevices() {
+        try {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+                this.checks.noMediaDevices = true;
+                return true;
+            }
+            
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const cameras = devices.filter(d => d.kind === 'videoinput');
+            
+            // Bots often have no cameras or fake cameras
+            this.checks.cameraCount = cameras.length;
+            this.checks.noCameras = cameras.length === 0;
+            
+            // Check for suspicious labels
+            const suspiciousLabels = cameras.some(c => 
+                !c.label || c.label === '' || /fake|virtual|obs/i.test(c.label)
+            );
+            this.checks.suspiciousCameraLabels = suspiciousLabels;
+            
+            return this.checks.noCameras || suspiciousLabels;
+        } catch (e) {
+            this.checks.mediaDeviceError = true;
+            return true;
+        }
+    },
+    
+    // Master detection function
+    async runAllChecks() {
+        console.log("🔍 Running bot detection checks...");
+        
+        // Synchronous checks
+        this.checkWebDriver();
+        this.checkHeadless();
+        this.checkAutomation();
+        this.checkBrowserConsistency();
+        this.checkCanvas();
+        this.checkWebGL();
+        this.checkWindowProperties();
+        
+        // Asynchronous checks
+        await this.checkTimingConsistency();
+        await this.checkMediaDevices();
+        // Note: checkHumanInteraction is optional, run separately if needed
+        
+        // Calculate suspicion score
+        const suspicionPoints = [
+            this.checks.webdriver ? 3 : 0,
+            this.checks.headless ? 3 : 0,
+            this.checks.automation ? 5 : 0,
+            this.checks.inconsistencies?.length > 0 ? 2 : 0,
+            this.checks.canvasBlocked || this.checks.canvasBlank ? 2 : 0,
+            this.checks.webglBlocked || this.checks.webglSuspicious ? 2 : 0,
+            this.checks.windowIssues?.length > 0 ? 3 : 0,
+            this.checks.timingInconsistent ? 1 : 0,
+            this.checks.noCameras ? 2 : 0,
+            this.checks.suspiciousCameraLabels ? 1 : 0
+        ];
+        
+        this.suspicionScore = suspicionPoints.reduce((a, b) => a + b, 0);
+        this.isLikelyBot = this.suspicionScore >= 5;
+        
+        console.log("🤖 Bot detection results:", {
+            suspicionScore: this.suspicionScore,
+            isLikelyBot: this.isLikelyBot,
+            checks: this.checks
+        });
+        
+        return {
+            isBot: this.isLikelyBot,
+            score: this.suspicionScore,
+            checks: this.checks
+        };
+    },
+    
+    // Get fingerprint for backend
+    getFingerprint() {
+        return {
+            userAgent: navigator.userAgent,
+            platform: navigator.platform,
+            language: navigator.language,
+            languages: navigator.languages,
+            hardwareConcurrency: navigator.hardwareConcurrency,
+            deviceMemory: navigator.deviceMemory,
+            screenResolution: `${screen.width}x${screen.height}`,
+            colorDepth: screen.colorDepth,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            timezoneOffset: new Date().getTimezoneOffset(),
+            canvasFingerprint: this.checks.canvasFingerprint,
+            webglVendor: this.checks.webglVendor,
+            webglRenderer: this.checks.webglRenderer,
+            cookieEnabled: navigator.cookieEnabled,
+            doNotTrack: navigator.doNotTrack,
+            plugins: Array.from(navigator.plugins || []).map(p => p.name).slice(0, 5)
+        };
+    }
+};
+</script>
+
+
+<script>
 const video = document.getElementById("video");
 const overlay = document.getElementById("overlay");
 const startFaceBtn = document.getElementById("startFaceBtn");
@@ -201,8 +539,45 @@ function showOverlayForInstruction(text) {
     else if (t.includes("right")) overlay.innerHTML = "➡️";
 }
 
-/* Enhanced Face Verification - 10/10 */
+/* Enhanced Face Verification with Bot Detection - 10/10 */
 startFaceBtn.onclick = async () => {
+    // RUN BOT DETECTION FIRST
+    startFaceBtn.disabled = true;
+    startFaceBtn.innerText = "🔍 Checking browser...";
+    
+    try {
+        const botResult = await BotDetector.runAllChecks();
+        
+        if (botResult.isBot) {
+            alert("⚠️ Automated browser detected. Please use a standard browser for verification.");
+            console.error("Bot detection failed:", botResult);
+            
+            // Log to backend
+            await fetch(`http://127.0.0.1:8000/v1/bot-report`, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    device_id: deviceId,
+                    bot_detected: true,
+                    suspicion_score: botResult.score,
+                    checks: botResult.checks,
+                    fingerprint: BotDetector.getFingerprint()
+                })
+            });
+            
+            startFaceBtn.innerText = "Start Face Verification";
+            startFaceBtn.disabled = false;
+            return;
+        }
+        
+        console.log("✅ Bot detection passed");
+        
+    } catch (error) {
+        console.error("Bot detection error:", error);
+        // Continue anyway if bot detection fails (fail-open for user experience)
+    }
+    
+    // Continue with original face verification code
     startFaceBtn.style.display = "none";
     faceSection.style.display = "block";
     
