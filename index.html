@@ -316,30 +316,48 @@ function startFaceDetectionLoop() {
     }, 400);
 }
 
-/* Load challenges with Fast-Track support */
+/* Load challenges with Fast-Track support and token storage */
 proceedBtn.onclick = async () => {
     faceSection.style.display = "none";
     challengeSection.style.display = "block";
 
-    const res = await fetch(`http://127.0.0.1:8000/v1/challenge?device_id=${deviceId}`);
-    const data = await res.json();
-    
-    // Show fast-track badge if enabled
-    if (data.fast_track_enabled) {
-        const badge = document.getElementById("fastTrackBadge");
-        badge.style.display = "block";
-        document.getElementById("fastTrackText").innerText = data.message;
-        console.log("🚀 Fast-Track Mode:", data.challenges.length, "challenge(s)");
+    try {
+        console.log("🔍 Fetching challenges for device:", deviceId);
+        
+        const res = await fetch(`http://127.0.0.1:8000/v1/challenge?device_id=${deviceId}`);
+        const data = await res.json();
+        
+        console.log("📦 Response data:", data);
+        
+        // Show fast-track badge if enabled
+        if (data.fast_track_enabled) {
+            const badge = document.getElementById("fastTrackBadge");
+            badge.style.display = "block";
+            document.getElementById("fastTrackText").innerText = data.message;
+            console.log("🚀 Fast-Track Mode:", data.challenges.length, "challenge(s)");
+        }
+        
+        // STORE CHALLENGES WITH TOKEN_ID
+        challenges = data.challenges.map(ch => ({
+            challenge_id: ch.challenge_id,
+            token_id: ch.token_id,
+            instruction: ch.instruction,
+            difficulty: ch.difficulty || "medium",
+            fast_track: ch.fast_track || false
+        }));
+        
+        console.log("✅ Challenges loaded:", challenges);
+        
+        // Initialize and start first challenge
+        challengeIndex = 0;
+        sessionResults = [];
+        loadNextChallenge();
+        
+    } catch (error) {
+        console.error("❌ Error loading challenges:", error);
+        statusEl.innerText = "❌ Error loading challenges. Check console.";
+        statusEl.style.color = "#ef4444";
     }
-    
-    // STORE CHALLENGES WITH TOKEN_ID
-    challenges = data.challenges.map(ch => ({
-        challenge_id: ch.challenge_id,
-        token_id: ch.token_id,
-        instruction: ch.instruction,
-        difficulty: ch.difficulty,
-        fast_track: ch.fast_track
-    }));
 };
 
 function loadNextChallenge() {
@@ -357,6 +375,7 @@ function loadNextChallenge() {
     challengeProgress.innerText = `Challenge ${challengeIndex} of ${challenges.length}${fastTrackLabel}`;
     
     statusEl.innerText = ch.instruction;
+    statusEl.style.color = "#e5e7eb";
 
     activeInstruction = ch.instruction.toLowerCase();
     initialNoseX = null;
@@ -401,7 +420,7 @@ async function trackHeadMovement() {
     );
 }
 
-/* Recording */
+/* Recording with token_id */
 function startRecording(challengeId, tokenId, duration) {
     recordedChunks = [];
     mediaRecorder = new MediaRecorder(video.srcObject);
@@ -439,7 +458,7 @@ function startRecording(challengeId, tokenId, duration) {
     }, 1000);
 }
 
-/* Submit */
+/* Submit with token_id - 10/10 SECURITY */
 async function submitRecording(challengeId, tokenId) {
     const blob = new Blob(recordedChunks, { type: "video/webm" });
     const formData = new FormData();
@@ -447,6 +466,9 @@ async function submitRecording(challengeId, tokenId) {
     formData.append("challenge_id", challengeId);
     formData.append("token_id", tokenId);
     formData.append("device_id", deviceId);
+
+    console.log("📤 Submitting challenge:", challengeId.substring(0, 8) + "...");
+    console.log("🔑 Token:", tokenId.substring(0, 8) + "...");
 
     const res = await fetch("http://127.0.0.1:8000/v1/verify", {
         method: "POST",
@@ -459,8 +481,10 @@ async function submitRecording(challengeId, tokenId) {
     if (result.error && result.error.includes("token")) {
         console.error("🔒 Token validation failed:", result.error);
         statusEl.innerText = "🔒 Security validation failed";
+        statusEl.style.color = "#ef4444";
     } else {
         statusEl.innerText = result.challenge_passed ? "✅ Passed" : "❌ Failed";
+        statusEl.style.color = result.challenge_passed ? "#10b981" : "#ef4444";
     }
     
     sessionResults.push(result);
@@ -470,15 +494,30 @@ async function submitRecording(challengeId, tokenId) {
 /* Finalize */
 async function finalizeSession() {
     statusEl.innerText = "🔐 Calculating trust score...";
+    statusEl.style.color = "#e5e7eb";
+    
     const res = await fetch("http://127.0.0.1:8000/v1/finalize", {
         method: "POST",
         headers: {"Content-Type":"application/json"},
         body: JSON.stringify({ results: sessionResults, device_id: deviceId })
     });
+    
     const final = await res.json();
+    
     verdictScreen.style.display = "block";
     trustBar.style.width = final.trust_score + "%";
     trustLabel.innerText = `${final.trust_level.toUpperCase()} TRUST`;
+    
+    // Color the trust bar based on level
+    if (final.trust_level === "high") {
+        trustBar.style.background = "#10b981";
+    } else if (final.trust_level === "medium") {
+        trustBar.style.background = "#f59e0b";
+    } else {
+        trustBar.style.background = "#ef4444";
+    }
+    
+    console.log("✅ Verification complete:", final);
 }
 </script>
 

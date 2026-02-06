@@ -143,17 +143,20 @@ def _analyze_head_movement_direction(video_path: str, expected_direction: str = 
             
             total_directional_movements = left_movements + right_movements
             
-            # Determine direction
+
+            # Determine direction (account for webcam mirroring)
             if movement_magnitude > DIRECTION_THRESHOLD:
+            # Swap left and right because webcam is mirrored
                 if left_movements > right_movements and left_movements >= DIRECTION_CONFIDENCE_FRAMES:
-                    direction_detected = "left"
+                    direction_detected = "right"  # Swapped from "left"
                     direction_confidence = left_movements / max(total_directional_movements, 1)
                 elif right_movements > left_movements and right_movements >= DIRECTION_CONFIDENCE_FRAMES:
-                    direction_detected = "right"
+                    direction_detected = "left"  # Swapped from "right"
                     direction_confidence = right_movements / max(total_directional_movements, 1)
                 elif left_movements == right_movements and total_directional_movements > 0:
                     direction_detected = "ambiguous"
                     direction_confidence = 0.5
+
             
             print(f"DIRECTION ANALYSIS: Net movement: {net_movement:.2f}px, "
                   f"Left movements: {left_movements}, Right movements: {right_movements}, "
