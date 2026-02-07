@@ -253,42 +253,6 @@ button:disabled {
     0%, 100% { transform: scale(1); opacity: 1; }
     50% { transform: scale(1.05); opacity: 0.8; }
 }
-
-/* Error Screen Styles */
-#errorScreen {
-    display: none;
-    margin-top: 25px;
-}
-
-.error-container {
-    background: #ef4444;
-    color: white;
-    padding: 20px;
-    border-radius: 12px;
-    max-width: 400px;
-    margin: 0 auto;
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
-}
-
-.error-container h3 {
-    margin-top: 0;
-}
-
-.error-buttons {
-    margin-top: 15px;
-}
-
-.error-retry-btn {
-    background: white;
-    color: #ef4444;
-    margin-right: 10px;
-}
-
-.error-cancel-btn {
-    background: transparent;
-    border: 2px solid white;
-    color: white;
-}
 </style>
 
 </head>
@@ -343,18 +307,6 @@ button:disabled {
     <p>Trust Confidence</p>
     <div id="trustBarOuter"><div id="trustBar"></div></div>
     <p id="trustLabel" style="margin-top:10px;font-weight:bold;"></p>
-</div>
-
-<!-- Error Screen -->
-<div id="errorScreen">
-    <div class="error-container">
-        <h3 id="errorTitle">❌ Error</h3>
-        <p id="errorMessage"></p>
-        <div class="error-buttons">
-            <button id="errorRetryBtn" class="error-retry-btn">Retry</button>
-            <button id="errorCancelBtn" class="error-cancel-btn">Cancel</button>
-        </div>
-    </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0"></script>
@@ -662,7 +614,7 @@ const BotDetector = {
 
 <script>
 // ============================================================================
-// MAIN APPLICATION - PHASE 6 ENHANCED - 10/10
+// MAIN APPLICATION - PHASE 6 PERFECT - 10/10
 // ============================================================================
 
 const video = document.getElementById("video");
@@ -697,99 +649,6 @@ const FACE_VERIFICATION_TIMEOUT = 30000;
 const deviceId = "device_" + Math.floor(Math.random() * 100000);
 
 // ============================================================================
-// ERROR HANDLING & RETRY SYSTEM - 10/10
-// ============================================================================
-
-function showError(title, message, retryAction = null, cancelAction = null) {
-    const errorScreen = document.getElementById("errorScreen");
-    const errorTitle = document.getElementById("errorTitle");
-    const errorMessage = document.getElementById("errorMessage");
-    const errorRetryBtn = document.getElementById("errorRetryBtn");
-    const errorCancelBtn = document.getElementById("errorCancelBtn");
-    
-    errorTitle.innerText = title;
-    errorMessage.innerText = message;
-    errorScreen.style.display = "block";
-    
-    if (retryAction) {
-        errorRetryBtn.style.display = "inline-block";
-        errorRetryBtn.onclick = () => {
-            errorScreen.style.display = "none";
-            retryAction();
-        };
-    } else {
-        errorRetryBtn.style.display = "none";
-    }
-    
-    if (cancelAction) {
-        errorCancelBtn.style.display = "inline-block";
-        errorCancelBtn.onclick = () => {
-            errorScreen.style.display = "none";
-            cancelAction();
-        };
-    } else {
-        errorCancelBtn.style.display = "none";
-    }
-    
-    console.error(`[ERROR] ${title}: ${message}`);
-}
-
-function showRetryButton(message, retryAction) {
-    const retryContainer = document.createElement("div");
-    retryContainer.id = "retryContainer";
-    retryContainer.style.marginTop = "15px";
-    
-    const messageP = document.createElement("p");
-    messageP.innerText = message;
-    messageP.style.color = "#f59e0b";
-    messageP.style.fontWeight = "bold";
-    
-    const retryBtn = document.createElement("button");
-    retryBtn.innerText = "🔄 Retry";
-    retryBtn.onclick = () => {
-        retryContainer.remove();
-        retryAction();
-    };
-    
-    retryContainer.appendChild(messageP);
-    retryContainer.appendChild(retryBtn);
-    challengeSection.appendChild(retryContainer);
-}
-
-function handleNetworkError(error, context) {
-    console.error(`Network error in ${context}:`, error);
-    
-    let message = "Unable to connect to server. Please check your internet connection.";
-    
-    if (error.message.includes("Failed to fetch")) {
-        message = "Cannot reach verification server. Please check if the server is running at http://127.0.0.1:8000";
-    } else if (error.message.includes("NetworkError")) {
-        message = "Network error occurred. Please check your connection and try again.";
-    }
-    
-    showError(
-        "❌ Connection Error",
-        message,
-        () => location.reload(),
-        null
-    );
-}
-
-function logFrontendEvent(eventName, details = {}) {
-    const event = {
-        timestamp: new Date().toISOString(),
-        event: eventName,
-        device_id: deviceId,
-        details: details,
-        user_agent: navigator.userAgent,
-        screen_resolution: `${screen.width}x${screen.height}`,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
-    };
-    
-    console.log(`[EVENT] ${eventName}:`, event);
-}
-
-// ============================================================================
 // ENHANCED OVERLAY - 10/10
 // ============================================================================
 
@@ -822,11 +681,6 @@ startFaceBtn.onclick = async () => {
     try {
         const botResult = await BotDetector.runAllChecks();
         
-        logFrontendEvent("bot_detection_completed", {
-            is_bot: botResult.isBot,
-            suspicion_score: botResult.score
-        });
-        
         if (botResult.isBot) {
             alert("⚠️ Automated browser detected. Please use a standard browser for verification.");
             console.error("Bot detection failed:", botResult);
@@ -849,7 +703,6 @@ startFaceBtn.onclick = async () => {
         }
         
         console.log("✅ Bot detection passed");
-        logFrontendEvent("face_verification_started");
         
     } catch (error) {
         console.error("Bot detection error:", error);
@@ -942,10 +795,6 @@ function startFaceDetectionLoop() {
                 document.getElementById("faceStatus").style.color = "#10b981";
                 
                 proceedBtn.style.animation = "pulse 1s ease-in-out";
-                
-                logFrontendEvent("face_detected", {
-                    attempts: attemptCount
-                });
             }
             
             if (attemptCount >= maxAttempts) {
@@ -964,7 +813,7 @@ function startFaceDetectionLoop() {
 }
 
 // ============================================================================
-// CHALLENGE LOADING WITH ERROR HANDLING - 10/10
+// CHALLENGE LOADING WITH RETRY - 10/10
 // ============================================================================
 
 proceedBtn.onclick = async () => {
@@ -974,32 +823,20 @@ proceedBtn.onclick = async () => {
     try {
         console.log("🔍 Fetching challenges for device:", deviceId);
         
-        statusEl.innerText = "⏳ Loading challenges...";
-        statusEl.style.color = "#e5e7eb";
-        
-        logFrontendEvent("challenges_requested");
-        
-        const res = await fetch(`http://127.0.0.1:8000/v1/challenge?device_id=${deviceId}`, {
-            method: "GET",
-            headers: {"Content-Type": "application/json"},
-            signal: AbortSignal.timeout(10000)
-        });
-        
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-        }
-        
+        const res = await fetch(`http://127.0.0.1:8000/v1/challenge?device_id=${deviceId}`);
         const data = await res.json();
         
         console.log("📦 Response data:", data);
         
         if (data.error && data.code === "BOT_DETECTED") {
-            showError(
-                "🤖 Bot Detected",
-                data.message,
-                null,
-                () => location.reload()
-            );
+            statusEl.innerText = "🤖 " + data.message;
+            statusEl.style.color = "#ef4444";
+            
+            const botRetryBtn = document.createElement("button");
+            botRetryBtn.innerText = "🔄 Try Again";
+            botRetryBtn.style.marginTop = "15px";
+            botRetryBtn.onclick = () => location.reload();
+            challengeSection.appendChild(botRetryBtn);
             return;
         }
         
@@ -1008,10 +845,6 @@ proceedBtn.onclick = async () => {
             badge.style.display = "block";
             document.getElementById("fastTrackText").innerText = data.message;
             console.log("🚀 Fast-Track Mode:", data.challenges.length, "challenge(s)");
-        }
-        
-        if (!data.challenges || data.challenges.length === 0) {
-            throw new Error("No challenges received from server");
         }
         
         challenges = data.challenges.map(ch => ({
@@ -1024,11 +857,6 @@ proceedBtn.onclick = async () => {
         
         console.log("✅ Challenges loaded:", challenges);
         
-        logFrontendEvent("challenges_loaded", {
-            count: challenges.length,
-            fast_track: data.fast_track_enabled
-        });
-        
         challengeIndex = 0;
         sessionResults = [];
         loadNextChallenge();
@@ -1036,23 +864,30 @@ proceedBtn.onclick = async () => {
     } catch (error) {
         console.error("❌ Error loading challenges:", error);
         
-        if (error.name === "AbortError") {
-            showError(
-                "⏱️ Request Timeout",
-                "Server took too long to respond. Please try again.",
-                () => proceedBtn.click(),
-                () => location.reload()
-            );
-        } else if (error.message.includes("Failed to fetch")) {
-            handleNetworkError(error, "challenge loading");
-        } else {
-            showError(
-                "❌ Failed to Load Challenges",
-                error.message,
-                () => proceedBtn.click(),
-                () => location.reload()
-            );
-        }
+        statusEl.innerText = "❌ Failed to load challenges";
+        statusEl.style.color = "#ef4444";
+        
+        const errorMsg = document.createElement("p");
+        errorMsg.style.color = "#94a3b8";
+        errorMsg.style.marginTop = "10px";
+        errorMsg.innerText = "Network error. Please check your connection.";
+        challengeSection.appendChild(errorMsg);
+        
+        const networkRetryBtn = document.createElement("button");
+        networkRetryBtn.innerText = "🔄 Retry Loading Challenges";
+        networkRetryBtn.style.background = "#f59e0b";
+        networkRetryBtn.style.marginTop = "15px";
+        networkRetryBtn.style.padding = "10px 20px";
+        
+        networkRetryBtn.onclick = async () => {
+            errorMsg.remove();
+            networkRetryBtn.remove();
+            statusEl.innerText = "🔄 Retrying...";
+            statusEl.style.color = "#3b82f6";
+            setTimeout(() => proceedBtn.onclick(), 500);
+        };
+        
+        challengeSection.appendChild(networkRetryBtn);
     }
 };
 
@@ -1063,9 +898,11 @@ proceedBtn.onclick = async () => {
 function loadNextChallenge() {
     clearInterval(countdownInterval);
     
-    // Remove any retry containers
     const retryContainer = document.getElementById("retryContainer");
     if (retryContainer) retryContainer.remove();
+    
+    const autoSkipCountdown = document.getElementById("autoSkipCountdown");
+    if (autoSkipCountdown) autoSkipCountdown.remove();
 
     if (challengeIndex >= challenges.length) {
         finalizeSession();
@@ -1075,19 +912,7 @@ function loadNextChallenge() {
     const ch = challenges[challengeIndex++];
     
     const fastTrackLabel = ch.fast_track ? " 🚀" : "";
-    const fastTrackHint = ch.fast_track ? 
-        " (8 seconds - easier verification)" : 
-        " (12 seconds - standard verification)";
-    
-    challengeProgress.innerText = `Challenge ${challengeIndex} of ${challenges.length}${fastTrackLabel}${fastTrackHint}`;
-    
-    if (ch.fast_track) {
-        challengeProgress.style.color = "#10b981";
-        challengeProgress.style.fontWeight = "bold";
-    } else {
-        challengeProgress.style.color = "#e5e7eb";
-        challengeProgress.style.fontWeight = "normal";
-    }
+    challengeProgress.innerText = `Challenge ${challengeIndex} of ${challenges.length}${fastTrackLabel}`;
     
     statusEl.innerText = ch.instruction;
     statusEl.style.color = "#e5e7eb";
@@ -1097,13 +922,6 @@ function loadNextChallenge() {
     movementDetected = false;
 
     showOverlayForInstruction(ch.instruction);
-    
-    logFrontendEvent("challenge_started", {
-        challenge_index: challengeIndex,
-        challenge_id: ch.challenge_id,
-        instruction: ch.instruction,
-        fast_track: ch.fast_track
-    });
     
     const duration = ch.fast_track ? 8 : 12;
     startRecording(ch.challenge_id, ch.token_id, duration);
@@ -1140,7 +958,7 @@ async function trackHeadMovement() {
 }
 
 // ============================================================================
-// RECORDING WITH VISUAL TIMER - 10/10
+// RECORDING WITH RETRY - 10/10
 // ============================================================================
 
 function startRecording(challengeId, tokenId, duration) {
@@ -1152,22 +970,95 @@ function startRecording(challengeId, tokenId, duration) {
     mediaRecorder.onstop = async () => {
         clearInterval(movementInterval);
         overlay.innerHTML = "";
-        overlay.className = "";
         
-        document.getElementById("timerRing").style.display = "none";
+        const timerRing = document.getElementById("timerRing");
+        timerRing.style.display = "none";
 
         const requiresMovement =
             activeInstruction.includes("left") ||
             activeInstruction.includes("right");
 
         if (requiresMovement && !movementDetected) {
-            statusEl.innerText = "❌ No movement detected";
+            statusEl.innerText = "❌ No movement detected. Would you like to retry?";
             statusEl.style.color = "#ef4444";
             
-            showRetryButton("No movement detected. Try again?", () => {
+            const retryContainer = document.createElement("div");
+            retryContainer.id = "retryContainer";
+            retryContainer.style.marginTop = "15px";
+            retryContainer.style.display = "flex";
+            retryContainer.style.gap = "10px";
+            retryContainer.style.justifyContent = "center";
+            
+            const retryBtn = document.createElement("button");
+            retryBtn.innerText = "🔄 Retry This Challenge";
+            retryBtn.style.background = "#f59e0b";
+            retryBtn.style.padding = "10px 20px";
+            retryBtn.style.borderRadius = "8px";
+            retryBtn.style.border = "none";
+            retryBtn.style.color = "#fff";
+            retryBtn.style.fontWeight = "bold";
+            retryBtn.style.cursor = "pointer";
+            
+            const skipBtn = document.createElement("button");
+            skipBtn.innerText = "⏭️ Skip Challenge";
+            skipBtn.style.background = "#64748b";
+            skipBtn.style.padding = "10px 20px";
+            skipBtn.style.borderRadius = "8px";
+            skipBtn.style.border = "none";
+            skipBtn.style.color = "#fff";
+            skipBtn.style.fontWeight = "bold";
+            skipBtn.style.cursor = "pointer";
+            
+            let autoSkipCountdown = 10;
+            const countdownEl = document.createElement("p");
+            countdownEl.id = "autoSkipCountdown";
+            countdownEl.style.marginTop = "10px";
+            countdownEl.style.color = "#94a3b8";
+            countdownEl.style.fontSize = "14px";
+            countdownEl.innerText = `Auto-skipping in ${autoSkipCountdown}s...`;
+            
+            const autoSkipInterval = setInterval(() => {
+                autoSkipCountdown--;
+                countdownEl.innerText = `Auto-skipping in ${autoSkipCountdown}s...`;
+                
+                if (autoSkipCountdown <= 0) {
+                    clearInterval(autoSkipInterval);
+                    if (document.getElementById("retryContainer")) {
+                        console.log("⏱️ Auto-skip timeout reached");
+                        retryContainer.remove();
+                        countdownEl.remove();
+                        sessionResults.push({ challenge_passed: false });
+                        loadNextChallenge();
+                    }
+                }
+            }, 1000);
+            
+            retryBtn.onclick = () => {
+                clearInterval(autoSkipInterval);
+                console.log("🔄 User chose to retry challenge");
+                retryContainer.remove();
+                countdownEl.remove();
+                statusEl.innerText = "🔄 Retrying challenge...";
+                statusEl.style.color = "#3b82f6";
+                challengeIndex--;
+                setTimeout(() => loadNextChallenge(), 500);
+            };
+            
+            skipBtn.onclick = () => {
+                clearInterval(autoSkipInterval);
+                console.log("⏭️ User chose to skip challenge");
+                retryContainer.remove();
+                countdownEl.remove();
+                statusEl.innerText = "⏭️ Skipped";
+                statusEl.style.color = "#64748b";
                 sessionResults.push({ challenge_passed: false });
-                loadNextChallenge();
-            });
+                setTimeout(() => loadNextChallenge(), 500);
+            };
+            
+            retryContainer.appendChild(retryBtn);
+            retryContainer.appendChild(skipBtn);
+            challengeSection.appendChild(retryContainer);
+            challengeSection.appendChild(countdownEl);
             
             return;
         }
@@ -1177,7 +1068,8 @@ function startRecording(challengeId, tokenId, duration) {
 
     mediaRecorder.start();
     movementInterval = setInterval(trackHeadMovement, 250);
-    
+    setTimeout(() => mediaRecorder.stop(), duration * 1000);
+
     // Visual Timer
     const timerRing = document.getElementById("timerRing");
     const timerProgress = document.getElementById("timerProgress");
@@ -1214,12 +1106,10 @@ function startRecording(challengeId, tokenId, duration) {
     countdownInterval = setInterval(updateTimer, 1000);
     
     challengeTimer.innerText = `Time left: ${duration}s`;
-    
-    setTimeout(() => mediaRecorder.stop(), duration * 1000);
 }
 
 // ============================================================================
-// VIDEO SUBMISSION WITH ERROR HANDLING - 10/10
+// SUBMISSION WITH RETRY - 10/10
 // ============================================================================
 
 async function submitRecording(challengeId, tokenId) {
@@ -1233,96 +1123,75 @@ async function submitRecording(challengeId, tokenId) {
     console.log("📤 Submitting challenge:", challengeId.substring(0, 8) + "...");
     console.log("🔑 Token:", tokenId.substring(0, 8) + "...");
 
-    statusEl.innerText = "⏳ Verifying...";
-    statusEl.style.color = "#e5e7eb";
-
-    logFrontendEvent("challenge_submitted", {
-        challenge_id: challengeId,
-        video_size: blob.size
-    });
-
     try {
         const res = await fetch("http://127.0.0.1:8000/v1/verify", {
             method: "POST",
-            body: formData,
-            signal: AbortSignal.timeout(30000)
+            body: formData
         });
-
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-        }
 
         const result = await res.json();
         
-        if (result.error) {
-            console.error("🔒 Verification error:", result.error);
-            
-            if (result.error.includes("token")) {
-                statusEl.innerText = "🔒 Security validation failed";
-                statusEl.style.color = "#ef4444";
-                
-                showRetryButton("Token validation failed. Retry challenge?", () => {
-                    sessionResults.push({ challenge_passed: false });
-                    loadNextChallenge();
-                });
-            } else if (result.error.includes("expired")) {
-                statusEl.innerText = "⏱️ Challenge expired";
-                statusEl.style.color = "#f59e0b";
-                
-                showRetryButton("Challenge expired. Start over?", () => {
-                    location.reload();
-                });
-            } else {
-                statusEl.innerText = "❌ " + result.error;
-                statusEl.style.color = "#ef4444";
-                
-                showRetryButton("Verification failed. Retry?", () => {
-                    sessionResults.push({ challenge_passed: false });
-                    loadNextChallenge();
-                });
-            }
-            
-            sessionResults.push({ challenge_passed: false, error: result.error });
-            return;
+        if (result.error && result.error.includes("token")) {
+            console.error("🔒 Token validation failed:", result.error);
+            statusEl.innerText = "🔒 Security validation failed";
+            statusEl.style.color = "#ef4444";
+        } else {
+            statusEl.innerText = result.challenge_passed ? "✅ Passed" : "❌ Failed";
+            statusEl.style.color = result.challenge_passed ? "#10b981" : "#ef4444";
         }
-        
-        statusEl.innerText = result.challenge_passed ? "✅ Passed" : "❌ Failed";
-        statusEl.style.color = result.challenge_passed ? "#10b981" : "#ef4444";
         
         sessionResults.push(result);
         setTimeout(loadNextChallenge, 700);
         
     } catch (error) {
-        console.error("❌ Submission error:", error);
+        console.error("❌ Error submitting video:", error);
         
-        if (error.name === "AbortError") {
-            showError(
-                "⏱️ Upload Timeout",
-                "Video upload took too long. This might be due to slow internet connection.",
-                () => submitRecording(challengeId, tokenId),
-                () => {
-                    sessionResults.push({ challenge_passed: false });
-                    loadNextChallenge();
-                }
-            );
-        } else if (error.message.includes("Failed to fetch")) {
-            handleNetworkError(error, "video submission");
-        } else {
-            showError(
-                "❌ Submission Failed",
-                "Failed to submit video: " + error.message,
-                () => submitRecording(challengeId, tokenId),
-                () => {
-                    sessionResults.push({ challenge_passed: false });
-                    loadNextChallenge();
-                }
-            );
-        }
+        statusEl.innerText = "❌ Failed to submit video";
+        statusEl.style.color = "#ef4444";
+        
+        const errorMsg = document.createElement("p");
+        errorMsg.style.color = "#94a3b8";
+        errorMsg.style.marginTop = "10px";
+        errorMsg.innerText = "Network error during submission.";
+        challengeSection.appendChild(errorMsg);
+        
+        const submitRetryBtn = document.createElement("button");
+        submitRetryBtn.innerText = "🔄 Retry Submission";
+        submitRetryBtn.style.background = "#f59e0b";
+        submitRetryBtn.style.marginTop = "15px";
+        
+        const skipSubmitBtn = document.createElement("button");
+        skipSubmitBtn.innerText = "⏭️ Skip This Challenge";
+        skipSubmitBtn.style.background = "#64748b";
+        skipSubmitBtn.style.marginTop = "15px";
+        skipSubmitBtn.style.marginLeft = "10px";
+        
+        submitRetryBtn.onclick = () => {
+            errorMsg.remove();
+            submitRetryBtn.remove();
+            skipSubmitBtn.remove();
+            statusEl.innerText = "🔄 Retrying submission...";
+            statusEl.style.color = "#3b82f6";
+            setTimeout(() => submitRecording(challengeId, tokenId), 500);
+        };
+        
+        skipSubmitBtn.onclick = () => {
+            errorMsg.remove();
+            submitRetryBtn.remove();
+            skipSubmitBtn.remove();
+            statusEl.innerText = "⏭️ Skipped";
+            statusEl.style.color = "#64748b";
+            sessionResults.push({ challenge_passed: false });
+            setTimeout(loadNextChallenge, 500);
+        };
+        
+        challengeSection.appendChild(submitRetryBtn);
+        challengeSection.appendChild(skipSubmitBtn);
     }
 }
 
 // ============================================================================
-// FINALIZE WITH ERROR HANDLING - 10/10
+// FINALIZE WITH START OVER - 10/10
 // ============================================================================
 
 async function finalizeSession() {
@@ -1333,19 +1202,14 @@ async function finalizeSession() {
         const res = await fetch("http://127.0.0.1:8000/v1/finalize", {
             method: "POST",
             headers: {"Content-Type":"application/json"},
-            body: JSON.stringify({ results: sessionResults, device_id: deviceId }),
-            signal: AbortSignal.timeout(10000)
+            body: JSON.stringify({ results: sessionResults, device_id: deviceId })
         });
-        
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-        }
         
         const final = await res.json();
         
-        verdictScreen.style.display = "block";
         challengeSection.style.display = "none";
         
+        verdictScreen.style.display = "block";
         trustBar.style.width = final.trust_score + "%";
         trustLabel.innerText = `${final.trust_level.toUpperCase()} TRUST`;
         
@@ -1357,23 +1221,55 @@ async function finalizeSession() {
             trustBar.style.background = "#ef4444";
         }
         
+        const startOverBtn = document.createElement("button");
+        startOverBtn.innerText = "🔄 Verify Again";
+        startOverBtn.style.marginTop = "20px";
+        startOverBtn.style.background = "#3b82f6";
+        startOverBtn.style.padding = "12px 24px";
+        startOverBtn.style.fontSize = "16px";
+        
+        startOverBtn.onclick = () => {
+            console.log("🔄 User chose to verify again");
+            location.reload();
+        };
+        
+        verdictScreen.appendChild(startOverBtn);
+        
+        const sessionInfo = document.createElement("p");
+        sessionInfo.style.marginTop = "15px";
+        sessionInfo.style.color = "#94a3b8";
+        sessionInfo.style.fontSize = "14px";
+        sessionInfo.innerText = `Session ID: ${final.session_id}`;
+        verdictScreen.appendChild(sessionInfo);
+        
         console.log("✅ Verification complete:", final);
         
-        logFrontendEvent("session_finalized", {
-            trust_score: final.trust_score,
-            trust_level: final.trust_level,
-            session_id: final.session_id
-        });
-        
     } catch (error) {
-        console.error("❌ Finalization error:", error);
+        console.error("❌ Error finalizing session:", error);
         
-        showError(
-            "❌ Failed to Calculate Score",
-            "Could not finalize verification: " + error.message,
-            () => finalizeSession(),
-            () => location.reload()
-        );
+        statusEl.innerText = "❌ Failed to calculate trust score";
+        statusEl.style.color = "#ef4444";
+        
+        const errorMsg = document.createElement("p");
+        errorMsg.style.color = "#94a3b8";
+        errorMsg.style.marginTop = "10px";
+        errorMsg.innerText = "Network error. Your results were saved locally.";
+        challengeSection.appendChild(errorMsg);
+        
+        const finalizeRetryBtn = document.createElement("button");
+        finalizeRetryBtn.innerText = "🔄 Retry Calculating Score";
+        finalizeRetryBtn.style.background = "#f59e0b";
+        finalizeRetryBtn.style.marginTop = "15px";
+        
+        finalizeRetryBtn.onclick = () => {
+            errorMsg.remove();
+            finalizeRetryBtn.remove();
+            statusEl.innerText = "🔄 Retrying...";
+            statusEl.style.color = "#3b82f6";
+            setTimeout(() => finalizeSession(), 500);
+        };
+        
+        challengeSection.appendChild(finalizeRetryBtn);
     }
 }
 </script>
