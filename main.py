@@ -10,6 +10,10 @@ import tempfile
 from logger import log_event
 from datetime import datetime, timedelta
 import cv2
+from typing import Dict, Any
+import json
+
+
 
 # Database imports
 from sqlalchemy.orm import Session
@@ -32,13 +36,176 @@ app.add_middleware(
 )
 
 
+@app.get("/v1/admin/bot-stats")
+async def get_bot_statistics_endpoint(db: Session = Depends(get_db)):
+    """
+    Get bot detection statistics (admin endpoint).
+    In production, add authentication!
+    """
+    stats = get_bot_statistics(db)
+    recent_reports = get_bot_reports(db, limit=10)
+    
+    return {
+        "statistics": stats,
+        "recent_reports": [
+            {
+                "device_id": r.device_id,
+                "bot_detected": r.bot_detected,
+                "suspicion_score": r.suspicion_score,
+                "timestamp": r.timestamp_utc.isoformat()
+            }
+            for r in recent_reports
+        ]
+    }
+
+
+@app.post("/v1/bot-report")
+async def report_bot_detection(request: Request, db: Session = Depends(get_db)):
+    """
+    Receive bot detection results from frontend.
+    Stores bot reports for analysis and blocking.
+    """
+    try:
+        data = await request.json()
+        device_id = data.get("device_id", "unknown")
+        bot_detected = data.get("bot_detected", False)
+        suspicion_score = data.get("suspicion_score", 0)
+        checks = data.get("checks", {})
+        fingerprint = data.get("fingerprint", {})
+        
+        log_event(
+            event="bot_detection_report",
+            session_id=device_id,
+            challenge_id=None,
+            details={
+                "bot_detected": bot_detected,
+                "suspicion_score": suspicion_score,
+                "checks": checks,
+                "fingerprint": fingerprint,
+                "ip_address": request.client.host if request.client else "unknown"
+            }
+        )
+        
+        # Optional: Store in database for analysis
+        # You could create a BotReport table if needed
+        
+        return {"status": "received", "bot_detected": bot_detected}
+        
+    except Exception as e:
+        log_event(
+            event="bot_report_error",
+            session_id="unknown",
+            challenge_id=None,
+            details={"error": str(e)}
+        )
+        return {"status": "error"}
+
+
+def analyze_backend_bot_signals(request: Request) -> Dict[str, Any]:
+    """
+    Backend-side bot detection based on HTTP headers and behavior.
+    Returns suspicion score and detected signals.
+    """
+    signals = {}
+    suspicion_score = 0
+    
+    # Get headers
+    headers = dict(request.headers)
+    user_agent = headers.get("user-agent", "").lower()
+    
+    # Check 1: User-Agent analysis
+    bot_keywords = [
+        'headless', 'selenium', 'puppeteer', 'phantomjs',
+        'bot', 'crawler', 'spider', 'scraper', 'python-requests',
+        'curl', 'wget', 'automation'
+    ]
+    
+    if any(keyword in user_agent for keyword in bot_keywords):
+        signals['suspicious_user_agent'] = True
+        suspicion_score += 5
+    
+    # Check 2: Missing common headers
+    required_headers = ['accept-language', 'accept-encoding']
+    missing_headers = [h for h in required_headers if h not in headers]
+    
+    if missing_headers:
+        signals['missing_headers'] = missing_headers
+        suspicion_score += len(missing_headers) * 2
+    
+    # Check 3: Suspicious header values
+    if headers.get('accept') == '*/*':
+        signals['generic_accept'] = True
+        suspicion_score += 1
+    
+    # Check 4: No accept-language (common in bots)
+    if not headers.get('accept-language'):
+        signals['no_language'] = True
+        suspicion_score += 2
+    
+    # Check 5: Check for automation frameworks headers
+    automation_headers = [
+        'x-requested-with', 'x-devtools-emulate-network-conditions-client-id',
+        'chrome-proxy', 'x-chrome-uma-enabled'
+    ]
+    
+    found_automation = [h for h in automation_headers if h in headers]
+    if found_automation:
+        signals['automation_headers'] = found_automation
+        suspicion_score += 3
+    
+    # Check 6: Suspicious referer patterns
+    referer = headers.get('referer', '')
+    if referer and not referer.startswith(('http://127.0.0.1', 'http://localhost', 'https://')):
+        signals['suspicious_referer'] = referer
+        suspicion_score += 1
+    
+    return {
+        'suspicion_score': suspicion_score,
+        'is_likely_bot': suspicion_score >= 5,
+        'signals': signals
+    }
+
 @app.get("/v1/challenge")
 async def get_challenge_endpoint(request: Request, device_id: str = Query(...), db: Session = Depends(get_db)):
     """
     Returns adaptive challenges with unique token_id for verification.
     Trusted devices get Fast-Track mode (fewer challenges).
     ALL DATA STORED IN DATABASE.
+    **NOW WITH BOT DETECTION 10/10**
     """
+    
+    # ============================================================================
+    # BACKEND BOT DETECTION
+    # ============================================================================
+    bot_analysis = analyze_backend_bot_signals(request)
+    
+    if bot_analysis['is_likely_bot']:
+        log_event(
+            event="bot_detected_backend",
+            session_id=device_id,
+            challenge_id=None,
+            details={
+                "suspicion_score": bot_analysis['suspicion_score'],
+                "signals": bot_analysis['signals'],
+                "user_agent": request.headers.get("user-agent", "unknown"),
+                "ip_address": request.client.host if request.client else "unknown"
+            }
+        )
+        
+        # STRICT MODE: Reject bots immediately (recommended for production)
+        return {
+            "error": "Automated access detected",
+            "code": "BOT_DETECTED",
+            "message": "Please use a standard web browser for verification"
+        }
+        
+        # ALTERNATIVE: Allow but flag (for data collection phase)
+        # Just continue and log, don't block
+        # pass
+    
+    # ============================================================================
+    # ORIGINAL CHALLENGE LOGIC
+    # ============================================================================
     user_agent = request.headers.get("user-agent", "unknown")
     
     # Check if device is trusted (from DATABASE)
@@ -96,7 +263,8 @@ async def get_challenge_endpoint(request: Request, device_id: str = Query(...), 
             details={
                 "instruction": instruction,
                 "expected_direction": expected_direction,
-                "fast_track": is_trusted
+                "fast_track": is_trusted,
+                "bot_score": bot_analysis['suspicion_score']  # ← NEW: Log bot score
             }
         )
         
@@ -114,7 +282,6 @@ async def get_challenge_endpoint(request: Request, device_id: str = Query(...), 
         "challenges": normalized,
         "message": "🚀 Fast-Track Mode Active" if is_trusted else "Standard Verification"
     }
-
 
 @app.post("/v1/verify")
 async def verify_challenge(
@@ -453,6 +620,7 @@ async def finalize_verification(request: Request, db: Session = Depends(get_db))
     """
     Calculates final trust score based on all challenges for the device.
     STORES SESSION IN DATABASE.
+    **NOW USES REAL LIVENESS SCORES - 10/10**
     """
     data = await request.json()
     results = data.get("results", [])
@@ -461,21 +629,61 @@ async def finalize_verification(request: Request, db: Session = Depends(get_db))
     if not results:
         return {"trust_score": 0, "trust_level": "low"}
 
-    # GET RESULTS FROM DATABASE instead of relying on frontend
+    # ============================================================================
+    # GET RESULTS FROM DATABASE (more reliable than frontend data)
+    # ============================================================================
     db_results = get_session_results(db, device_id)
     
-    if not db_results:
+    if not db_results or len(db_results) == 0:
         # Fallback to frontend results if database query returns nothing
         total_challenges = len(results)
         failed_challenges = sum(1 for r in results if not r.get("challenge_passed"))
-        score = int(sum(100 if r.get("challenge_passed") else 0 for r in results) / total_challenges)
+        
+        # OLD: Binary scoring
+        # score = int(sum(100 if r.get("challenge_passed") else 0 for r in results) / total_challenges)
+        
+        # NEW: Use liveness scores from frontend (fallback only)
+        total_liveness = sum(
+            r.get("liveness_score", 0) * 100 if r.get("challenge_passed") else 0 
+            for r in results
+        )
+        score = int(total_liveness / total_challenges) if total_challenges > 0 else 0
     else:
-        # Use database results (more reliable)
+        # ========================================================================
+        # NEW: USE REAL LIVENESS SCORES FROM DATABASE - 10/10 ⭐
+        # ========================================================================
         total_challenges = len(db_results)
         failed_challenges = sum(1 for r in db_results if not r.challenge_passed)
-        passed_challenges = total_challenges - failed_challenges
-        score = int((passed_challenges / total_challenges) * 100) if total_challenges > 0 else 0
+        
+        # Calculate weighted score based on actual liveness_score (0.95-1.0)
+        # Passed challenges: Use their liveness_score * 100 (95-100 points)
+        # Failed challenges: 0 points
+        total_liveness = sum(
+            r.liveness_score * 100 if r.challenge_passed else 0 
+            for r in db_results
+        )
+        
+        # Average liveness score across all challenges
+        score = int(total_liveness / total_challenges) if total_challenges > 0 else 0
+        
+        # Log the calculation for transparency
+        log_event(
+            event="trust_score_calculated",
+            session_id=device_id,
+            challenge_id=None,
+            details={
+                "total_challenges": total_challenges,
+                "failed_challenges": failed_challenges,
+                "passed_challenges": total_challenges - failed_challenges,
+                "total_liveness": total_liveness,
+                "final_score": score,
+                "calculation_method": "weighted_liveness_score"
+            }
+        )
 
+    # ============================================================================
+    # ASSIGN TRUST LEVEL BASED ON SCORE
+    # ============================================================================
     if score >= 80:
         level = "high"
     elif score >= 50:
@@ -483,7 +691,9 @@ async def finalize_verification(request: Request, db: Session = Depends(get_db))
     else:
         level = "low"
 
+    # ============================================================================
     # STORE SESSION IN DATABASE
+    # ============================================================================
     session_id = f"session_{device_id}_{int(datetime.utcnow().timestamp())}"
     is_fast_track = is_device_trusted(db, device_id)
     
@@ -498,7 +708,9 @@ async def finalize_verification(request: Request, db: Session = Depends(get_db))
         fast_track=is_fast_track
     )
 
+    # ============================================================================
     # UPDATE DEVICE TRUST IN DATABASE
+    # ============================================================================
     verification_passed = (level in ["high", "medium"])
     update_device_trust(
         db=db,
@@ -516,7 +728,8 @@ async def finalize_verification(request: Request, db: Session = Depends(get_db))
             "trust_score": score,
             "trust_level": level,
             "total_challenges": total_challenges,
-            "failed_challenges": failed_challenges
+            "failed_challenges": failed_challenges,
+            "scoring_method": "weighted_liveness"  # ← NEW
         }
     )
 

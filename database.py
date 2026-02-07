@@ -100,6 +100,32 @@ class ActiveChallenge(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class BotReport(Base):
+    """Stores bot detection reports for analysis"""
+    __tablename__ = "bot_reports"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    device_id = Column(String, index=True, nullable=False)
+    
+    # Detection results
+    bot_detected = Column(Boolean, nullable=False)
+    suspicion_score = Column(Integer, nullable=False)
+    
+    # Frontend checks (JSON)
+    frontend_checks = Column(Text, nullable=True)  # JSON string
+    
+    # Browser fingerprint (JSON)
+    fingerprint = Column(Text, nullable=True)  # JSON string
+    
+    # Backend signals (JSON)
+    backend_signals = Column(Text, nullable=True)  # JSON string
+    
+    # Network info
+    ip_address = Column(String, nullable=True)
+    user_agent = Column(String, nullable=True)
+    
+    timestamp_utc = Column(DateTime, default=datetime.utcnow, nullable=False)
+
 # ============================================================================
 # DATABASE HELPER FUNCTIONS
 # ============================================================================
@@ -117,6 +143,51 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def store_bot_report(db, device_id: str, bot_detected: bool, suspicion_score: int,
+                    frontend_checks: dict = None, fingerprint: dict = None,
+                    backend_signals: dict = None, ip_address: str = None,
+                    user_agent: str = None):
+    """Store bot detection report"""
+    report = BotReport(
+        device_id=device_id,
+        bot_detected=bot_detected,
+        suspicion_score=suspicion_score,
+        frontend_checks=json.dumps(frontend_checks) if frontend_checks else None,
+        fingerprint=json.dumps(fingerprint) if fingerprint else None,
+        backend_signals=json.dumps(backend_signals) if backend_signals else None,
+        ip_address=ip_address,
+        user_agent=user_agent
+    )
+    db.add(report)
+    db.commit()
+    return report
+
+
+def get_bot_reports(db, device_id: str = None, limit: int = 50):
+    """Get bot detection reports, optionally filtered by device"""
+    query = db.query(BotReport)
+    
+    if device_id:
+        query = query.filter(BotReport.device_id == device_id)
+    
+    return query.order_by(BotReport.timestamp_utc.desc()).limit(limit).all()
+
+
+def get_bot_statistics(db):
+    """Get overall bot detection statistics"""
+    total_reports = db.query(BotReport).count()
+    bots_detected = db.query(BotReport).filter(BotReport.bot_detected == True).count()
+    
+    if total_reports == 0:
+        return {"total_reports": 0, "bots_detected": 0, "bot_rate": 0.0}
+    
+    return {
+        "total_reports": total_reports,
+        "bots_detected": bots_detected,
+        "bot_rate": round((bots_detected / total_reports) * 100, 2)
+    }
 
 
 # ============================================================================
