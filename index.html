@@ -31,9 +31,88 @@ video {
     align-items: center;
     justify-content: center;
     pointer-events: none;
-    font-size: 64px;
+    font-size: 80px;
     font-weight: bold;
     color: #facc15;
+    text-shadow: 0 0 20px rgba(250, 204, 21, 0.6), 
+                 0 0 40px rgba(250, 204, 21, 0.4);
+    transition: all 0.3s ease;
+}
+
+/* Pulsing animation for overlay icons */
+.overlay-pulse {
+    animation: overlayPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes overlayPulse {
+    0%, 100% { 
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% { 
+        transform: scale(1.15);
+        opacity: 0.8;
+    }
+}
+
+/* Direction indicators with slide animation */
+.overlay-slide-left {
+    animation: slideLeft 1.5s ease-in-out infinite;
+}
+
+.overlay-slide-right {
+    animation: slideRight 1.5s ease-in-out infinite;
+}
+
+@keyframes slideLeft {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(-20px); }
+}
+
+@keyframes slideRight {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(20px); }
+}
+
+/* Enhanced overlay with background glow */
+.overlay-glow {
+    background: radial-gradient(circle, rgba(250, 204, 21, 0.1) 0%, transparent 70%);
+}
+
+/* Circular countdown timer */
+#timerRing {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 80px;
+    height: 80px;
+    display: none;
+}
+
+.timer-circle {
+    transform: rotate(-90deg);
+}
+
+.timer-circle-bg {
+    fill: none;
+    stroke: #1e293b;
+    stroke-width: 8;
+}
+
+.timer-circle-progress {
+    fill: none;
+    stroke: #facc15;
+    stroke-width: 8;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.3s linear;
+}
+
+.timer-text {
+    font-size: 24px;
+    font-weight: bold;
+    fill: #facc15;
+    text-anchor: middle;
+    dominant-baseline: middle;
 }
 
 button {
@@ -104,6 +183,61 @@ button:disabled {
     margin-right: 8px;
 }
 
+/* Fast-Track Tooltip */
+.fast-track-tooltip {
+    position: relative;
+    display: inline-block;
+}
+
+.fast-track-tooltip .tooltiptext {
+    visibility: hidden;
+    width: 300px;
+    background-color: #1e293b;
+    color: #fff;
+    text-align: center;
+    border-radius: 8px;
+    padding: 12px;
+    position: absolute;
+    z-index: 1;
+    bottom: 125%;
+    left: 50%;
+    margin-left: -150px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    font-size: 14px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.fast-track-tooltip .tooltiptext::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: #1e293b transparent transparent transparent;
+}
+
+.fast-track-tooltip:hover .tooltiptext {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* Pulsing info icon */
+.info-icon {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    text-align: center;
+    line-height: 20px;
+    margin-left: 8px;
+    cursor: help;
+    animation: pulse 2s infinite;
+}
+
 @keyframes slideIn {
     from {
         opacity: 0;
@@ -116,8 +250,44 @@ button:disabled {
 }
 
 @keyframes pulse {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.05); }
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.05); opacity: 0.8; }
+}
+
+/* Error Screen Styles */
+#errorScreen {
+    display: none;
+    margin-top: 25px;
+}
+
+.error-container {
+    background: #ef4444;
+    color: white;
+    padding: 20px;
+    border-radius: 12px;
+    max-width: 400px;
+    margin: 0 auto;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+.error-container h3 {
+    margin-top: 0;
+}
+
+.error-buttons {
+    margin-top: 15px;
+}
+
+.error-retry-btn {
+    background: white;
+    color: #ef4444;
+    margin-right: 10px;
+}
+
+.error-cancel-btn {
+    background: transparent;
+    border: 2px solid white;
+    color: white;
 }
 </style>
 
@@ -127,15 +297,32 @@ button:disabled {
 
 <h1>Certivo Prime Verification</h1>
 
-<!-- Fast-Track Badge -->
-<div id="fastTrackBadge">
+<!-- Fast-Track Badge with Tooltip -->
+<div id="fastTrackBadge" class="fast-track-tooltip">
     <span class="fast-track-icon">🚀</span>
     <span id="fastTrackText">Fast-Track Mode Active</span>
+    <span class="info-icon">ℹ️</span>
+    <span class="tooltiptext">
+        You're a trusted user! Enjoy:<br>
+        ✅ Only 1 challenge (vs 3)<br>
+        ✅ Shorter 8-second timer (vs 12s)<br>
+        ✅ Easier verification thresholds
+    </span>
 </div>
 
 <div id="cameraWrapper">
     <video id="video" autoplay muted></video>
     <div id="overlay"></div>
+    
+    <!-- Visual Countdown Ring -->
+    <svg id="timerRing" viewBox="0 0 100 100">
+        <circle class="timer-circle-bg timer-circle" cx="50" cy="50" r="40"></circle>
+        <circle id="timerProgress" class="timer-circle-progress timer-circle" 
+                cx="50" cy="50" r="40" 
+                stroke-dasharray="251.2" 
+                stroke-dashoffset="0"></circle>
+        <text id="timerText" class="timer-text" x="50" y="50">12</text>
+    </svg>
 </div>
 
 <button id="startFaceBtn">Start Face Verification</button>
@@ -158,6 +345,18 @@ button:disabled {
     <p id="trustLabel" style="margin-top:10px;font-weight:bold;"></p>
 </div>
 
+<!-- Error Screen -->
+<div id="errorScreen">
+    <div class="error-container">
+        <h3 id="errorTitle">❌ Error</h3>
+        <p id="errorMessage"></p>
+        <div class="error-buttons">
+            <button id="errorRetryBtn" class="error-retry-btn">Retry</button>
+            <button id="errorCancelBtn" class="error-cancel-btn">Cancel</button>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/facemesh"></script>
 
@@ -169,13 +368,11 @@ button:disabled {
 const BotDetector = {
     checks: {},
     
-    // Check 1: WebDriver detection
     checkWebDriver() {
         this.checks.webdriver = navigator.webdriver === true;
         return this.checks.webdriver;
     },
     
-    // Check 2: Headless browser detection
     checkHeadless() {
         const checks = {
             userAgent: /HeadlessChrome|PhantomJS|Nightmare/i.test(navigator.userAgent),
@@ -183,7 +380,6 @@ const BotDetector = {
             noLanguages: navigator.languages.length === 0,
             chromeRuntime: !window.chrome && /Chrome/.test(navigator.userAgent),
             permissions: navigator.permissions === undefined,
-            // Chrome DevTools detection
             devtools: window.outerWidth - window.innerWidth > 160 ||
                      window.outerHeight - window.innerHeight > 160
         };
@@ -193,24 +389,16 @@ const BotDetector = {
         return this.checks.headless;
     },
     
-    // Check 3: Automation framework detection
     checkAutomation() {
         const checks = {
-            // Selenium
             selenium: window.document.$cdc_asdjflasutopfhvcZLmcfl_ !== undefined ||
                      window.document.documentElement.getAttribute('selenium') !== null ||
                      window.document.documentElement.getAttribute('webdriver') !== null ||
                      window.document.documentElement.getAttribute('driver') !== null,
-            
-            // Puppeteer
             puppeteer: window.navigator.webdriver ||
                       window.callPhantom !== undefined ||
                       window._phantom !== undefined,
-            
-            // Nightmare
             nightmare: window.__nightmare !== undefined,
-            
-            // Generic automation properties
             domAutomation: window.domAutomation !== undefined ||
                           window.domAutomationController !== undefined
         };
@@ -220,26 +408,21 @@ const BotDetector = {
         return this.checks.automation;
     },
     
-    // Check 4: Browser features consistency
     checkBrowserConsistency() {
         const issues = [];
         
-        // Chrome without chrome object
         if (/Chrome/.test(navigator.userAgent) && !window.chrome) {
             issues.push('chrome_missing');
         }
         
-        // Missing expected properties
         if (!navigator.platform) issues.push('no_platform');
         if (!navigator.hardwareConcurrency) issues.push('no_hardware');
         if (!screen.colorDepth) issues.push('no_color_depth');
         
-        // Suspicious screen dimensions
         if (screen.width < 100 || screen.height < 100) {
             issues.push('tiny_screen');
         }
         
-        // Missing Date.prototype.toJSON
         if (typeof Date.prototype.toJSON !== 'function') {
             issues.push('missing_date_json');
         }
@@ -248,7 +431,6 @@ const BotDetector = {
         return issues.length > 0;
     },
     
-    // Check 5: Mouse/Touch interaction
     checkHumanInteraction() {
         return new Promise((resolve) => {
             let hasMouseMove = false;
@@ -264,7 +446,7 @@ const BotDetector = {
                 };
                 cleanup();
                 resolve(this.checks.humanInteraction);
-            }, 3000); // Wait 3 seconds for interaction
+            }, 3000);
             
             const onMouseMove = () => { hasMouseMove = true; };
             const onClick = () => { hasClick = true; };
@@ -283,7 +465,6 @@ const BotDetector = {
         });
     },
     
-    // Check 6: Canvas fingerprinting
     checkCanvas() {
         try {
             const canvas = document.createElement('canvas');
@@ -294,7 +475,6 @@ const BotDetector = {
                 return true;
             }
             
-            // Draw test pattern
             ctx.textBaseline = 'top';
             ctx.font = '14px Arial';
             ctx.textBaseline = 'alphabetic';
@@ -307,9 +487,8 @@ const BotDetector = {
             
             const dataUrl = canvas.toDataURL();
             
-            // Check if canvas is blank (some bots return blank canvas)
             this.checks.canvasBlank = dataUrl === 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-            this.checks.canvasFingerprint = dataUrl.slice(-20); // Store last 20 chars
+            this.checks.canvasFingerprint = dataUrl.slice(-20);
             
             return this.checks.canvasBlank;
         } catch (e) {
@@ -318,7 +497,6 @@ const BotDetector = {
         }
     },
     
-    // Check 7: WebGL fingerprinting
     checkWebGL() {
         try {
             const canvas = document.createElement('canvas');
@@ -334,7 +512,6 @@ const BotDetector = {
                 this.checks.webglVendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
                 this.checks.webglRenderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
                 
-                // Check for suspicious values
                 const suspicious = /SwiftShader|llvmpipe|Microsoft Basic Render/i.test(
                     this.checks.webglRenderer
                 );
@@ -349,7 +526,6 @@ const BotDetector = {
         }
     },
     
-    // Check 8: Timing attacks (bots often have inconsistent timing)
     async checkTimingConsistency() {
         const delays = [];
         
@@ -360,27 +536,22 @@ const BotDetector = {
             delays.push(end - start);
         }
         
-        // Calculate variance
         const avg = delays.reduce((a, b) => a + b) / delays.length;
         const variance = delays.reduce((sum, delay) => sum + Math.pow(delay - avg, 2), 0) / delays.length;
         
-        // Bots often have very low variance (too consistent) or very high variance
         this.checks.timingVariance = variance;
         this.checks.timingInconsistent = variance < 1 || variance > 1000;
         
         return this.checks.timingInconsistent;
     },
     
-    // Check 9: Browser window properties
     checkWindowProperties() {
         const issues = [];
         
-        // Phantom detection
         if (window.callPhantom || window._phantom) {
             issues.push('phantom_detected');
         }
         
-        // Check for common bot properties
         const botProps = [
             '__webdriver_evaluate', '__selenium_evaluate',
             '__webdriver_script_function', '__webdriver_script_func',
@@ -398,7 +569,6 @@ const BotDetector = {
         return issues.length > 0;
     },
     
-    // Check 10: Media device availability
     async checkMediaDevices() {
         try {
             if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
@@ -409,11 +579,9 @@ const BotDetector = {
             const devices = await navigator.mediaDevices.enumerateDevices();
             const cameras = devices.filter(d => d.kind === 'videoinput');
             
-            // Bots often have no cameras or fake cameras
             this.checks.cameraCount = cameras.length;
             this.checks.noCameras = cameras.length === 0;
             
-            // Check for suspicious labels
             const suspiciousLabels = cameras.some(c => 
                 !c.label || c.label === '' || /fake|virtual|obs/i.test(c.label)
             );
@@ -426,11 +594,9 @@ const BotDetector = {
         }
     },
     
-    // Master detection function
     async runAllChecks() {
         console.log("🔍 Running bot detection checks...");
         
-        // Synchronous checks
         this.checkWebDriver();
         this.checkHeadless();
         this.checkAutomation();
@@ -439,12 +605,9 @@ const BotDetector = {
         this.checkWebGL();
         this.checkWindowProperties();
         
-        // Asynchronous checks
         await this.checkTimingConsistency();
         await this.checkMediaDevices();
-        // Note: checkHumanInteraction is optional, run separately if needed
         
-        // Calculate suspicion score
         const suspicionPoints = [
             this.checks.webdriver ? 3 : 0,
             this.checks.headless ? 3 : 0,
@@ -474,7 +637,6 @@ const BotDetector = {
         };
     },
     
-    // Get fingerprint for backend
     getFingerprint() {
         return {
             userAgent: navigator.userAgent,
@@ -498,8 +660,11 @@ const BotDetector = {
 };
 </script>
 
-
 <script>
+// ============================================================================
+// MAIN APPLICATION - PHASE 6 ENHANCED - 10/10
+// ============================================================================
+
 const video = document.getElementById("video");
 const overlay = document.getElementById("overlay");
 const startFaceBtn = document.getElementById("startFaceBtn");
@@ -527,32 +692,145 @@ let movementInterval = null;
 let countdownInterval = null;
 
 let faceVerificationTimeout = null;
-const FACE_VERIFICATION_TIMEOUT = 30000; // 30 seconds
+const FACE_VERIFICATION_TIMEOUT = 30000;
 
 const deviceId = "device_" + Math.floor(Math.random() * 100000);
 
-/* Overlay */
-function showOverlayForInstruction(text) {
-    overlay.innerHTML = "";
-    const t = text.toLowerCase();
-    if (t.includes("left")) overlay.innerHTML = "⬅️";
-    else if (t.includes("right")) overlay.innerHTML = "➡️";
+// ============================================================================
+// ERROR HANDLING & RETRY SYSTEM - 10/10
+// ============================================================================
+
+function showError(title, message, retryAction = null, cancelAction = null) {
+    const errorScreen = document.getElementById("errorScreen");
+    const errorTitle = document.getElementById("errorTitle");
+    const errorMessage = document.getElementById("errorMessage");
+    const errorRetryBtn = document.getElementById("errorRetryBtn");
+    const errorCancelBtn = document.getElementById("errorCancelBtn");
+    
+    errorTitle.innerText = title;
+    errorMessage.innerText = message;
+    errorScreen.style.display = "block";
+    
+    if (retryAction) {
+        errorRetryBtn.style.display = "inline-block";
+        errorRetryBtn.onclick = () => {
+            errorScreen.style.display = "none";
+            retryAction();
+        };
+    } else {
+        errorRetryBtn.style.display = "none";
+    }
+    
+    if (cancelAction) {
+        errorCancelBtn.style.display = "inline-block";
+        errorCancelBtn.onclick = () => {
+            errorScreen.style.display = "none";
+            cancelAction();
+        };
+    } else {
+        errorCancelBtn.style.display = "none";
+    }
+    
+    console.error(`[ERROR] ${title}: ${message}`);
 }
 
-/* Enhanced Face Verification with Bot Detection - 10/10 */
+function showRetryButton(message, retryAction) {
+    const retryContainer = document.createElement("div");
+    retryContainer.id = "retryContainer";
+    retryContainer.style.marginTop = "15px";
+    
+    const messageP = document.createElement("p");
+    messageP.innerText = message;
+    messageP.style.color = "#f59e0b";
+    messageP.style.fontWeight = "bold";
+    
+    const retryBtn = document.createElement("button");
+    retryBtn.innerText = "🔄 Retry";
+    retryBtn.onclick = () => {
+        retryContainer.remove();
+        retryAction();
+    };
+    
+    retryContainer.appendChild(messageP);
+    retryContainer.appendChild(retryBtn);
+    challengeSection.appendChild(retryContainer);
+}
+
+function handleNetworkError(error, context) {
+    console.error(`Network error in ${context}:`, error);
+    
+    let message = "Unable to connect to server. Please check your internet connection.";
+    
+    if (error.message.includes("Failed to fetch")) {
+        message = "Cannot reach verification server. Please check if the server is running at http://127.0.0.1:8000";
+    } else if (error.message.includes("NetworkError")) {
+        message = "Network error occurred. Please check your connection and try again.";
+    }
+    
+    showError(
+        "❌ Connection Error",
+        message,
+        () => location.reload(),
+        null
+    );
+}
+
+function logFrontendEvent(eventName, details = {}) {
+    const event = {
+        timestamp: new Date().toISOString(),
+        event: eventName,
+        device_id: deviceId,
+        details: details,
+        user_agent: navigator.userAgent,
+        screen_resolution: `${screen.width}x${screen.height}`,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    };
+    
+    console.log(`[EVENT] ${eventName}:`, event);
+}
+
+// ============================================================================
+// ENHANCED OVERLAY - 10/10
+// ============================================================================
+
+function showOverlayForInstruction(text) {
+    overlay.innerHTML = "";
+    overlay.className = "overlay-glow";
+    
+    const t = text.toLowerCase();
+    
+    if (t.includes("left")) {
+        overlay.innerHTML = "⬅️";
+        overlay.classList.add("overlay-pulse", "overlay-slide-left");
+    } else if (t.includes("right")) {
+        overlay.innerHTML = "➡️";
+        overlay.classList.add("overlay-pulse", "overlay-slide-right");
+    } else {
+        overlay.innerHTML = "👀";
+        overlay.classList.add("overlay-pulse");
+    }
+}
+
+// ============================================================================
+// FACE VERIFICATION WITH BOT DETECTION - 10/10
+// ============================================================================
+
 startFaceBtn.onclick = async () => {
-    // RUN BOT DETECTION FIRST
     startFaceBtn.disabled = true;
     startFaceBtn.innerText = "🔍 Checking browser...";
     
     try {
         const botResult = await BotDetector.runAllChecks();
         
+        logFrontendEvent("bot_detection_completed", {
+            is_bot: botResult.isBot,
+            suspicion_score: botResult.score
+        });
+        
         if (botResult.isBot) {
             alert("⚠️ Automated browser detected. Please use a standard browser for verification.");
             console.error("Bot detection failed:", botResult);
             
-            // Log to backend
             await fetch(`http://127.0.0.1:8000/v1/bot-report`, {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
@@ -571,18 +849,16 @@ startFaceBtn.onclick = async () => {
         }
         
         console.log("✅ Bot detection passed");
+        logFrontendEvent("face_verification_started");
         
     } catch (error) {
         console.error("Bot detection error:", error);
-        // Continue anyway if bot detection fails (fail-open for user experience)
     }
     
-    // Continue with original face verification code
     startFaceBtn.style.display = "none";
     faceSection.style.display = "block";
     
     try {
-        // Request camera access with error handling
         const stream = await navigator.mediaDevices.getUserMedia({ 
             video: { 
                 width: { ideal: 640 },
@@ -592,7 +868,6 @@ startFaceBtn.onclick = async () => {
         });
         video.srcObject = stream;
         
-        // Load face detection model with error handling
         try {
             document.getElementById("faceStatus").innerText = "🔄 Loading face detection...";
             faceModel = await facemesh.load();
@@ -627,15 +902,13 @@ startFaceBtn.onclick = async () => {
 
 function startFaceDetectionLoop() {
     let attemptCount = 0;
-    const maxAttempts = 75; // 30 seconds at 400ms intervals
+    const maxAttempts = 75;
     
-    // Set timeout as backup
     faceVerificationTimeout = setTimeout(() => {
         clearInterval(detectionInterval);
         document.getElementById("faceStatus").innerText = "⏱️ Timeout: No face detected. Please try again.";
         document.getElementById("faceStatus").style.color = "#f59e0b";
         
-        // Show retry button
         const retryBtn = document.createElement("button");
         retryBtn.innerText = "Retry Face Detection";
         retryBtn.onclick = () => {
@@ -655,15 +928,12 @@ function startFaceDetectionLoop() {
             const preds = await faceModel.estimateFaces(video);
             
             if (preds.length === 0) {
-                // No face detected
-                if (attemptCount % 5 === 0) { // Update every 2 seconds
+                if (attemptCount % 5 === 0) {
                     document.getElementById("faceStatus").innerText = "👤 No face detected. Please center your face.";
                 }
             } else if (preds.length > 1) {
-                // Multiple faces detected
                 document.getElementById("faceStatus").innerText = "⚠️ Multiple faces detected. Please ensure only you are visible.";
             } else if (preds.length === 1) {
-                // Perfect: exactly one face
                 clearInterval(detectionInterval);
                 clearTimeout(faceVerificationTimeout);
                 
@@ -671,11 +941,13 @@ function startFaceDetectionLoop() {
                 document.getElementById("faceStatus").innerText = "✅ Face verified successfully";
                 document.getElementById("faceStatus").style.color = "#10b981";
                 
-                // Optional: Add success animation
                 proceedBtn.style.animation = "pulse 1s ease-in-out";
+                
+                logFrontendEvent("face_detected", {
+                    attempts: attemptCount
+                });
             }
             
-            // Stop after max attempts
             if (attemptCount >= maxAttempts) {
                 clearInterval(detectionInterval);
                 clearTimeout(faceVerificationTimeout);
@@ -691,7 +963,10 @@ function startFaceDetectionLoop() {
     }, 400);
 }
 
-/* Load challenges with Fast-Track support and token storage */
+// ============================================================================
+// CHALLENGE LOADING WITH ERROR HANDLING - 10/10
+// ============================================================================
+
 proceedBtn.onclick = async () => {
     faceSection.style.display = "none";
     challengeSection.style.display = "block";
@@ -699,12 +974,35 @@ proceedBtn.onclick = async () => {
     try {
         console.log("🔍 Fetching challenges for device:", deviceId);
         
-        const res = await fetch(`http://127.0.0.1:8000/v1/challenge?device_id=${deviceId}`);
+        statusEl.innerText = "⏳ Loading challenges...";
+        statusEl.style.color = "#e5e7eb";
+        
+        logFrontendEvent("challenges_requested");
+        
+        const res = await fetch(`http://127.0.0.1:8000/v1/challenge?device_id=${deviceId}`, {
+            method: "GET",
+            headers: {"Content-Type": "application/json"},
+            signal: AbortSignal.timeout(10000)
+        });
+        
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+        
         const data = await res.json();
         
         console.log("📦 Response data:", data);
         
-        // Show fast-track badge if enabled
+        if (data.error && data.code === "BOT_DETECTED") {
+            showError(
+                "🤖 Bot Detected",
+                data.message,
+                null,
+                () => location.reload()
+            );
+            return;
+        }
+        
         if (data.fast_track_enabled) {
             const badge = document.getElementById("fastTrackBadge");
             badge.style.display = "block";
@@ -712,7 +1010,10 @@ proceedBtn.onclick = async () => {
             console.log("🚀 Fast-Track Mode:", data.challenges.length, "challenge(s)");
         }
         
-        // STORE CHALLENGES WITH TOKEN_ID
+        if (!data.challenges || data.challenges.length === 0) {
+            throw new Error("No challenges received from server");
+        }
+        
         challenges = data.challenges.map(ch => ({
             challenge_id: ch.challenge_id,
             token_id: ch.token_id,
@@ -723,20 +1024,48 @@ proceedBtn.onclick = async () => {
         
         console.log("✅ Challenges loaded:", challenges);
         
-        // Initialize and start first challenge
+        logFrontendEvent("challenges_loaded", {
+            count: challenges.length,
+            fast_track: data.fast_track_enabled
+        });
+        
         challengeIndex = 0;
         sessionResults = [];
         loadNextChallenge();
         
     } catch (error) {
         console.error("❌ Error loading challenges:", error);
-        statusEl.innerText = "❌ Error loading challenges. Check console.";
-        statusEl.style.color = "#ef4444";
+        
+        if (error.name === "AbortError") {
+            showError(
+                "⏱️ Request Timeout",
+                "Server took too long to respond. Please try again.",
+                () => proceedBtn.click(),
+                () => location.reload()
+            );
+        } else if (error.message.includes("Failed to fetch")) {
+            handleNetworkError(error, "challenge loading");
+        } else {
+            showError(
+                "❌ Failed to Load Challenges",
+                error.message,
+                () => proceedBtn.click(),
+                () => location.reload()
+            );
+        }
     }
 };
 
+// ============================================================================
+// ENHANCED CHALLENGE FLOW - 10/10
+// ============================================================================
+
 function loadNextChallenge() {
     clearInterval(countdownInterval);
+    
+    // Remove any retry containers
+    const retryContainer = document.getElementById("retryContainer");
+    if (retryContainer) retryContainer.remove();
 
     if (challengeIndex >= challenges.length) {
         finalizeSession();
@@ -745,9 +1074,20 @@ function loadNextChallenge() {
 
     const ch = challenges[challengeIndex++];
     
-    // Show fast-track indicator in challenge progress
     const fastTrackLabel = ch.fast_track ? " 🚀" : "";
-    challengeProgress.innerText = `Challenge ${challengeIndex} of ${challenges.length}${fastTrackLabel}`;
+    const fastTrackHint = ch.fast_track ? 
+        " (8 seconds - easier verification)" : 
+        " (12 seconds - standard verification)";
+    
+    challengeProgress.innerText = `Challenge ${challengeIndex} of ${challenges.length}${fastTrackLabel}${fastTrackHint}`;
+    
+    if (ch.fast_track) {
+        challengeProgress.style.color = "#10b981";
+        challengeProgress.style.fontWeight = "bold";
+    } else {
+        challengeProgress.style.color = "#e5e7eb";
+        challengeProgress.style.fontWeight = "normal";
+    }
     
     statusEl.innerText = ch.instruction;
     statusEl.style.color = "#e5e7eb";
@@ -758,12 +1098,17 @@ function loadNextChallenge() {
 
     showOverlayForInstruction(ch.instruction);
     
-    // Fast-track gets shorter time (8s vs 12s)
+    logFrontendEvent("challenge_started", {
+        challenge_index: challengeIndex,
+        challenge_id: ch.challenge_id,
+        instruction: ch.instruction,
+        fast_track: ch.fast_track
+    });
+    
     const duration = ch.fast_track ? 8 : 12;
     startRecording(ch.challenge_id, ch.token_id, duration);
 }
 
-/* Head movement detection */
 async function trackHeadMovement() {
     const preds = await faceModel.estimateFaces(video);
     if (!preds.length) return;
@@ -778,7 +1123,6 @@ async function trackHeadMovement() {
 
     const delta = noseX - initialNoseX;
 
-    // NOTE: webcam is mirrored
     if (activeInstruction.includes("left") && delta > 8) {
         movementDetected = true;
     }
@@ -795,7 +1139,10 @@ async function trackHeadMovement() {
     );
 }
 
-/* Recording with token_id */
+// ============================================================================
+// RECORDING WITH VISUAL TIMER - 10/10
+// ============================================================================
+
 function startRecording(challengeId, tokenId, duration) {
     recordedChunks = [];
     mediaRecorder = new MediaRecorder(video.srcObject);
@@ -805,6 +1152,9 @@ function startRecording(challengeId, tokenId, duration) {
     mediaRecorder.onstop = async () => {
         clearInterval(movementInterval);
         overlay.innerHTML = "";
+        overlay.className = "";
+        
+        document.getElementById("timerRing").style.display = "none";
 
         const requiresMovement =
             activeInstruction.includes("left") ||
@@ -812,8 +1162,13 @@ function startRecording(challengeId, tokenId, duration) {
 
         if (requiresMovement && !movementDetected) {
             statusEl.innerText = "❌ No movement detected";
-            sessionResults.push({ challenge_passed: false });
-            setTimeout(loadNextChallenge, 800);
+            statusEl.style.color = "#ef4444";
+            
+            showRetryButton("No movement detected. Try again?", () => {
+                sessionResults.push({ challenge_passed: false });
+                loadNextChallenge();
+            });
+            
             return;
         }
 
@@ -822,18 +1177,51 @@ function startRecording(challengeId, tokenId, duration) {
 
     mediaRecorder.start();
     movementInterval = setInterval(trackHeadMovement, 250);
+    
+    // Visual Timer
+    const timerRing = document.getElementById("timerRing");
+    const timerProgress = document.getElementById("timerProgress");
+    const timerText = document.getElementById("timerText");
+    
+    timerRing.style.display = "block";
+    
+    const circumference = 2 * Math.PI * 40;
+    let timeLeft = duration;
+    
+    function updateTimer() {
+        timerText.textContent = timeLeft;
+        
+        const progress = timeLeft / duration;
+        const offset = circumference * (1 - progress);
+        timerProgress.style.strokeDashoffset = offset;
+        
+        if (timeLeft <= 3) {
+            timerProgress.style.stroke = "#ef4444";
+        } else if (timeLeft <= 5) {
+            timerProgress.style.stroke = "#f59e0b";
+        } else {
+            timerProgress.style.stroke = "#facc15";
+        }
+        
+        timeLeft--;
+        
+        if (timeLeft < 0) {
+            clearInterval(countdownInterval);
+        }
+    }
+    
+    updateTimer();
+    countdownInterval = setInterval(updateTimer, 1000);
+    
+    challengeTimer.innerText = `Time left: ${duration}s`;
+    
     setTimeout(() => mediaRecorder.stop(), duration * 1000);
-
-    let t = duration;
-    challengeTimer.innerText = `Time left: ${t}s`;
-    countdownInterval = setInterval(() => {
-        t--;
-        challengeTimer.innerText = `Time left: ${t}s`;
-        if (t <= 0) clearInterval(countdownInterval);
-    }, 1000);
 }
 
-/* Submit with token_id - 10/10 SECURITY */
+// ============================================================================
+// VIDEO SUBMISSION WITH ERROR HANDLING - 10/10
+// ============================================================================
+
 async function submitRecording(challengeId, tokenId) {
     const blob = new Blob(recordedChunks, { type: "video/webm" });
     const formData = new FormData();
@@ -845,54 +1233,148 @@ async function submitRecording(challengeId, tokenId) {
     console.log("📤 Submitting challenge:", challengeId.substring(0, 8) + "...");
     console.log("🔑 Token:", tokenId.substring(0, 8) + "...");
 
-    const res = await fetch("http://127.0.0.1:8000/v1/verify", {
-        method: "POST",
-        body: formData
+    statusEl.innerText = "⏳ Verifying...";
+    statusEl.style.color = "#e5e7eb";
+
+    logFrontendEvent("challenge_submitted", {
+        challenge_id: challengeId,
+        video_size: blob.size
     });
 
-    const result = await res.json();
-    
-    // Check for token validation errors
-    if (result.error && result.error.includes("token")) {
-        console.error("🔒 Token validation failed:", result.error);
-        statusEl.innerText = "🔒 Security validation failed";
-        statusEl.style.color = "#ef4444";
-    } else {
+    try {
+        const res = await fetch("http://127.0.0.1:8000/v1/verify", {
+            method: "POST",
+            body: formData,
+            signal: AbortSignal.timeout(30000)
+        });
+
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+
+        const result = await res.json();
+        
+        if (result.error) {
+            console.error("🔒 Verification error:", result.error);
+            
+            if (result.error.includes("token")) {
+                statusEl.innerText = "🔒 Security validation failed";
+                statusEl.style.color = "#ef4444";
+                
+                showRetryButton("Token validation failed. Retry challenge?", () => {
+                    sessionResults.push({ challenge_passed: false });
+                    loadNextChallenge();
+                });
+            } else if (result.error.includes("expired")) {
+                statusEl.innerText = "⏱️ Challenge expired";
+                statusEl.style.color = "#f59e0b";
+                
+                showRetryButton("Challenge expired. Start over?", () => {
+                    location.reload();
+                });
+            } else {
+                statusEl.innerText = "❌ " + result.error;
+                statusEl.style.color = "#ef4444";
+                
+                showRetryButton("Verification failed. Retry?", () => {
+                    sessionResults.push({ challenge_passed: false });
+                    loadNextChallenge();
+                });
+            }
+            
+            sessionResults.push({ challenge_passed: false, error: result.error });
+            return;
+        }
+        
         statusEl.innerText = result.challenge_passed ? "✅ Passed" : "❌ Failed";
         statusEl.style.color = result.challenge_passed ? "#10b981" : "#ef4444";
+        
+        sessionResults.push(result);
+        setTimeout(loadNextChallenge, 700);
+        
+    } catch (error) {
+        console.error("❌ Submission error:", error);
+        
+        if (error.name === "AbortError") {
+            showError(
+                "⏱️ Upload Timeout",
+                "Video upload took too long. This might be due to slow internet connection.",
+                () => submitRecording(challengeId, tokenId),
+                () => {
+                    sessionResults.push({ challenge_passed: false });
+                    loadNextChallenge();
+                }
+            );
+        } else if (error.message.includes("Failed to fetch")) {
+            handleNetworkError(error, "video submission");
+        } else {
+            showError(
+                "❌ Submission Failed",
+                "Failed to submit video: " + error.message,
+                () => submitRecording(challengeId, tokenId),
+                () => {
+                    sessionResults.push({ challenge_passed: false });
+                    loadNextChallenge();
+                }
+            );
+        }
     }
-    
-    sessionResults.push(result);
-    setTimeout(loadNextChallenge, 700);
 }
 
-/* Finalize */
+// ============================================================================
+// FINALIZE WITH ERROR HANDLING - 10/10
+// ============================================================================
+
 async function finalizeSession() {
     statusEl.innerText = "🔐 Calculating trust score...";
     statusEl.style.color = "#e5e7eb";
     
-    const res = await fetch("http://127.0.0.1:8000/v1/finalize", {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({ results: sessionResults, device_id: deviceId })
-    });
-    
-    const final = await res.json();
-    
-    verdictScreen.style.display = "block";
-    trustBar.style.width = final.trust_score + "%";
-    trustLabel.innerText = `${final.trust_level.toUpperCase()} TRUST`;
-    
-    // Color the trust bar based on level
-    if (final.trust_level === "high") {
-        trustBar.style.background = "#10b981";
-    } else if (final.trust_level === "medium") {
-        trustBar.style.background = "#f59e0b";
-    } else {
-        trustBar.style.background = "#ef4444";
+    try {
+        const res = await fetch("http://127.0.0.1:8000/v1/finalize", {
+            method: "POST",
+            headers: {"Content-Type":"application/json"},
+            body: JSON.stringify({ results: sessionResults, device_id: deviceId }),
+            signal: AbortSignal.timeout(10000)
+        });
+        
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+        
+        const final = await res.json();
+        
+        verdictScreen.style.display = "block";
+        challengeSection.style.display = "none";
+        
+        trustBar.style.width = final.trust_score + "%";
+        trustLabel.innerText = `${final.trust_level.toUpperCase()} TRUST`;
+        
+        if (final.trust_level === "high") {
+            trustBar.style.background = "#10b981";
+        } else if (final.trust_level === "medium") {
+            trustBar.style.background = "#f59e0b";
+        } else {
+            trustBar.style.background = "#ef4444";
+        }
+        
+        console.log("✅ Verification complete:", final);
+        
+        logFrontendEvent("session_finalized", {
+            trust_score: final.trust_score,
+            trust_level: final.trust_level,
+            session_id: final.session_id
+        });
+        
+    } catch (error) {
+        console.error("❌ Finalization error:", error);
+        
+        showError(
+            "❌ Failed to Calculate Score",
+            "Could not finalize verification: " + error.message,
+            () => finalizeSession(),
+            () => location.reload()
+        );
     }
-    
-    console.log("✅ Verification complete:", final);
 }
 </script>
 
