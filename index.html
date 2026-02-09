@@ -302,7 +302,7 @@ body {
     width: 100%;
     height: auto;
     display: block;
-    transform: scaleX(-1); /* Mirror the video */
+    transform: scaleX(-1);
 }
 
 .face-outline-container {
@@ -411,7 +411,6 @@ body {
     border-radius: 2px;
 }
 
-/* Success state */
 .face-outline.detected {
     animation: none;
     opacity: 1;
@@ -477,7 +476,6 @@ body {
     transform: scaleX(-1);
 }
 
-/* Timer Bar (replaces circular timer) */
 .timer-bar-container {
     width: 100%;
     height: 8px;
@@ -517,7 +515,6 @@ body {
     50% { transform: scale(1.1); }
 }
 
-/* Simple instruction indicator (no fancy overlays) */
 .instruction-hint {
     display: inline-flex;
     align-items: center;
@@ -532,6 +529,137 @@ body {
 
 .instruction-hint-icon {
     font-size: 20px;
+}
+
+/* ============================================================================
+   SCREEN 5: CHALLENGE RESULT LOCK - 10/10
+   ============================================================================ */
+
+.result-icon-wrapper {
+    width: 100px;
+    height: 100px;
+    margin: 0 auto 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: scaleIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.result-icon-wrapper.success {
+    background: #10b981;
+    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
+}
+
+.result-icon-wrapper.failure {
+    background: #ef4444;
+    box-shadow: 0 8px 24px rgba(239, 68, 68, 0.4);
+}
+
+.result-icon {
+    font-size: 60px;
+    color: white;
+}
+
+.result-title {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    color: #1a202c;
+}
+
+.result-title.success {
+    color: #10b981;
+}
+
+.result-title.failure {
+    color: #ef4444;
+}
+
+.result-subtitle {
+    font-size: 16px;
+    color: #718096;
+    line-height: 1.6;
+    margin-bottom: 32px;
+}
+
+.result-detail {
+    background: #f7fafc;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 24px;
+    text-align: left;
+}
+
+.result-detail-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #667eea;
+    margin-bottom: 4px;
+}
+
+.result-detail-value {
+    font-size: 14px;
+    color: #2d3748;
+}
+
+.btn-retry {
+    background: #f59e0b;
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 16px 32px;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    width: 100%;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+    margin-bottom: 12px;
+}
+
+.btn-retry:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(245, 158, 11, 0.5);
+}
+
+.btn-continue {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 16px 32px;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    width: 100%;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-continue:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+}
+
+/* Auto-advance countdown */
+.auto-advance-text {
+    font-size: 13px;
+    color: #94a3b8;
+    margin-top: 16px;
 }
 
 /* ============================================================================
@@ -557,6 +685,15 @@ body {
     
     .timer-countdown {
         font-size: 40px;
+    }
+    
+    .result-icon-wrapper {
+        width: 80px;
+        height: 80px;
+    }
+    
+    .result-icon {
+        font-size: 48px;
     }
 }
 
@@ -665,22 +802,18 @@ body {
 </div>
 
 <!-- ============================================================================
-     SCREEN 3: PREPARATION / CALIBRATION (2-3 seconds) - 10/10
+     SCREEN 3: PREPARATION / CALIBRATION
      ============================================================================ -->
 <div id="screen3" class="screen">
     
-    <!-- Header -->
     <h2 class="calibration-title">Position Your Face</h2>
     <p class="calibration-subtitle">Center your face in the frame</p>
     
-    <!-- Camera Feed with Face Outline -->
     <div class="calibration-camera-wrapper">
         <video id="calibrationVideo" autoplay muted playsinline></video>
         
-        <!-- Face Outline Overlay -->
         <div class="face-outline-container">
             <svg class="face-outline" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
-                <!-- Rounded rectangle for face outline -->
                 <rect x="20" y="20" width="160" height="200" rx="80" ry="100" 
                       fill="none" 
                       stroke="#667eea" 
@@ -688,14 +821,12 @@ body {
                       stroke-dasharray="8 4"
                       opacity="0.6"/>
                 
-                <!-- Corner guides -->
                 <path d="M 40,40 L 20,40 L 20,60" stroke="#667eea" stroke-width="3" fill="none" opacity="0.8"/>
                 <path d="M 160,40 L 180,40 L 180,60" stroke="#667eea" stroke-width="3" fill="none" opacity="0.8"/>
                 <path d="M 40,200 L 20,200 L 20,180" stroke="#667eea" stroke-width="3" fill="none" opacity="0.8"/>
                 <path d="M 160,200 L 180,200 L 180,180" stroke="#667eea" stroke-width="3" fill="none" opacity="0.8"/>
             </svg>
             
-            <!-- Success Checkmark (hidden initially) -->
             <div id="faceDetectedCheck" class="face-detected-check">
                 <svg viewBox="0 0 52 52" xmlns="http://www.w3.org/2000/svg">
                     <circle cx="26" cy="26" r="25" fill="#10b981"/>
@@ -706,7 +837,6 @@ body {
         </div>
     </div>
     
-    <!-- Status Text -->
     <div class="calibration-status">
         <div class="status-indicator">
             <div class="scanning-dot"></div>
@@ -714,7 +844,6 @@ body {
         <p id="calibrationStatus" class="status-text">Detecting face...</p>
     </div>
     
-    <!-- Progress Indicator -->
     <div class="calibration-progress">
         <div id="calibrationProgressBar" class="progress-bar"></div>
     </div>
@@ -722,34 +851,70 @@ body {
 </div>
 
 <!-- ============================================================================
-     SCREEN 4: ACTIVE CHALLENGE - 10/10
+     SCREEN 4: ACTIVE CHALLENGE
      ============================================================================ -->
 <div id="screen4" class="screen">
     
-    <!-- Header -->
     <div class="challenge-header">
         <p id="screen4ProgressText" class="challenge-progress-text">Challenge 1 of 2</p>
         <h2 id="screen4Instruction" class="challenge-instruction">Turn your head to the left</h2>
         <p id="screen4Status" class="challenge-status">Get ready...</p>
     </div>
     
-    <!-- Camera Feed -->
     <div class="challenge-camera-wrapper">
         <video id="challengeVideo" autoplay muted playsinline></video>
     </div>
     
-    <!-- Simple Direction Hint (no fancy overlay) -->
     <div id="screen4Hint" class="instruction-hint" style="display: none;">
         <span class="instruction-hint-icon">⬅️</span>
         <span>Turn left now</span>
     </div>
     
-    <!-- Timer Countdown -->
     <div id="screen4TimerCountdown" class="timer-countdown">3</div>
     
-    <!-- Timer Bar -->
     <div class="timer-bar-container">
         <div id="screen4TimerBar" class="timer-bar"></div>
+    </div>
+    
+</div>
+
+<!-- ============================================================================
+     SCREEN 5: CHALLENGE RESULT LOCK - 10/10
+     ============================================================================ -->
+<div id="screen5" class="screen">
+    
+    <!-- Result Icon (Success or Failure) -->
+    <div id="screen5IconWrapper" class="result-icon-wrapper success">
+        <div id="screen5Icon" class="result-icon">✓</div>
+    </div>
+    
+    <!-- Title -->
+    <h2 id="screen5Title" class="result-title success">Challenge Completed</h2>
+    
+    <!-- Subtitle -->
+    <p id="screen5Subtitle" class="result-subtitle">Head movement detected successfully</p>
+    
+    <!-- Detail Box (what was detected) -->
+    <div id="screen5Detail" class="result-detail">
+        <div class="result-detail-label">Detection Result</div>
+        <div id="screen5DetailValue" class="result-detail-value">Movement to the left verified</div>
+    </div>
+    
+    <!-- Buttons -->
+    <div id="screen5ButtonsSuccess" style="display: none;">
+        <button class="btn-continue" onclick="continueToNextChallenge()">
+            Continue
+        </button>
+        <p class="auto-advance-text">Auto-advancing in <span id="screen5AutoAdvance">3</span>s...</p>
+    </div>
+    
+    <div id="screen5ButtonsFailure" style="display: none;">
+        <button class="btn-retry" onclick="retryCurrentChallenge()">
+            🔄 Retry This Challenge
+        </button>
+        <button class="btn-secondary" onclick="skipToNextChallenge()">
+            Skip Challenge
+        </button>
     </div>
     
 </div>
@@ -774,6 +939,10 @@ let sessionResults = [];
 let mediaRecorder = null;
 let recordedChunks = [];
 let challengeTimerInterval = null;
+let autoAdvanceInterval = null;
+
+// Current challenge result (for Screen 5)
+let currentChallengeResult = null;
 
 // ============================================================================
 // SCREEN NAVIGATION SYSTEM
@@ -783,16 +952,15 @@ function goToScreen1() {
     hideAllScreens();
     document.getElementById('screen1').classList.add('active');
     
-    // Cleanup: Stop camera stream if active
     if (window.cameraStream) {
         window.cameraStream.getTracks().forEach(track => track.stop());
         window.cameraStream = null;
         console.log('🛑 Camera stream stopped');
     }
     
-    // Clear calibration intervals
     if (calibrationCheckInterval) clearInterval(calibrationCheckInterval);
     if (calibrationProgressInterval) clearInterval(calibrationProgressInterval);
+    if (autoAdvanceInterval) clearInterval(autoAdvanceInterval);
 }
 
 function goToScreen2() {
@@ -810,15 +978,21 @@ function goToScreen4() {
     document.getElementById('screen4').classList.add('active');
 }
 
+function goToScreen5() {
+    hideAllScreens();
+    document.getElementById('screen5').classList.add('active');
+}
+
 function hideAllScreens() {
     document.getElementById('screen1').classList.remove('active');
     document.getElementById('screen2').classList.remove('active');
     document.getElementById('screen3').classList.remove('active');
     document.getElementById('screen4').classList.remove('active');
+    document.getElementById('screen5').classList.remove('active');
 }
 
 // ============================================================================
-// SCREEN 2: CAMERA PERMISSION LOGIC
+// SCREEN 2: CAMERA PERMISSION
 // ============================================================================
 
 async function requestCameraAccess() {
@@ -837,7 +1011,6 @@ async function requestCameraAccess() {
         console.log('✅ Camera access granted');
         window.cameraStream = stream;
         
-        // Go to Screen 3 (Calibration)
         startCalibrationScreen();
         
     } catch (error) {
@@ -857,20 +1030,17 @@ async function requestCameraAccess() {
 }
 
 // ============================================================================
-// SCREEN 3: PREPARATION / CALIBRATION LOGIC - 10/10
+// SCREEN 3: CALIBRATION
 // ============================================================================
 
 async function startCalibrationScreen() {
     console.log('📸 Starting Screen 3: Calibration');
     
-    // Show Screen 3
     hideAllScreens();
     document.getElementById('screen3').classList.add('active');
     
-    // Get video element
     const calibrationVideo = document.getElementById('calibrationVideo');
     
-    // Use camera stream from Screen 2
     if (window.cameraStream) {
         calibrationVideo.srcObject = window.cameraStream;
     } else {
@@ -878,14 +1048,12 @@ async function startCalibrationScreen() {
         return;
     }
     
-    // Load FaceMesh model if not loaded
     if (!calibrationFaceModel) {
         try {
             calibrationFaceModel = await facemesh.load();
             console.log('✅ FaceMesh model loaded for calibration');
         } catch (error) {
             console.error('❌ Failed to load FaceMesh:', error);
-            // Fallback: skip to challenges after delay
             setTimeout(() => {
                 loadChallengesAndStart();
             }, 2000);
@@ -893,7 +1061,6 @@ async function startCalibrationScreen() {
         }
     }
     
-    // Start calibration process
     runCalibration(calibrationVideo);
 }
 
@@ -905,42 +1072,36 @@ function runCalibration(videoElement) {
     
     let faceDetectedTime = null;
     let calibrationStartTime = Date.now();
-    const CALIBRATION_DURATION = 2000; // 2 seconds
-    const REQUIRED_STABLE_TIME = 500; // Face must be stable for 500ms
+    const CALIBRATION_DURATION = 2000;
+    const REQUIRED_STABLE_TIME = 500;
     
-    // Progress bar animation
     let progress = 0;
     calibrationProgressInterval = setInterval(() => {
         const elapsed = Date.now() - calibrationStartTime;
         progress = Math.min((elapsed / CALIBRATION_DURATION) * 100, 100);
         progressBar.style.width = progress + '%';
         
-        // Force advance after max duration
         if (elapsed >= CALIBRATION_DURATION && !faceDetectedTime) {
             console.log('⏱️ Calibration timeout - advancing anyway');
             completeCalibration();
         }
     }, 50);
     
-    // Face detection loop
     calibrationCheckInterval = setInterval(async () => {
         try {
             const predictions = await calibrationFaceModel.estimateFaces(videoElement);
             
             if (predictions.length === 1) {
-                // Single face detected
                 if (!faceDetectedTime) {
                     faceDetectedTime = Date.now();
                     console.log('👤 Face detected - starting stability check');
                     
-                    // Update UI
                     statusText.innerText = 'Face detected! ✓';
                     statusText.classList.add('success');
                     faceOutline.classList.add('detected');
                     checkmark.classList.add('show');
                 }
                 
-                // Check if face has been stable long enough
                 const stableTime = Date.now() - faceDetectedTime;
                 if (stableTime >= REQUIRED_STABLE_TIME) {
                     console.log('✅ Face stable - calibration complete');
@@ -948,7 +1109,6 @@ function runCalibration(videoElement) {
                 }
                 
             } else if (predictions.length === 0) {
-                // No face - reset
                 if (faceDetectedTime) {
                     console.log('👤 Face lost - resetting');
                     faceDetectedTime = null;
@@ -958,7 +1118,6 @@ function runCalibration(videoElement) {
                     checkmark.classList.remove('show');
                 }
             } else {
-                // Multiple faces - reset
                 if (faceDetectedTime) {
                     console.log('⚠️ Multiple faces - resetting');
                     faceDetectedTime = null;
@@ -972,27 +1131,24 @@ function runCalibration(videoElement) {
         } catch (error) {
             console.error('Face detection error:', error);
         }
-    }, 100); // Check every 100ms
+    }, 100);
 }
 
 function completeCalibration() {
-    // Clear intervals
     clearInterval(calibrationCheckInterval);
     clearInterval(calibrationProgressInterval);
     
-    // Set progress to 100%
     document.getElementById('calibrationProgressBar').style.width = '100%';
     
     console.log('✅ Calibration complete - loading challenges');
     
-    // Small delay for visual feedback, then load challenges
     setTimeout(() => {
         loadChallengesAndStart();
     }, 500);
 }
 
 // ============================================================================
-// LOAD CHALLENGES AND START SCREEN 4
+// LOAD CHALLENGES
 // ============================================================================
 
 async function loadChallengesAndStart() {
@@ -1010,7 +1166,6 @@ async function loadChallengesAndStart() {
             return;
         }
         
-        // Store challenges
         challenges = data.challenges.map(ch => ({
             challenge_id: ch.challenge_id,
             token_id: ch.token_id,
@@ -1021,11 +1176,9 @@ async function loadChallengesAndStart() {
         
         console.log('✅ Challenges loaded:', challenges);
         
-        // Reset state
         challengeIndex = 0;
         sessionResults = [];
         
-        // Start first challenge
         startChallenge();
         
     } catch (error) {
@@ -1035,14 +1188,14 @@ async function loadChallengesAndStart() {
 }
 
 // ============================================================================
-// SCREEN 4: ACTIVE CHALLENGE LOGIC - 10/10
+// SCREEN 4: ACTIVE CHALLENGE
 // ============================================================================
 
 function startChallenge() {
     if (challengeIndex >= challenges.length) {
         console.log('✅ All challenges complete');
-        // TODO: Move to Screen 5 (Result Lock)
-        alert('All challenges complete! (Screen 5 coming next)');
+        // TODO: Move to Screen 6 (Transition) then Screen 7 (Final Decision)
+        alert('All challenges complete! (Screens 6-7 coming next)');
         return;
     }
     
@@ -1052,21 +1205,17 @@ function startChallenge() {
     
     console.log(`🎯 Starting challenge ${challengeNumber} of ${totalChallenges}:`, challenge.instruction);
     
-    // Show Screen 4
     goToScreen4();
     
-    // Set video source
     const challengeVideo = document.getElementById('challengeVideo');
     challengeVideo.srcObject = window.cameraStream;
     
-    // Update UI
     document.getElementById('screen4ProgressText').innerText = 
         `Challenge ${challengeNumber} of ${totalChallenges}`;
     document.getElementById('screen4Instruction').innerText = challenge.instruction;
     document.getElementById('screen4Status').innerText = 'Get ready...';
     document.getElementById('screen4Status').classList.remove('listening');
     
-    // Update hint icon
     const hint = document.getElementById('screen4Hint');
     const hintIcon = hint.querySelector('.instruction-hint-icon');
     const hintText = hint.querySelector('span:last-child');
@@ -1081,7 +1230,6 @@ function startChallenge() {
         hint.style.display = 'none';
     }
     
-    // Wait 1 second, then start timer
     setTimeout(() => {
         runChallengeTimer(challenge);
     }, 1000);
@@ -1090,14 +1238,11 @@ function startChallenge() {
 function runChallengeTimer(challenge) {
     console.log('⏱️ Starting 3-second validation window');
     
-    // Update status
     document.getElementById('screen4Status').innerText = 'Listening...';
     document.getElementById('screen4Status').classList.add('listening');
     
-    // Show hint
     document.getElementById('screen4Hint').style.display = 'inline-flex';
     
-    // Start recording
     recordedChunks = [];
     mediaRecorder = new MediaRecorder(window.cameraStream);
     mediaRecorder.ondataavailable = e => e.data.size && recordedChunks.push(e.data);
@@ -1106,7 +1251,6 @@ function runChallengeTimer(challenge) {
     
     console.log('🔴 Recording started');
     
-    // Timer countdown: 3...2...1...0
     let timeLeft = 3;
     const timerCountdown = document.getElementById('screen4TimerCountdown');
     const timerBar = document.getElementById('screen4TimerBar');
@@ -1119,30 +1263,24 @@ function runChallengeTimer(challenge) {
     challengeTimerInterval = setInterval(() => {
         timeLeft--;
         
-        // Update countdown number
         timerCountdown.innerText = timeLeft;
         
-        // Update progress bar
         const progress = (timeLeft / 3) * 100;
         timerBar.style.width = progress + '%';
         
-        // Add warning style at 1 second
         if (timeLeft === 1) {
             timerCountdown.classList.add('warning');
             timerBar.classList.add('warning');
         }
         
-        // Stop at 0
         if (timeLeft <= 0) {
             clearInterval(challengeTimerInterval);
             console.log('⏹️ Timer complete - stopping recording');
             
-            // Stop recording
             if (mediaRecorder && mediaRecorder.state === 'recording') {
                 mediaRecorder.stop();
             }
             
-            // Update UI
             document.getElementById('screen4Status').innerText = 'Processing...';
             document.getElementById('screen4Status').classList.remove('listening');
             document.getElementById('screen4Hint').style.display = 'none';
@@ -1154,10 +1292,8 @@ function runChallengeTimer(challenge) {
 async function handleChallengeComplete(challenge) {
     console.log('📤 Challenge complete - submitting video');
     
-    // Create blob from recorded chunks
     const blob = new Blob(recordedChunks, { type: "video/webm" });
     
-    // Create form data
     const formData = new FormData();
     formData.append("video", blob);
     formData.append("challenge_id", challenge.challenge_id);
@@ -1176,15 +1312,14 @@ async function handleChallengeComplete(challenge) {
         
         console.log('📥 Verification result:', result);
         
-        // Store result
+        // Store result globally
+        currentChallengeResult = result;
+        
+        // Store in session results
         sessionResults.push(result);
         
-        // Move to next challenge after brief delay
-        challengeIndex++;
-        
-        setTimeout(() => {
-            startChallenge();
-        }, 1000);
+        // Show Screen 5 (Result Lock)
+        showResultScreen(result, challenge);
         
     } catch (error) {
         console.error('❌ Submission error:', error);
@@ -1193,7 +1328,138 @@ async function handleChallengeComplete(challenge) {
 }
 
 // ============================================================================
-// BOT DETECTION (Hidden from user per team requirements)
+// SCREEN 5: CHALLENGE RESULT LOCK - 10/10
+// ============================================================================
+
+function showResultScreen(result, challenge) {
+    console.log('📋 Showing result screen:', result);
+    
+    goToScreen5();
+    
+    const iconWrapper = document.getElementById('screen5IconWrapper');
+    const icon = document.getElementById('screen5Icon');
+    const title = document.getElementById('screen5Title');
+    const subtitle = document.getElementById('screen5Subtitle');
+    const detailValue = document.getElementById('screen5DetailValue');
+    const successButtons = document.getElementById('screen5ButtonsSuccess');
+    const failureButtons = document.getElementById('screen5ButtonsFailure');
+    
+    // Clear auto-advance if exists
+    if (autoAdvanceInterval) clearInterval(autoAdvanceInterval);
+    
+    if (result.challenge_passed) {
+        // ========================================================================
+        // SUCCESS STATE
+        // ========================================================================
+        
+        iconWrapper.className = 'result-icon-wrapper success';
+        icon.innerText = '✓';
+        
+        title.className = 'result-title success';
+        title.innerText = 'Challenge Completed';
+        
+        // Generate subtitle based on instruction
+        const instruction = challenge.instruction.toLowerCase();
+        if (instruction.includes('left')) {
+            subtitle.innerText = 'Head movement to the left detected';
+            detailValue.innerText = 'Movement to the left verified';
+        } else if (instruction.includes('right')) {
+            subtitle.innerText = 'Head movement to the right detected';
+            detailValue.innerText = 'Movement to the right verified';
+        } else {
+            subtitle.innerText = 'Challenge completed successfully';
+            detailValue.innerText = 'Action verified';
+        }
+        
+        // Show success buttons
+        successButtons.style.display = 'block';
+        failureButtons.style.display = 'none';
+        
+        // Auto-advance countdown
+        let autoAdvanceTime = 3;
+        document.getElementById('screen5AutoAdvance').innerText = autoAdvanceTime;
+        
+        autoAdvanceInterval = setInterval(() => {
+            autoAdvanceTime--;
+            document.getElementById('screen5AutoAdvance').innerText = autoAdvanceTime;
+            
+            if (autoAdvanceTime <= 0) {
+                clearInterval(autoAdvanceInterval);
+                continueToNextChallenge();
+            }
+        }, 1000);
+        
+    } else {
+        // ========================================================================
+        // FAILURE STATE
+        // ========================================================================
+        
+        iconWrapper.className = 'result-icon-wrapper failure';
+        icon.innerText = '✕';
+        
+        title.className = 'result-title failure';
+        title.innerText = 'Challenge Not Completed';
+        
+        // Determine failure reason
+        if (result.error) {
+            subtitle.innerText = result.error;
+            detailValue.innerText = result.error;
+        } else if (result.direction_detected === 'none') {
+            subtitle.innerText = 'We didn\'t detect enough movement';
+            detailValue.innerText = 'No significant head movement detected';
+        } else if (!result.direction_matched) {
+            subtitle.innerText = 'Movement in wrong direction detected';
+            detailValue.innerText = `Expected: ${challenge.instruction} | Detected: ${result.direction_detected}`;
+        } else {
+            subtitle.innerText = 'We didn\'t detect enough movement';
+            detailValue.innerText = 'Insufficient movement detected';
+        }
+        
+        // Show failure buttons
+        successButtons.style.display = 'none';
+        failureButtons.style.display = 'block';
+    }
+}
+
+// ============================================================================
+// SCREEN 5: BUTTON ACTIONS
+// ============================================================================
+
+function continueToNextChallenge() {
+    if (autoAdvanceInterval) clearInterval(autoAdvanceInterval);
+    
+    console.log('✅ Continuing to next challenge');
+    
+    // Move to next challenge
+    challengeIndex++;
+    startChallenge();
+}
+
+function retryCurrentChallenge() {
+    if (autoAdvanceInterval) clearInterval(autoAdvanceInterval);
+    
+    console.log('🔄 Retrying current challenge');
+    
+    // Remove the failed result from session
+    sessionResults.pop();
+    
+    // Retry same challenge (don't increment index)
+    startChallenge();
+}
+
+function skipToNextChallenge() {
+    if (autoAdvanceInterval) clearInterval(autoAdvanceInterval);
+    
+    console.log('⏭️ Skipping to next challenge');
+    
+    // Current failed result already in sessionResults
+    // Move to next challenge
+    challengeIndex++;
+    startChallenge();
+}
+
+// ============================================================================
+// BOT DETECTION (Hidden from user)
 // ============================================================================
 
 const BotDetector = {
