@@ -272,7 +272,158 @@ body {
 }
 
 /* ============================================================================
-   YOUR EXISTING STYLES (Screens 3-7)
+   SCREEN 3: PREPARATION / CALIBRATION STYLES - 10/10
+   ============================================================================ */
+
+.calibration-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: #1a202c;
+    margin-bottom: 8px;
+}
+
+.calibration-subtitle {
+    font-size: 16px;
+    color: #718096;
+    margin-bottom: 24px;
+}
+
+.calibration-camera-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 320px;
+    margin: 0 auto 24px;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+#calibrationVideo {
+    width: 100%;
+    height: auto;
+    display: block;
+    transform: scaleX(-1); /* Mirror the video */
+}
+
+.face-outline-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.face-outline {
+    width: 60%;
+    height: 80%;
+    animation: pulse-outline 2s ease-in-out infinite;
+}
+
+@keyframes pulse-outline {
+    0%, 100% {
+        opacity: 0.6;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.02);
+    }
+}
+
+.face-detected-check {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    width: 80px;
+    height: 80px;
+    opacity: 0;
+    transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.face-detected-check.show {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+}
+
+.calibration-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.status-indicator {
+    width: 12px;
+    height: 12px;
+    position: relative;
+}
+
+.scanning-dot {
+    width: 12px;
+    height: 12px;
+    background: #667eea;
+    border-radius: 50%;
+    animation: scanning-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes scanning-pulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.5);
+        opacity: 0.5;
+    }
+}
+
+.status-text {
+    font-size: 16px;
+    font-weight: 600;
+    color: #4a5568;
+    transition: color 0.3s ease;
+}
+
+.status-text.success {
+    color: #10b981;
+}
+
+.calibration-progress {
+    width: 100%;
+    height: 4px;
+    background: #e2e8f0;
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 16px;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    width: 0%;
+    transition: width 0.3s ease;
+    border-radius: 2px;
+}
+
+/* Success state */
+.face-outline.detected {
+    animation: none;
+    opacity: 1;
+}
+
+.face-outline.detected rect {
+    stroke: #10b981;
+    stroke-dasharray: none;
+}
+
+/* ============================================================================
+   YOUR EXISTING STYLES (Screens 4-7)
    ============================================================================ */
 
 /* Container for camera feed section */
@@ -640,7 +791,64 @@ button:disabled {
 </div>
 
 <!-- ============================================================================
-     SCREEN 3-7: YOUR EXISTING VERIFICATION FLOW
+     SCREEN 3: PREPARATION / CALIBRATION (2-3 seconds) - 10/10
+     ============================================================================ -->
+<div id="screen3" class="screen">
+    
+    <!-- Header -->
+    <h2 class="calibration-title">Position Your Face</h2>
+    <p class="calibration-subtitle">Center your face in the frame</p>
+    
+    <!-- Camera Feed with Face Outline -->
+    <div class="calibration-camera-wrapper">
+        <video id="calibrationVideo" autoplay muted playsinline></video>
+        
+        <!-- Face Outline Overlay -->
+        <div class="face-outline-container">
+            <svg class="face-outline" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
+                <!-- Rounded rectangle for face outline -->
+                <rect x="20" y="20" width="160" height="200" rx="80" ry="100" 
+                      fill="none" 
+                      stroke="#667eea" 
+                      stroke-width="3" 
+                      stroke-dasharray="8 4"
+                      opacity="0.6"/>
+                
+                <!-- Corner guides -->
+                <path d="M 40,40 L 20,40 L 20,60" stroke="#667eea" stroke-width="3" fill="none" opacity="0.8"/>
+                <path d="M 160,40 L 180,40 L 180,60" stroke="#667eea" stroke-width="3" fill="none" opacity="0.8"/>
+                <path d="M 40,200 L 20,200 L 20,180" stroke="#667eea" stroke-width="3" fill="none" opacity="0.8"/>
+                <path d="M 160,200 L 180,200 L 180,180" stroke="#667eea" stroke-width="3" fill="none" opacity="0.8"/>
+            </svg>
+            
+            <!-- Success Checkmark (hidden initially) -->
+            <div id="faceDetectedCheck" class="face-detected-check">
+                <svg viewBox="0 0 52 52" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="26" cy="26" r="25" fill="#10b981"/>
+                    <path fill="none" stroke="white" stroke-width="4" 
+                          d="M14 27l7 7 16-16"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Status Text -->
+    <div class="calibration-status">
+        <div class="status-indicator">
+            <div class="scanning-dot"></div>
+        </div>
+        <p id="calibrationStatus" class="status-text">Detecting face...</p>
+    </div>
+    
+    <!-- Progress Indicator -->
+    <div class="calibration-progress">
+        <div id="calibrationProgressBar" class="progress-bar"></div>
+    </div>
+    
+</div>
+
+<!-- ============================================================================
+     SCREEN 4-7: YOUR EXISTING VERIFICATION FLOW
      ============================================================================ -->
 <div id="verificationContainer" style="display: none;">
     
@@ -713,19 +921,37 @@ function goToScreen2() {
     document.getElementById('screen2').classList.add('active');
 }
 
+function goToScreen3() {
+    hideAllScreens();
+    document.getElementById('screen3').classList.add('active');
+}
+
 function goToVerification() {
     hideAllScreens();
     document.getElementById('verificationContainer').style.display = 'block';
     
-    // Automatically start face verification
+    // Use the already-loaded face model
+    faceModel = calibrationFaceModel;
+    
+    // Set video source
+    video.srcObject = window.cameraStream;
+    
+    // Automatically start face verification section
     setTimeout(() => {
-        startFaceBtn.click();
-    }, 500);
+        // Skip bot detection since we did it earlier
+        startFaceBtn.style.display = "none";
+        faceSection.style.display = "block";
+        
+        // Face model already loaded, start detection immediately
+        document.getElementById("faceStatus").innerText = "📷 Please show your face clearly";
+        startFaceDetectionLoop();
+    }, 300);
 }
 
 function hideAllScreens() {
     document.getElementById('screen1').classList.remove('active');
     document.getElementById('screen2').classList.remove('active');
+    document.getElementById('screen3').classList.remove('active');
     document.getElementById('verificationContainer').style.display = 'none';
 }
 
@@ -746,22 +972,16 @@ async function requestCameraAccess() {
             } 
         });
         
-        // Success! Camera access granted
         console.log('✅ Camera access granted');
-        
-        // Store stream for later use
         window.cameraStream = stream;
         
-        // Move to verification screens
-        goToVerification();
+        // ✅ Go to Screen 3 (Calibration) instead of verification
+        startCalibrationScreen();
         
     } catch (error) {
         console.error('❌ Camera access denied:', error);
-        
-        // Show error message
         errorDiv.style.display = 'block';
         
-        // Log specific error type
         if (error.name === 'NotAllowedError') {
             console.log('User denied camera permission');
         } else if (error.name === 'NotFoundError') {
@@ -772,6 +992,145 @@ async function requestCameraAccess() {
                 'Camera is already in use by another application. Please close other apps and try again.';
         }
     }
+}
+
+// ============================================================================
+// SCREEN 3: PREPARATION / CALIBRATION LOGIC - 10/10
+// ============================================================================
+
+let calibrationFaceModel = null;
+let calibrationCheckInterval = null;
+let calibrationProgressInterval = null;
+
+async function startCalibrationScreen() {
+    console.log('📸 Starting Screen 3: Calibration');
+    
+    // Show Screen 3
+    hideAllScreens();
+    document.getElementById('screen3').classList.add('active');
+    
+    // Get video element
+    const calibrationVideo = document.getElementById('calibrationVideo');
+    
+    // Use camera stream from Screen 2
+    if (window.cameraStream) {
+        calibrationVideo.srcObject = window.cameraStream;
+    } else {
+        console.error('❌ No camera stream available');
+        return;
+    }
+    
+    // Load FaceMesh model if not loaded
+    if (!calibrationFaceModel) {
+        try {
+            calibrationFaceModel = await facemesh.load();
+            console.log('✅ FaceMesh model loaded for calibration');
+        } catch (error) {
+            console.error('❌ Failed to load FaceMesh:', error);
+            // Fallback: skip to verification after delay
+            setTimeout(() => {
+                goToVerification();
+            }, 2000);
+            return;
+        }
+    }
+    
+    // Start calibration process
+    runCalibration(calibrationVideo);
+}
+
+function runCalibration(videoElement) {
+    const statusText = document.getElementById('calibrationStatus');
+    const progressBar = document.getElementById('calibrationProgressBar');
+    const faceOutline = document.querySelector('.face-outline');
+    const checkmark = document.getElementById('faceDetectedCheck');
+    
+    let faceDetectedTime = null;
+    let calibrationStartTime = Date.now();
+    const CALIBRATION_DURATION = 2000; // 2 seconds
+    const REQUIRED_STABLE_TIME = 500; // Face must be stable for 500ms
+    
+    // Progress bar animation
+    let progress = 0;
+    calibrationProgressInterval = setInterval(() => {
+        const elapsed = Date.now() - calibrationStartTime;
+        progress = Math.min((elapsed / CALIBRATION_DURATION) * 100, 100);
+        progressBar.style.width = progress + '%';
+        
+        // Force advance after max duration
+        if (elapsed >= CALIBRATION_DURATION && !faceDetectedTime) {
+            console.log('⏱️ Calibration timeout - advancing anyway');
+            completeCalibration();
+        }
+    }, 50);
+    
+    // Face detection loop
+    calibrationCheckInterval = setInterval(async () => {
+        try {
+            const predictions = await calibrationFaceModel.estimateFaces(videoElement);
+            
+            if (predictions.length === 1) {
+                // Single face detected
+                if (!faceDetectedTime) {
+                    faceDetectedTime = Date.now();
+                    console.log('👤 Face detected - starting stability check');
+                    
+                    // Update UI
+                    statusText.innerText = 'Face detected! ✓';
+                    statusText.classList.add('success');
+                    faceOutline.classList.add('detected');
+                    checkmark.classList.add('show');
+                }
+                
+                // Check if face has been stable long enough
+                const stableTime = Date.now() - faceDetectedTime;
+                if (stableTime >= REQUIRED_STABLE_TIME) {
+                    console.log('✅ Face stable - calibration complete');
+                    completeCalibration();
+                }
+                
+            } else if (predictions.length === 0) {
+                // No face - reset
+                if (faceDetectedTime) {
+                    console.log('👤 Face lost - resetting');
+                    faceDetectedTime = null;
+                    statusText.innerText = 'Detecting face...';
+                    statusText.classList.remove('success');
+                    faceOutline.classList.remove('detected');
+                    checkmark.classList.remove('show');
+                }
+            } else {
+                // Multiple faces - reset
+                if (faceDetectedTime) {
+                    console.log('⚠️ Multiple faces - resetting');
+                    faceDetectedTime = null;
+                    statusText.innerText = 'Multiple faces detected';
+                    statusText.classList.remove('success');
+                    faceOutline.classList.remove('detected');
+                    checkmark.classList.remove('show');
+                }
+            }
+            
+        } catch (error) {
+            console.error('Face detection error:', error);
+        }
+    }, 100); // Check every 100ms
+}
+
+function completeCalibration() {
+    // Clear intervals
+    clearInterval(calibrationCheckInterval);
+    clearInterval(calibrationProgressInterval);
+    
+    // Set progress to 100%
+    document.getElementById('calibrationProgressBar').style.width = '100%';
+    
+    console.log('✅ Calibration complete - advancing to verification');
+    
+    // Small delay for visual feedback, then advance
+    setTimeout(() => {
+        goToVerification();
+    }, 500);
 }
 
 // ============================================================================
@@ -1039,7 +1398,7 @@ const BotDetector = {
 };
 
 // ============================================================================
-// YOUR EXISTING VERIFICATION CODE (Unchanged)
+// YOUR EXISTING VERIFICATION CODE
 // ============================================================================
 
 const video = document.getElementById("video");
@@ -1128,11 +1487,9 @@ startFaceBtn.onclick = async () => {
     startFaceBtn.style.display = "none";
     faceSection.style.display = "block";
     
-    // Use the camera stream we already got from Screen 2
     if (window.cameraStream) {
         video.srcObject = window.cameraStream;
     } else {
-        // Fallback: request again if needed
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 video: { 
