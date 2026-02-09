@@ -215,7 +215,7 @@ async def get_challenge_endpoint(request: Request, device_id: str = Query(...), 
     cleanup_expired_challenges(db)
 
     # Adjust challenge count based on trust
-    num_challenges = 1 if is_trusted else 3
+    num_challenges = 1 if is_trusted else 2
     
     # Generate challenges
     challenges = generate_adaptive_challenges(
