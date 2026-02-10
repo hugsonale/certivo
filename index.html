@@ -662,7 +662,7 @@ body {
 }
 
 /* ============================================================================
-   SCREEN 6: NEXT CHALLENGE TRANSITION - 10/10
+   SCREEN 6: NEXT CHALLENGE TRANSITION
    ============================================================================ */
 
 .transition-container {
@@ -755,7 +755,6 @@ body {
     }
 }
 
-/* Progress indicator for transition */
 .transition-progress-bar {
     width: 100%;
     max-width: 200px;
@@ -777,6 +776,242 @@ body {
 @keyframes fill-progress {
     from { width: 0%; }
     to { width: 100%; }
+}
+
+/* ============================================================================
+   SCREEN 7: FINAL DECISION - 10/10
+   ============================================================================ */
+
+.final-icon-wrapper {
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: scaleInBig 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@keyframes scaleInBig {
+    from {
+        opacity: 0;
+        transform: scale(0) rotate(-180deg);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) rotate(0deg);
+    }
+}
+
+.final-icon-wrapper.success {
+    background: #10b981;
+    box-shadow: 0 12px 32px rgba(16, 185, 129, 0.5);
+}
+
+.final-icon-wrapper.failure {
+    background: #ef4444;
+    box-shadow: 0 12px 32px rgba(239, 68, 68, 0.5);
+}
+
+.final-icon {
+    font-size: 72px;
+    color: white;
+}
+
+.final-headline {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    line-height: 1.2;
+}
+
+.final-headline.success {
+    color: #10b981;
+}
+
+.final-headline.failure {
+    color: #ef4444;
+}
+
+.final-subtext {
+    font-size: 18px;
+    color: #4a5568;
+    line-height: 1.6;
+    margin-bottom: 32px;
+}
+
+.trust-score-container {
+    background: #f7fafc;
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 32px;
+}
+
+.trust-score-label {
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #667eea;
+    margin-bottom: 12px;
+}
+
+.trust-score-bar-outer {
+    width: 100%;
+    height: 24px;
+    background: #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 12px;
+    position: relative;
+}
+
+.trust-score-bar {
+    height: 100%;
+    width: 0%;
+    transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+}
+
+.trust-score-bar.high {
+    background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+}
+
+.trust-score-bar.medium {
+    background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);
+}
+
+.trust-score-bar.low {
+    background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+}
+
+.trust-score-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.3) 50%,
+        transparent 100%
+    );
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.trust-score-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: #1a202c;
+}
+
+.trust-level-badge {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 24px;
+}
+
+.trust-level-badge.high {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.trust-level-badge.medium {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.trust-level-badge.low {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.session-details {
+    background: #f7fafc;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 24px;
+    text-align: left;
+}
+
+.session-detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.session-detail-row:last-child {
+    border-bottom: none;
+}
+
+.session-detail-label {
+    font-size: 13px;
+    color: #718096;
+    font-weight: 500;
+}
+
+.session-detail-value {
+    font-size: 13px;
+    color: #1a202c;
+    font-weight: 600;
+}
+
+.btn-start-over {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 16px 32px;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    width: 100%;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-start-over:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+}
+
+.failure-explanation {
+    background: #fff7ed;
+    border-left: 4px solid #f59e0b;
+    padding: 16px;
+    border-radius: 8px;
+    margin-bottom: 24px;
+    text-align: left;
+}
+
+.failure-explanation-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #92400e;
+    margin-bottom: 8px;
+}
+
+.failure-explanation-text {
+    font-size: 14px;
+    color: #78350f;
+    line-height: 1.5;
 }
 
 /* ============================================================================
@@ -815,6 +1050,23 @@ body {
     
     .transition-text {
         font-size: 18px;
+    }
+    
+    .final-icon-wrapper {
+        width: 100px;
+        height: 100px;
+    }
+    
+    .final-icon {
+        font-size: 60px;
+    }
+    
+    .final-headline {
+        font-size: 26px;
+    }
+    
+    .final-subtext {
+        font-size: 16px;
     }
 }
 
@@ -1036,35 +1288,106 @@ body {
 </div>
 
 <!-- ============================================================================
-     SCREEN 6: NEXT CHALLENGE TRANSITION - 10/10
+     SCREEN 6: NEXT CHALLENGE TRANSITION
      ============================================================================ -->
 <div id="screen6" class="screen">
     
     <div class="transition-container">
         
-        <!-- Icon -->
         <div class="transition-icon-wrapper">
             <div class="transition-icon">→</div>
         </div>
         
-        <!-- Progress Text -->
         <p id="screen6Progress" class="transition-progress">Challenge 2 of 2</p>
         
-        <!-- Transition Text -->
         <p class="transition-text">Next challenge starting...</p>
         
-        <!-- Loading Dots -->
         <div class="transition-loading">
             <div class="transition-dot"></div>
             <div class="transition-dot"></div>
             <div class="transition-dot"></div>
         </div>
         
-        <!-- Progress Bar -->
         <div class="transition-progress-bar">
             <div class="transition-progress-fill"></div>
         </div>
         
+    </div>
+    
+</div>
+
+<!-- ============================================================================
+     SCREEN 7: FINAL DECISION - 10/10
+     ============================================================================ -->
+<div id="screen7" class="screen">
+    
+    <!-- Success/Failure Icon -->
+    <div id="screen7IconWrapper" class="final-icon-wrapper success">
+        <div id="screen7Icon" class="final-icon">✓</div>
+    </div>
+    
+    <!-- Headline -->
+    <h1 id="screen7Headline" class="final-headline success">Verification Successful</h1>
+    
+    <!-- Subtext -->
+    <p id="screen7Subtext" class="final-subtext">You've been verified as human.</p>
+    
+    <!-- Failure Explanation (hidden by default) -->
+    <div id="screen7FailureExplanation" class="failure-explanation" style="display: none;">
+        <div class="failure-explanation-title">Why did verification fail?</div>
+        <div id="screen7FailureText" class="failure-explanation-text">
+            We couldn't detect enough human movement during the challenges.
+        </div>
+    </div>
+    
+    <!-- Trust Score Container (success only) -->
+    <div id="screen7TrustContainer" class="trust-score-container">
+        <div class="trust-score-label">Trust Score</div>
+        
+        <div class="trust-score-bar-outer">
+            <div id="screen7TrustBar" class="trust-score-bar high"></div>
+        </div>
+        
+        <div class="trust-score-value">
+            <span id="screen7TrustScore">95</span>% 
+            <span id="screen7TrustBadge" class="trust-level-badge high">High Trust</span>
+        </div>
+    </div>
+    
+    <!-- Session Details -->
+    <div id="screen7SessionDetails" class="session-details">
+        <div class="session-detail-row">
+            <span class="session-detail-label">Session ID</span>
+            <span id="screen7SessionId" class="session-detail-value">device_12345</span>
+        </div>
+        <div class="session-detail-row">
+            <span class="session-detail-label">Challenges Completed</span>
+            <span id="screen7ChallengesCompleted" class="session-detail-value">2 of 2</span>
+        </div>
+        <div class="session-detail-row">
+            <span class="session-detail-label">Verification Date</span>
+            <span id="screen7Date" class="session-detail-value">Feb 10, 2026</span>
+        </div>
+    </div>
+    
+    <!-- Action Buttons -->
+    <div id="screen7ButtonsSuccess" style="display: none;">
+        <button class="btn-primary" onclick="closeVerification()">
+            Close
+        </button>
+    </div>
+    
+    <div id="screen7ButtonsFailure" style="display: none;">
+        <button class="btn-retry" onclick="retryEntireProcess()">
+            🔄 Try Verification Again
+        </button>
+        <button class="btn-secondary" onclick="closeVerification()">
+            Close
+        </button>
+    </div>
+    
+    <div class="powered-by">
+        Powered by <strong>Certivo</strong>
     </div>
     
 </div>
@@ -1091,6 +1414,7 @@ let challengeTimerInterval = null;
 let autoAdvanceInterval = null;
 
 let currentChallengeResult = null;
+let finalSessionData = null;
 
 // ============================================================================
 // SCREEN NAVIGATION SYSTEM
@@ -1136,6 +1460,11 @@ function goToScreen6() {
     document.getElementById('screen6').classList.add('active');
 }
 
+function goToScreen7() {
+    hideAllScreens();
+    document.getElementById('screen7').classList.add('active');
+}
+
 function hideAllScreens() {
     document.getElementById('screen1').classList.remove('active');
     document.getElementById('screen2').classList.remove('active');
@@ -1143,6 +1472,7 @@ function hideAllScreens() {
     document.getElementById('screen4').classList.remove('active');
     document.getElementById('screen5').classList.remove('active');
     document.getElementById('screen6').classList.remove('active');
+    document.getElementById('screen7').classList.remove('active');
 }
 
 // ============================================================================
@@ -1348,7 +1678,6 @@ async function loadChallengesAndStart() {
 function startChallenge() {
     if (challengeIndex >= challenges.length) {
         console.log('✅ All challenges complete - finalizing');
-        // TODO: Move to Screen 7 (Final Decision)
         finalizeSession();
         return;
     }
@@ -1568,12 +1897,9 @@ function continueToNextChallenge() {
     
     challengeIndex++;
     
-    // Check if there's another challenge
     if (challengeIndex < challenges.length) {
-        // Show Screen 6 (Transition) before next challenge
         showTransitionScreen();
     } else {
-        // All challenges complete - finalize
         finalizeSession();
     }
 }
@@ -1603,7 +1929,7 @@ function skipToNextChallenge() {
 }
 
 // ============================================================================
-// SCREEN 6: NEXT CHALLENGE TRANSITION - 10/10
+// SCREEN 6: NEXT CHALLENGE TRANSITION
 // ============================================================================
 
 function showTransitionScreen() {
@@ -1611,13 +1937,11 @@ function showTransitionScreen() {
     
     goToScreen6();
     
-    // Update progress text
     const challengeNumber = challengeIndex + 1;
     const totalChallenges = challenges.length;
     document.getElementById('screen6Progress').innerText = 
         `Challenge ${challengeNumber} of ${totalChallenges}`;
     
-    // Auto-advance to next challenge after 1 second
     setTimeout(() => {
         console.log('✅ Transition complete - starting next challenge');
         startChallenge();
@@ -1625,7 +1949,7 @@ function showTransitionScreen() {
 }
 
 // ============================================================================
-// FINALIZE SESSION (Screen 7 placeholder)
+// SCREEN 7: FINAL DECISION - 10/10
 // ============================================================================
 
 async function finalizeSession() {
@@ -1642,13 +1966,144 @@ async function finalizeSession() {
         
         console.log('✅ Finalization complete:', final);
         
-        // TODO: Show Screen 7 (Final Decision)
-        alert(`Verification Complete!\n\nTrust Score: ${final.trust_score}%\nTrust Level: ${final.trust_level.toUpperCase()}\n\n(Screen 7 coming next)`);
+        finalSessionData = final;
+        
+        showFinalDecisionScreen(final);
         
     } catch (error) {
         console.error('❌ Finalization error:', error);
         alert('Failed to finalize verification.');
     }
+}
+
+function showFinalDecisionScreen(final) {
+    console.log('🎉 Showing final decision screen:', final);
+    
+    goToScreen7();
+    
+    // Stop camera stream
+    if (window.cameraStream) {
+        window.cameraStream.getTracks().forEach(track => track.stop());
+        window.cameraStream = null;
+        console.log('🛑 Camera stream stopped');
+    }
+    
+    const iconWrapper = document.getElementById('screen7IconWrapper');
+    const icon = document.getElementById('screen7Icon');
+    const headline = document.getElementById('screen7Headline');
+    const subtext = document.getElementById('screen7Subtext');
+    const failureExplanation = document.getElementById('screen7FailureExplanation');
+    const failureText = document.getElementById('screen7FailureText');
+    const trustContainer = document.getElementById('screen7TrustContainer');
+    const trustBar = document.getElementById('screen7TrustBar');
+    const trustScore = document.getElementById('screen7TrustScore');
+    const trustBadge = document.getElementById('screen7TrustBadge');
+    const sessionId = document.getElementById('screen7SessionId');
+    const challengesCompleted = document.getElementById('screen7ChallengesCompleted');
+    const date = document.getElementById('screen7Date');
+    const successButtons = document.getElementById('screen7ButtonsSuccess');
+    const failureButtons = document.getElementById('screen7ButtonsFailure');
+    
+    // Determine success or failure
+    const isSuccess = final.trust_level === 'high' || final.trust_level === 'medium';
+    
+    // Update icon and headline
+    if (isSuccess) {
+        iconWrapper.className = 'final-icon-wrapper success';
+        icon.innerText = '✓';
+        headline.className = 'final-headline success';
+        headline.innerText = 'Verification Successful';
+        subtext.innerText = 'You\'ve been verified as human.';
+        
+        failureExplanation.style.display = 'none';
+        trustContainer.style.display = 'block';
+        successButtons.style.display = 'block';
+        failureButtons.style.display = 'none';
+        
+    } else {
+        iconWrapper.className = 'final-icon-wrapper failure';
+        icon.innerText = '✕';
+        headline.className = 'final-headline failure';
+        headline.innerText = 'Verification Failed';
+        subtext.innerText = 'We couldn\'t verify you as human.';
+        
+        failureExplanation.style.display = 'block';
+        trustContainer.style.display = 'block'; // Still show score
+        successButtons.style.display = 'none';
+        failureButtons.style.display = 'block';
+        
+        // Failure explanation
+        const passedCount = sessionResults.filter(r => r.challenge_passed).length;
+        const totalCount = sessionResults.length;
+        
+        if (passedCount === 0) {
+            failureText.innerText = 'We couldn\'t detect any human movement during the challenges. Please ensure your camera is working and you\'re following the instructions carefully.';
+        } else {
+            failureText.innerText = `You completed ${passedCount} out of ${totalCount} challenges successfully, but the trust score (${final.trust_score}%) was below the minimum threshold for verification.`;
+        }
+    }
+    
+    // Update trust score
+    trustScore.innerText = final.trust_score;
+    
+    // Animate trust bar
+    setTimeout(() => {
+        trustBar.style.width = final.trust_score + '%';
+    }, 300);
+    
+    // Set trust bar color
+    if (final.trust_level === 'high') {
+        trustBar.className = 'trust-score-bar high';
+        trustBadge.className = 'trust-level-badge high';
+        trustBadge.innerText = 'High Trust';
+    } else if (final.trust_level === 'medium') {
+        trustBar.className = 'trust-score-bar medium';
+        trustBadge.className = 'trust-level-badge medium';
+        trustBadge.innerText = 'Medium Trust';
+    } else {
+        trustBar.className = 'trust-score-bar low';
+        trustBadge.className = 'trust-level-badge low';
+        trustBadge.innerText = 'Low Trust';
+    }
+    
+    // Update session details
+    sessionId.innerText = final.session_id || deviceId;
+    
+    const passedCount = sessionResults.filter(r => r.challenge_passed).length;
+    const totalCount = sessionResults.length;
+    challengesCompleted.innerText = `${passedCount} of ${totalCount}`;
+    
+    const now = new Date();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    date.innerText = `${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+}
+
+// ============================================================================
+// SCREEN 7: BUTTON ACTIONS
+// ============================================================================
+
+function closeVerification() {
+    console.log('✅ User closed verification');
+    
+    // In a real app, this would close the modal/iframe or redirect
+    alert('Verification complete! This would close the verification flow.');
+    
+    // For demo: go back to start
+    // goToScreen1();
+}
+
+function retryEntireProcess() {
+    console.log('🔄 User chose to retry entire verification');
+    
+    // Reset all state
+    challenges = [];
+    challengeIndex = 0;
+    sessionResults = [];
+    currentChallengeResult = null;
+    finalSessionData = null;
+    
+    // Go back to screen 1
+    goToScreen1();
 }
 
 // ============================================================================
