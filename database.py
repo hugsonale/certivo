@@ -1,4 +1,3 @@
-# database.py
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -50,11 +49,6 @@ class ChallengeResult(Base):
     liveness_score = Column(Float, nullable=False)
     direction_detected = Column(String, nullable=True)  # "left", "right", "none", "ambiguous"
     direction_matched = Column(Boolean, default=False)
-
-    deepfake_detected = Column(Boolean, default=False)
-    deepfake_score = Column(Float, default=0.0)  # 0.0 = human, 1.0 = deepfake
-    blink_detected = Column(Boolean, default=True)
-    texture_quality = Column(Float, default=1.0)  # 1.0 = perfect, 0.0 = bad
     
     # Metadata
     fast_track = Column(Boolean, default=False)
@@ -266,31 +260,23 @@ def store_challenge_result(db, session_id: str, device_id: str, challenge_id: st
                           direction_detected: str, direction_matched: bool,
                           fast_track: bool = False, video_size_bytes: int = None,
                           frames_analyzed: int = None, face_detected_frames: int = None,
-                          difficulty: str = "medium",
-                          deepfake_detected: bool = False, 
-                          deepfake_score: float = 0.0,     
-                          blink_detected: bool = True,      
-                          texture_quality: float = 1.0):   
+                          difficulty: str = "medium"):
     """Store individual challenge result"""
     result = ChallengeResult(
-    session_id=session_id,
-    device_id=device_id,
-    challenge_id=challenge_id,
-    instruction=instruction,
-    expected_direction=expected_direction,
-    difficulty=difficulty,
-    challenge_passed=challenge_passed,
-    liveness_score=liveness_score,
-    direction_detected=direction_detected,
-    direction_matched=direction_matched,
-    fast_track=fast_track,
-    video_size_bytes=video_size_bytes,
-    frames_analyzed=frames_analyzed,
-    face_detected_frames=face_detected_frames,
-    deepfake_detected=deepfake_detected,      
-    deepfake_score=deepfake_score,            
-    blink_detected=blink_detected,           
-    texture_quality=texture_quality           
+        session_id=session_id,
+        device_id=device_id,
+        challenge_id=challenge_id,
+        instruction=instruction,
+        expected_direction=expected_direction,
+        difficulty=difficulty,
+        challenge_passed=challenge_passed,
+        liveness_score=liveness_score,
+        direction_detected=direction_detected,
+        direction_matched=direction_matched,
+        fast_track=fast_track,
+        video_size_bytes=video_size_bytes,
+        frames_analyzed=frames_analyzed,
+        face_detected_frames=face_detected_frames
     )
     db.add(result)
     db.commit()

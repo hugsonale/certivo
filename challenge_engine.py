@@ -15,16 +15,33 @@ def generate_adaptive_challenges(prev_results=None, num=2, trusted=False):
 
     # STRICT challenge pool (movement-only)
     base_challenges = [
+        
         {
-            "challenge_value": "Turn your head to the left",
-            "difficulty": "easy",
-            "expected_movement": "left"
-        },
-        {
-            "challenge_value": "Turn your head to the right",
-            "difficulty": "easy",
-            "expected_movement": "right"
-        }
+        "challenge_value": "Turn your head to the left",
+        "difficulty": "easy",
+        "expected_movement": "left"
+    },
+    {
+        "challenge_value": "Turn your head to the right",
+        "difficulty": "easy",
+        "expected_movement": "right"
+    },
+    {
+        "challenge_value": "Blink twice",  # ← NEW
+        "difficulty": "easy",
+        "expected_movement": "blink"
+    },
+    {
+        "challenge_value": "Smile naturally",  # ← NEW
+        "difficulty": "easy",
+        "expected_movement": "smile"
+    },
+    {
+        "challenge_value": "Raise your eyebrows",  # ← NEW
+        "difficulty": "medium",
+        "expected_movement": "eyebrows"
+    }
+
     ]
 
     # Trusted devices still use same pool for now

@@ -1,8 +1,7 @@
-# human_verification.py
+
 import os
 import cv2
 from logger import log_event
-from deepfake_detector import DeepfakeDetector
 
 # Thresholds (VERY LENIENT FOR TESTING)
 MIN_VIDEO_FRAMES = 1  # Was 3
@@ -249,18 +248,6 @@ def run_human_verification(session_id: str, challenge_id: str, video_path: str,
             "direction_matched": False
         }
     
-    # ADD BEFORE THAT:
-    # Initialize deepfake detector
-    deepfake_detector = DeepfakeDetector()
-
-    # Run deepfake analysis
-    deepfake_analysis = deepfake_detector.analyze_video(
-    video_path=video_path,
-    expected_direction=expected_direction,
-    session_id=session_id,
-    challenge_id=challenge_id
-)
-
     # Run direction-aware motion analysis
     analysis = _analyze_head_movement_direction(video_path, expected_direction)
     
@@ -382,39 +369,12 @@ def run_human_verification(session_id: str, challenge_id: str, video_path: str,
     
     # ALL CHECKS PASSED - Calculate liveness score
     base_score = 0.98 if fast_track else 0.95
-
-
-    # DEEPFAKE CHECK - CRITICAL
-    if deepfake_analysis["is_likely_deepfake"]:
-        log_event(
-        event="deepfake_detected",
-        session_id=session_id,
-        challenge_id=challenge_id,
-        details={
-            "deepfake_score": deepfake_analysis["deepfake_score"],
-            "blink_detected": deepfake_analysis["blink_detected"],
-            "texture_anomalies": deepfake_analysis["texture_anomalies"],
-            "temporal_issues": deepfake_analysis["temporal_issues"]
-        }
-    )
-        return {
-        "liveness_score": 0.0,
-        "challenge_passed": False,
-        "direction_detected": analysis["direction_detected"],
-        "direction_matched": False,
-        "deepfake_detected": True,
-        "deepfake_score": deepfake_analysis["deepfake_score"]
-    }
-
-        # Adjust liveness score based on deepfake confidence
-        deepfake_penalty = deepfake_analysis["deepfake_score"] * 0.1
-        liveness_score = min(1.0, base_score + confidence_bonus - deepfake_penalty)
     
-        # Bonus for high direction confidence
-        confidence_bonus = analysis["direction_confidence"] * 0.05
-        liveness_score = min(1.0, base_score + confidence_bonus)
+    # Bonus for high direction confidence
+    confidence_bonus = analysis["direction_confidence"] * 0.05
+    liveness_score = min(1.0, base_score + confidence_bonus)
     
-        log_event(
+    log_event(
         event="challenge_passed",
         session_id=session_id,
         challenge_id=challenge_id,
@@ -430,12 +390,8 @@ def run_human_verification(session_id: str, challenge_id: str, video_path: str,
     )
     
     return {
-    "liveness_score": liveness_score,
-    "challenge_passed": True,
-    "direction_detected": analysis["direction_detected"],
-    "direction_matched": analysis.get("direction_matches_expected", True),
-    "deepfake_detected": False,  # ← NEW
-    "deepfake_score": deepfake_analysis["deepfake_score"],  # ← NEW
-    "blink_detected": deepfake_analysis["blink_detected"],  # ← NEW
-    "texture_quality": deepfake_analysis["texture_quality"]  # ← NEW
+        "liveness_score": liveness_score,
+        "challenge_passed": True,
+        "direction_detected": analysis["direction_detected"],
+        "direction_matched": analysis.get("direction_matches_expected", True)
     }

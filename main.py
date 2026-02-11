@@ -562,24 +562,20 @@ async def verify_challenge(
 
         # STORE CHALLENGE RESULT IN DATABASE
         store_challenge_result(
-    db=db,
-    session_id=device_id,
-    device_id=device_id,
-    challenge_id=challenge_id,
-    instruction=instruction,
-    expected_direction=expected_direction,
-    challenge_passed=result["challenge_passed"],
-    liveness_score=result["liveness_score"],
-    direction_detected=result["direction_detected"],
-    direction_matched=result["direction_matched"],
-    fast_track=is_trusted,
-    video_size_bytes=video_size_bytes,
-    difficulty=difficulty,
-    deepfake_detected=result.get("deepfake_detected", False),     # ← NEW
-    deepfake_score=result.get("deepfake_score", 0.0),            # ← NEW
-    blink_detected=result.get("blink_detected", True),           # ← NEW
-    texture_quality=result.get("texture_quality", 1.0)           # ← NEW
-    )
+            db=db,
+            session_id=device_id,  # Using device_id as session_id for now
+            device_id=device_id,
+            challenge_id=challenge_id,
+            instruction=instruction,
+            expected_direction=expected_direction,
+            challenge_passed=result["challenge_passed"],
+            liveness_score=result["liveness_score"],
+            direction_detected=result["direction_detected"],
+            direction_matched=result["direction_matched"],
+            fast_track=is_trusted,
+            video_size_bytes=video_size_bytes,
+            difficulty=difficulty
+        )
 
         return result
 
@@ -734,26 +730,6 @@ async def finalize_verification(request: Request, db: Session = Depends(get_db))
             "total_challenges": total_challenges,
             "failed_challenges": failed_challenges,
             "scoring_method": "weighted_liveness"  # ← NEW
-        }
-    )
-
-
-    # Calculate deepfake statistics for session
-    deepfake_flags = sum(1 for r in db_results if r.deepfake_detected)
-    avg_deepfake_score = sum(r.deepfake_score for r in db_results) / total_challenges if total_challenges > 0 else 0.0
-    blink_success_rate = sum(1 for r in db_results if r.blink_detected) / total_challenges if total_challenges > 0 else 0.0
-
-    if deepfake_flags > 0 or avg_deepfake_score > 0.3:
-        log_event(
-            event="deepfake_suspicion",
-            session_id=session_id,
-            challenge_id=None,
-            details={
-                "device_id": device_id,
-                "deepfake_flags": deepfake_flags,
-                "avg_deepfake_score": avg_deepfake_score,
-                "blink_success_rate": blink_success_rate,
-                "action": "flagged_for_review"
         }
     )
 
