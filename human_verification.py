@@ -2,6 +2,7 @@
 import os
 import cv2
 from logger import log_event
+from deepfake_detector import DeepfakeDetector
 
 # Thresholds (VERY LENIENT FOR TESTING)
 MIN_VIDEO_FRAMES = 1  # Was 3
@@ -248,6 +249,18 @@ def run_human_verification(session_id: str, challenge_id: str, video_path: str,
             "direction_matched": False
         }
     
+    # ADD BEFORE THAT:
+    # Initialize deepfake detector
+    deepfake_detector = DeepfakeDetector()
+
+    # Run deepfake analysis
+    deepfake_analysis = deepfake_detector.analyze_video(
+    video_path=video_path,
+    expected_direction=expected_direction,
+    session_id=session_id,
+    challenge_id=challenge_id
+)
+
     # Run direction-aware motion analysis
     analysis = _analyze_head_movement_direction(video_path, expected_direction)
     
