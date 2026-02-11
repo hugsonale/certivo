@@ -273,20 +273,24 @@ def store_challenge_result(db, session_id: str, device_id: str, challenge_id: st
                           texture_quality: float = 1.0):   
     """Store individual challenge result"""
     result = ChallengeResult(
-        session_id=session_id,
-        device_id=device_id,
-        challenge_id=challenge_id,
-        instruction=instruction,
-        expected_direction=expected_direction,
-        difficulty=difficulty,
-        challenge_passed=challenge_passed,
-        liveness_score=liveness_score,
-        direction_detected=direction_detected,
-        direction_matched=direction_matched,
-        fast_track=fast_track,
-        video_size_bytes=video_size_bytes,
-        frames_analyzed=frames_analyzed,
-        face_detected_frames=face_detected_frames
+    session_id=session_id,
+    device_id=device_id,
+    challenge_id=challenge_id,
+    instruction=instruction,
+    expected_direction=expected_direction,
+    difficulty=difficulty,
+    challenge_passed=challenge_passed,
+    liveness_score=liveness_score,
+    direction_detected=direction_detected,
+    direction_matched=direction_matched,
+    fast_track=fast_track,
+    video_size_bytes=video_size_bytes,
+    frames_analyzed=frames_analyzed,
+    face_detected_frames=face_detected_frames,
+    deepfake_detected=deepfake_detected,      
+    deepfake_score=deepfake_score,            
+    blink_detected=blink_detected,           
+    texture_quality=texture_quality           
     )
     db.add(result)
     db.commit()
