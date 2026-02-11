@@ -50,6 +50,11 @@ class ChallengeResult(Base):
     liveness_score = Column(Float, nullable=False)
     direction_detected = Column(String, nullable=True)  # "left", "right", "none", "ambiguous"
     direction_matched = Column(Boolean, default=False)
+
+    deepfake_detected = Column(Boolean, default=False)
+    deepfake_score = Column(Float, default=0.0)  # 0.0 = human, 1.0 = deepfake
+    blink_detected = Column(Boolean, default=True)
+    texture_quality = Column(Float, default=1.0)  # 1.0 = perfect, 0.0 = bad
     
     # Metadata
     fast_track = Column(Boolean, default=False)
@@ -261,7 +266,11 @@ def store_challenge_result(db, session_id: str, device_id: str, challenge_id: st
                           direction_detected: str, direction_matched: bool,
                           fast_track: bool = False, video_size_bytes: int = None,
                           frames_analyzed: int = None, face_detected_frames: int = None,
-                          difficulty: str = "medium"):
+                          difficulty: str = "medium",
+                          deepfake_detected: bool = False, 
+                          deepfake_score: float = 0.0,     
+                          blink_detected: bool = True,      
+                          texture_quality: float = 1.0):   
     """Store individual challenge result"""
     result = ChallengeResult(
         session_id=session_id,
