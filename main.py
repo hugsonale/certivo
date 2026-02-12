@@ -274,7 +274,6 @@ async def get_challenge_endpoint(request: Request, device_id: str = Query(...), 
             "instruction": instruction,
             "difficulty": ch.get("difficulty", "medium"),
             "fast_track": ch.get("fast_track", False),
-            "timer_duration": ch.get("timer_duration", 3)  # ← NEW: Send random duration to frontend
         })
     return {
         "trusted_device": is_trusted,

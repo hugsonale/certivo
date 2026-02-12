@@ -57,10 +57,6 @@ body {
     }
 }
 
-/* [ALL YOUR EXISTING CSS - SCREENS 1-7 - KEEP AS IS] */
-/* I'm not repeating all 1000+ lines of CSS here for brevity */
-/* Just copy all CSS from your existing file */
-
 /* ============================================================================
    SCREEN 1: ENTRY/TRUST SETUP STYLES
    ============================================================================ */
@@ -783,7 +779,7 @@ body {
 }
 
 /* ============================================================================
-   SCREEN 7: FINAL DECISION
+   SCREEN 7: FINAL DECISION - 10/10
    ============================================================================ */
 
 .final-icon-wrapper {
@@ -1078,9 +1074,9 @@ body {
 </head>
 <body>
 
-<!-- [ALL YOUR EXISTING HTML FOR SCREENS 1-7 - KEEP AS IS] -->
-
-<!-- SCREEN 1 HTML -->
+<!-- ============================================================================
+     SCREEN 1: ENTRY / TRUST SETUP
+     ============================================================================ -->
 <div id="screen1" class="screen active">
     <div class="logo">
         <div class="logo-text">C</div>
@@ -1131,7 +1127,7 @@ body {
         <span>🔒 No video is stored. Your privacy is protected.</span>
     </div>
     
-    <button class="btn-primary" onclick="handleStartVerification()">
+    <button class="btn-primary" onclick="goToScreen2()">
         Start Verification
     </button>
     
@@ -1140,109 +1136,266 @@ body {
     </div>
 </div>
 
-<!-- SCREEN 2-7 HTML - COPY FROM YOUR EXISTING FILE -->
-<!-- I won't repeat all 800+ lines here, just continue to the JavaScript section -->
+<!-- ============================================================================
+     SCREEN 2: CAMERA PERMISSION GATE
+     ============================================================================ -->
+<div id="screen2" class="screen">
+    <div class="camera-icon">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path fill="white" d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+        </svg>
+    </div>
+    
+    <h2 class="permission-text">Camera Access Required</h2>
+    
+    <p class="permission-subtext">
+        Certivo uses your camera to verify human presence. 
+        Your camera will be used for verification only.
+    </p>
+    
+    <div id="cameraError" class="error-message" style="display: none;">
+        <div class="error-title">❌ Camera Access Denied</div>
+        <div class="error-text">
+            Please allow camera access in your browser settings and try again. 
+            Certivo cannot verify without camera permission.
+        </div>
+    </div>
+    
+    <button class="btn-primary" onclick="requestCameraAccess()">
+        Allow Camera
+    </button>
+    
+    <button class="btn-secondary" onclick="goToScreen1()">
+        Cancel
+    </button>
+    
+    <div class="powered-by">
+        Powered by <strong>Certivo</strong>
+    </div>
+</div>
+
+<!-- ============================================================================
+     SCREEN 3: PREPARATION / CALIBRATION
+     ============================================================================ -->
+<div id="screen3" class="screen">
+    
+    <h2 class="calibration-title">Position Your Face</h2>
+    <p class="calibration-subtitle">Center your face in the frame</p>
+    
+    <div class="calibration-camera-wrapper">
+        <video id="calibrationVideo" autoplay muted playsinline></video>
+        
+        <div class="face-outline-container">
+            <svg class="face-outline" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
+                <rect x="20" y="20" width="160" height="200" rx="80" ry="100" 
+                      fill="none" 
+                      stroke="#667eea" 
+                      stroke-width="3" 
+                      stroke-dasharray="8 4"
+                      opacity="0.6"/>
+                
+                <path d="M 40,40 L 20,40 L 20,60" stroke="#667eea" stroke-width="3" fill="none" opacity="0.8"/>
+                <path d="M 160,40 L 180,40 L 180,60" stroke="#667eea" stroke-width="3" fill="none" opacity="0.8"/>
+                <path d="M 40,200 L 20,200 L 20,180" stroke="#667eea" stroke-width="3" fill="none" opacity="0.8"/>
+                <path d="M 160,200 L 180,200 L 180,180" stroke="#667eea" stroke-width="3" fill="none" opacity="0.8"/>
+            </svg>
+            
+            <div id="faceDetectedCheck" class="face-detected-check">
+                <svg viewBox="0 0 52 52" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="26" cy="26" r="25" fill="#10b981"/>
+                    <path fill="none" stroke="white" stroke-width="4" 
+                          d="M14 27l7 7 16-16"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+    
+    <div class="calibration-status">
+        <div class="status-indicator">
+            <div class="scanning-dot"></div>
+        </div>
+        <p id="calibrationStatus" class="status-text">Detecting face...</p>
+    </div>
+    
+    <div class="calibration-progress">
+        <div id="calibrationProgressBar" class="progress-bar"></div>
+    </div>
+    
+</div>
+
+<!-- ============================================================================
+     SCREEN 4: ACTIVE CHALLENGE
+     ============================================================================ -->
+<div id="screen4" class="screen">
+    
+    <div class="challenge-header">
+        <p id="screen4ProgressText" class="challenge-progress-text">Challenge 1 of 2</p>
+        <h2 id="screen4Instruction" class="challenge-instruction">Turn your head to the left</h2>
+        <p id="screen4Status" class="challenge-status">Get ready...</p>
+    </div>
+    
+    <div class="challenge-camera-wrapper">
+        <video id="challengeVideo" autoplay muted playsinline></video>
+    </div>
+    
+    <div id="screen4Hint" class="instruction-hint" style="display: none;">
+        <span class="instruction-hint-icon">⬅️</span>
+        <span>Turn left now</span>
+    </div>
+    
+    <div id="screen4TimerCountdown" class="timer-countdown">3</div>
+    
+    <div class="timer-bar-container">
+        <div id="screen4TimerBar" class="timer-bar"></div>
+    </div>
+    
+</div>
+
+<!-- ============================================================================
+     SCREEN 5: CHALLENGE RESULT LOCK
+     ============================================================================ -->
+<div id="screen5" class="screen">
+    
+    <div id="screen5IconWrapper" class="result-icon-wrapper success">
+        <div id="screen5Icon" class="result-icon">✓</div>
+    </div>
+    
+    <h2 id="screen5Title" class="result-title success">Challenge Completed</h2>
+    
+    <p id="screen5Subtitle" class="result-subtitle">Head movement detected successfully</p>
+    
+    <div id="screen5Detail" class="result-detail">
+        <div class="result-detail-label">Detection Result</div>
+        <div id="screen5DetailValue" class="result-detail-value">Movement to the left verified</div>
+    </div>
+    
+    <div id="screen5ButtonsSuccess" style="display: none;">
+        <button class="btn-continue" onclick="continueToNextChallenge()">
+            Continue
+        </button>
+        <p class="auto-advance-text">Auto-advancing in <span id="screen5AutoAdvance">3</span>s...</p>
+    </div>
+    
+    <div id="screen5ButtonsFailure" style="display: none;">
+        <button class="btn-retry" onclick="retryCurrentChallenge()">
+            🔄 Retry This Challenge
+        </button>
+        <button class="btn-secondary" onclick="skipToNextChallenge()">
+            Skip Challenge
+        </button>
+    </div>
+    
+</div>
+
+<!-- ============================================================================
+     SCREEN 6: NEXT CHALLENGE TRANSITION
+     ============================================================================ -->
+<div id="screen6" class="screen">
+    
+    <div class="transition-container">
+        
+        <div class="transition-icon-wrapper">
+            <div class="transition-icon">→</div>
+        </div>
+        
+        <p id="screen6Progress" class="transition-progress">Challenge 2 of 2</p>
+        
+        <p class="transition-text">Next challenge starting...</p>
+        
+        <div class="transition-loading">
+            <div class="transition-dot"></div>
+            <div class="transition-dot"></div>
+            <div class="transition-dot"></div>
+        </div>
+        
+        <div class="transition-progress-bar">
+            <div class="transition-progress-fill"></div>
+        </div>
+        
+    </div>
+    
+</div>
+
+<!-- ============================================================================
+     SCREEN 7: FINAL DECISION - 10/10
+     ============================================================================ -->
+<div id="screen7" class="screen">
+    
+    <!-- Success/Failure Icon -->
+    <div id="screen7IconWrapper" class="final-icon-wrapper success">
+        <div id="screen7Icon" class="final-icon">✓</div>
+    </div>
+    
+    <!-- Headline -->
+    <h1 id="screen7Headline" class="final-headline success">Verification Successful</h1>
+    
+    <!-- Subtext -->
+    <p id="screen7Subtext" class="final-subtext">You've been verified as human.</p>
+    
+    <!-- Failure Explanation (hidden by default) -->
+    <div id="screen7FailureExplanation" class="failure-explanation" style="display: none;">
+        <div class="failure-explanation-title">Why did verification fail?</div>
+        <div id="screen7FailureText" class="failure-explanation-text">
+            We couldn't detect enough human movement during the challenges.
+        </div>
+    </div>
+    
+    <!-- Trust Score Container (success only) -->
+    <div id="screen7TrustContainer" class="trust-score-container">
+        <div class="trust-score-label">Trust Score</div>
+        
+        <div class="trust-score-bar-outer">
+            <div id="screen7TrustBar" class="trust-score-bar high"></div>
+        </div>
+        
+        <div class="trust-score-value">
+            <span id="screen7TrustScore">95</span>% 
+            <span id="screen7TrustBadge" class="trust-level-badge high">High Trust</span>
+        </div>
+    </div>
+    
+    <!-- Session Details -->
+    <div id="screen7SessionDetails" class="session-details">
+        <div class="session-detail-row">
+            <span class="session-detail-label">Session ID</span>
+            <span id="screen7SessionId" class="session-detail-value">device_12345</span>
+        </div>
+        <div class="session-detail-row">
+            <span class="session-detail-label">Challenges Completed</span>
+            <span id="screen7ChallengesCompleted" class="session-detail-value">2 of 2</span>
+        </div>
+        <div class="session-detail-row">
+            <span class="session-detail-label">Verification Date</span>
+            <span id="screen7Date" class="session-detail-value">Feb 10, 2026</span>
+        </div>
+    </div>
+    
+    <!-- Action Buttons -->
+    <div id="screen7ButtonsSuccess" style="display: none;">
+        <button class="btn-primary" onclick="closeVerification()">
+            Close
+        </button>
+    </div>
+    
+    <div id="screen7ButtonsFailure" style="display: none;">
+        <button class="btn-retry" onclick="retryEntireProcess()">
+            🔄 Try Verification Again
+        </button>
+        <button class="btn-secondary" onclick="closeVerification()">
+            Close
+        </button>
+    </div>
+    
+    <div class="powered-by">
+        Powered by <strong>Certivo</strong>
+    </div>
+    
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/facemesh"></script>
 
 <script>
-// ============================================================================
-// STATE MACHINE - 10/10 STRICT IMPLEMENTATION
-// ============================================================================
-
-const STATE = {
-    IDLE: 'IDLE',
-    CAMERA_REQUESTED: 'CAMERA_REQUESTED',
-    CAMERA_GRANTED: 'CAMERA_GRANTED',
-    CAMERA_DENIED: 'CAMERA_DENIED',
-    CALIBRATING: 'CALIBRATING',
-    CALIBRATION_COMPLETE: 'CALIBRATION_COMPLETE',
-    CHALLENGES_LOADING: 'CHALLENGES_LOADING',
-    CHALLENGES_LOADED: 'CHALLENGES_LOADED',
-    CHALLENGE_READY: 'CHALLENGE_READY',
-    CHALLENGE_ACTIVE: 'CHALLENGE_ACTIVE',
-    CAPTURE_WINDOW_OPEN: 'CAPTURE_WINDOW_OPEN',
-    CAPTURE_WINDOW_CLOSED: 'CAPTURE_WINDOW_CLOSED',
-    VALIDATING: 'VALIDATING',
-    CHALLENGE_PASSED: 'CHALLENGE_PASSED',
-    CHALLENGE_FAILED: 'CHALLENGE_FAILED',
-    TRANSITIONING: 'TRANSITIONING',
-    SESSION_FINALIZING: 'SESSION_FINALIZING',
-    SESSION_COMPLETE: 'SESSION_COMPLETE',
-    ERROR: 'ERROR'
-};
-
-let currentState = STATE.IDLE;
-
-function transitionState(newState, context = {}) {
-    const timestamp = new Date().toISOString();
-    console.log(`[STATE ${timestamp}] ${currentState} → ${newState}`, context);
-    
-    // Validate transition
-    if (!isValidTransition(currentState, newState)) {
-        console.error(`[STATE ERROR] Invalid transition: ${currentState} → ${newState}`);
-        console.error('Context:', context);
-        return false;
-    }
-    
-    currentState = newState;
-    
-    // Log state change for analytics
-    logStateChange(currentState, newState, context);
-    
-    return true;
-}
-
-function isValidTransition(from, to) {
-    const validTransitions = {
-        [STATE.IDLE]: [STATE.CAMERA_REQUESTED],
-        [STATE.CAMERA_REQUESTED]: [STATE.CAMERA_GRANTED, STATE.CAMERA_DENIED, STATE.ERROR],
-        [STATE.CAMERA_GRANTED]: [STATE.CALIBRATING],
-        [STATE.CAMERA_DENIED]: [STATE.IDLE],
-        [STATE.CALIBRATING]: [STATE.CALIBRATION_COMPLETE, STATE.ERROR],
-        [STATE.CALIBRATION_COMPLETE]: [STATE.CHALLENGES_LOADING],
-        [STATE.CHALLENGES_LOADING]: [STATE.CHALLENGES_LOADED, STATE.ERROR],
-        [STATE.CHALLENGES_LOADED]: [STATE.CHALLENGE_READY],
-        [STATE.CHALLENGE_READY]: [STATE.CHALLENGE_ACTIVE],
-        [STATE.CHALLENGE_ACTIVE]: [STATE.CAPTURE_WINDOW_OPEN],
-        [STATE.CAPTURE_WINDOW_OPEN]: [STATE.CAPTURE_WINDOW_CLOSED],
-        [STATE.CAPTURE_WINDOW_CLOSED]: [STATE.VALIDATING],
-        [STATE.VALIDATING]: [STATE.CHALLENGE_PASSED, STATE.CHALLENGE_FAILED, STATE.ERROR],
-        [STATE.CHALLENGE_PASSED]: [STATE.TRANSITIONING, STATE.SESSION_FINALIZING],
-        [STATE.CHALLENGE_FAILED]: [STATE.CHALLENGE_READY, STATE.TRANSITIONING, STATE.SESSION_FINALIZING],
-        [STATE.TRANSITIONING]: [STATE.CHALLENGE_READY],
-        [STATE.SESSION_FINALIZING]: [STATE.SESSION_COMPLETE, STATE.ERROR],
-        [STATE.SESSION_COMPLETE]: [STATE.IDLE],
-        [STATE.ERROR]: [STATE.IDLE]
-    };
-    
-    return validTransitions[from]?.includes(to) || false;
-}
-
-function requireState(requiredState, actionName) {
-    if (currentState !== requiredState) {
-        console.error(`[STATE ERROR] ${actionName} requires state ${requiredState}, but current state is ${currentState}`);
-        return false;
-    }
-    return true;
-}
-
-function logStateChange(from, to, context) {
-    // Send to analytics / logging service
-    // For now, just console log
-    const stateLog = {
-        timestamp: Date.now(),
-        from: from,
-        to: to,
-        context: context,
-        deviceId: deviceId
-    };
-    
-    // You could send this to your backend analytics endpoint
-    // fetch('/v1/analytics/state', { method: 'POST', body: JSON.stringify(stateLog) });
-}
-
 // ============================================================================
 // GLOBAL VARIABLES
 // ============================================================================
@@ -1264,17 +1417,42 @@ let currentChallengeResult = null;
 let finalSessionData = null;
 
 // ============================================================================
-// SCREEN NAVIGATION WITH STATE GUARDS
+// SCREEN NAVIGATION SYSTEM
 // ============================================================================
 
 function goToScreen1() {
     hideAllScreens();
     document.getElementById('screen1').classList.add('active');
+    
+    if (window.cameraStream) {
+        window.cameraStream.getTracks().forEach(track => track.stop());
+        window.cameraStream = null;
+        console.log('🛑 Camera stream stopped');
+    }
+    
+    if (calibrationCheckInterval) clearInterval(calibrationCheckInterval);
+    if (calibrationProgressInterval) clearInterval(calibrationProgressInterval);
+    if (autoAdvanceInterval) clearInterval(autoAdvanceInterval);
 }
 
 function goToScreen2() {
     hideAllScreens();
     document.getElementById('screen2').classList.add('active');
+    
+    // ✅ Check browser support immediately
+    if (!checkCameraSupport()) {
+        const errorDiv = document.getElementById('cameraError');
+        errorDiv.style.display = 'block';
+        
+        const errorTitle = errorDiv.querySelector('.error-title');
+        const errorText = errorDiv.querySelector('.error-text');
+        
+        errorTitle.innerText = '❌ Browser Not Supported';
+        errorText.innerText = 'Your browser doesn\'t support camera access. Please use Chrome, Firefox, Safari, or Edge.';
+        
+        // Disable the allow button
+        document.querySelector('#screen2 .btn-primary').disabled = true;
+    }
 }
 
 function goToScreen3() {
@@ -1313,94 +1491,153 @@ function hideAllScreens() {
 }
 
 // ============================================================================
-// SCREEN 1: START VERIFICATION (WITH STATE GUARD)
+// SCREEN 2: CAMERA PERMISSION - FIXED (10/10)
 // ============================================================================
 
-function handleStartVerification() {
-    if (!requireState(STATE.IDLE, 'Start Verification')) {
-        console.error('Cannot start verification - system not in IDLE state');
-        return;
+function checkCameraSupport() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.error('❌ getUserMedia not supported');
+        return false;
     }
-    
-    if (!transitionState(STATE.CAMERA_REQUESTED, { action: 'user_clicked_start' })) {
-        return;
-    }
-    
-    goToScreen2();
+    return true;
 }
 
-// ============================================================================
-// SCREEN 2: CAMERA PERMISSION (WITH STATE GUARDS)
-// ============================================================================
-
 async function requestCameraAccess() {
-    if (!requireState(STATE.CAMERA_REQUESTED, 'Request Camera Access')) {
-        console.error('Cannot request camera - not in CAMERA_REQUESTED state');
-        return;
-    }
-    
     const errorDiv = document.getElementById('cameraError');
+    const allowButton = document.querySelector('#screen2 .btn-primary');
+    
+    // Hide any previous errors
     errorDiv.style.display = 'none';
     
+    // Show loading state on button
+    allowButton.disabled = true;
+    allowButton.innerText = 'Requesting access...';
+    
     try {
+        console.log('📸 Requesting camera access...');
+        
+        // ✅ FIX: Proper camera request with error handling
         const stream = await navigator.mediaDevices.getUserMedia({ 
             video: { 
                 width: { ideal: 640 },
                 height: { ideal: 480 },
                 facingMode: "user"
-            } 
+            },
+            audio: false  // ✅ Explicitly disable audio
         });
         
         console.log('✅ Camera access granted');
+        console.log('📹 Stream active:', stream.active);
+        console.log('📹 Video tracks:', stream.getVideoTracks().length);
+        
+        // ✅ Store the stream globally
         window.cameraStream = stream;
         
-        if (!transitionState(STATE.CAMERA_GRANTED, { action: 'camera_granted' })) {
-            return;
+        // ✅ Verify stream is actually working
+        const videoTrack = stream.getVideoTracks()[0];
+        if (!videoTrack) {
+            throw new Error('No video track available');
         }
         
-        startCalibrationScreen();
+        console.log('📹 Video track settings:', videoTrack.getSettings());
+        
+        // ✅ Success - move to calibration
+        allowButton.innerText = 'Access Granted ✓';
+        allowButton.style.background = '#10b981';
+        
+        setTimeout(() => {
+            startCalibrationScreen();
+        }, 500);
         
     } catch (error) {
-        console.error('❌ Camera access denied:', error);
+        console.error('❌ Camera access error:', error);
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
         
-        transitionState(STATE.CAMERA_DENIED, { 
-            action: 'camera_denied',
-            error: error.name 
-        });
+        // Re-enable button
+        allowButton.disabled = false;
+        allowButton.innerText = 'Allow Camera';
         
+        // Show error div
         errorDiv.style.display = 'block';
         
-        if (error.name === 'NotAllowedError') {
-            console.log('User denied camera permission');
-        } else if (error.name === 'NotFoundError') {
-            errorDiv.querySelector('.error-text').innerText = 
-                'No camera found on this device. Please ensure your device has a camera.';
-        } else if (error.name === 'NotReadableError') {
-            errorDiv.querySelector('.error-text').innerText = 
-                'Camera is already in use by another application. Please close other apps and try again.';
+        // ✅ Detailed error handling
+        const errorTitle = errorDiv.querySelector('.error-title');
+        const errorText = errorDiv.querySelector('.error-text');
+        
+        if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+            errorTitle.innerText = '❌ Camera Access Denied';
+            errorText.innerText = 'You clicked "Block" or "Deny" on the camera permission prompt. Please click "Allow Camera" again and select "Allow" when your browser asks for permission.';
+            
+        } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+            errorTitle.innerText = '❌ No Camera Found';
+            errorText.innerText = 'No camera was detected on this device. Please ensure your device has a working camera and try again.';
+            
+        } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+            errorTitle.innerText = '❌ Camera Already In Use';
+            errorText.innerText = 'Your camera is being used by another application. Please close other apps (Zoom, Skype, etc.) and try again.';
+            
+        } else if (error.name === 'OverconstrainedError' || error.name === 'ConstraintNotSatisfiedError') {
+            errorTitle.innerText = '❌ Camera Settings Not Supported';
+            errorText.innerText = 'Your camera doesn\'t support the required settings. Trying again with basic settings...';
+            
+            setTimeout(() => {
+                requestCameraAccessFallback();
+            }, 2000);
+            
+        } else if (error.name === 'TypeError') {
+            errorTitle.innerText = '❌ Browser Not Supported';
+            errorText.innerText = 'Your browser doesn\'t support camera access. Please use a modern browser like Chrome, Firefox, Safari, or Edge.';
+            
+        } else if (error.name === 'SecurityError') {
+            errorTitle.innerText = '❌ Insecure Connection';
+            errorText.innerText = 'Camera access requires a secure connection (HTTPS). If you\'re testing locally, use http://localhost instead of http://127.0.0.1';
+            
+        } else {
+            errorTitle.innerText = '❌ Camera Error';
+            errorText.innerText = `An unexpected error occurred: ${error.message}. Please refresh the page and try again.`;
         }
     }
 }
 
-function handleCameraCancel() {
-    transitionState(STATE.IDLE, { action: 'user_cancelled_camera' });
-    goToScreen1();
+async function requestCameraAccessFallback() {
+    const errorDiv = document.getElementById('cameraError');
+    const allowButton = document.querySelector('#screen2 .btn-primary');
+    
+    console.log('🔄 Attempting fallback camera request with minimal constraints...');
+    
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: true,
+            audio: false
+        });
+        
+        console.log('✅ Fallback camera access granted');
+        window.cameraStream = stream;
+        
+        allowButton.innerText = 'Access Granted ✓';
+        allowButton.style.background = '#10b981';
+        
+        setTimeout(() => {
+            startCalibrationScreen();
+        }, 500);
+        
+    } catch (fallbackError) {
+        console.error('❌ Fallback also failed:', fallbackError);
+        
+        const errorTitle = errorDiv.querySelector('.error-title');
+        const errorText = errorDiv.querySelector('.error-text');
+        
+        errorTitle.innerText = '❌ Camera Access Failed';
+        errorText.innerText = 'We tried multiple ways to access your camera but all failed. Please check your browser settings and ensure camera access is enabled for this site.';
+    }
 }
 
 // ============================================================================
-// SCREEN 3: CALIBRATION (WITH STATE GUARDS)
+// SCREEN 3: CALIBRATION - FIXED (10/10)
 // ============================================================================
 
 async function startCalibrationScreen() {
-    if (!requireState(STATE.CAMERA_GRANTED, 'Start Calibration')) {
-        console.error('Cannot start calibration - camera not granted');
-        return;
-    }
-    
-    if (!transitionState(STATE.CALIBRATING, { action: 'calibration_started' })) {
-        return;
-    }
-    
     console.log('📸 Starting Screen 3: Calibration');
     
     goToScreen3();
@@ -1409,19 +1646,22 @@ async function startCalibrationScreen() {
     
     if (window.cameraStream) {
         calibrationVideo.srcObject = window.cameraStream;
+        console.log('✅ Camera stream attached to video element');
     } else {
         console.error('❌ No camera stream available');
-        transitionState(STATE.ERROR, { error: 'no_camera_stream' });
+        alert('Camera stream not available. Please try again.');
+        goToScreen2();
         return;
     }
     
+    // Load FaceMesh model
     if (!calibrationFaceModel) {
         try {
+            console.log('⏳ Loading FaceMesh model...');
             calibrationFaceModel = await facemesh.load();
             console.log('✅ FaceMesh model loaded for calibration');
         } catch (error) {
             console.error('❌ Failed to load FaceMesh:', error);
-            transitionState(STATE.ERROR, { error: 'facemesh_load_failed' });
             setTimeout(() => {
                 loadChallengesAndStart();
             }, 2000);
@@ -1440,8 +1680,8 @@ function runCalibration(videoElement) {
     
     let faceDetectedTime = null;
     let calibrationStartTime = Date.now();
-    const CALIBRATION_DURATION = 2000;
-    const REQUIRED_STABLE_TIME = 500;
+    const CALIBRATION_DURATION = 5000; // ✅ 5 seconds max
+    const REQUIRED_STABLE_TIME = 500; // Must be stable for 500ms
     
     let progress = 0;
     calibrationProgressInterval = setInterval(() => {
@@ -1449,9 +1689,26 @@ function runCalibration(videoElement) {
         progress = Math.min((elapsed / CALIBRATION_DURATION) * 100, 100);
         progressBar.style.width = progress + '%';
         
+        // ✅ Only timeout if face was never detected
         if (elapsed >= CALIBRATION_DURATION && !faceDetectedTime) {
-            console.log('⏱️ Calibration timeout - advancing anyway');
-            completeCalibration();
+            console.log('⏱️ Calibration timeout - no face detected');
+            clearInterval(calibrationCheckInterval);
+            clearInterval(calibrationProgressInterval);
+            
+            // Show error message
+            statusText.innerText = 'No face detected. Please try again.';
+            statusText.classList.remove('success');
+            statusText.style.color = '#ef4444';
+            
+            // Restart after 2 seconds
+            setTimeout(() => {
+                calibrationStartTime = Date.now();
+                progress = 0;
+                progressBar.style.width = '0%';
+                statusText.innerText = 'Detecting face...';
+                statusText.style.color = '#4a5568';
+                runCalibration(videoElement);
+            }, 2000);
         }
     }, 50);
     
@@ -1460,16 +1717,19 @@ function runCalibration(videoElement) {
             const predictions = await calibrationFaceModel.estimateFaces(videoElement);
             
             if (predictions.length === 1) {
+                // ✅ Exactly one face detected
                 if (!faceDetectedTime) {
                     faceDetectedTime = Date.now();
                     console.log('👤 Face detected - starting stability check');
                     
                     statusText.innerText = 'Face detected! ✓';
                     statusText.classList.add('success');
+                    statusText.style.color = '#10b981';
                     faceOutline.classList.add('detected');
                     checkmark.classList.add('show');
                 }
                 
+                // Check stability duration
                 const stableTime = Date.now() - faceDetectedTime;
                 if (stableTime >= REQUIRED_STABLE_TIME) {
                     console.log('✅ Face stable - calibration complete');
@@ -1477,20 +1737,24 @@ function runCalibration(videoElement) {
                 }
                 
             } else if (predictions.length === 0) {
+                // ✅ No face detected - reset
                 if (faceDetectedTime) {
                     console.log('👤 Face lost - resetting');
                     faceDetectedTime = null;
-                    statusText.innerText = 'Detecting face...';
+                    statusText.innerText = 'Face lost. Please center your face.';
                     statusText.classList.remove('success');
+                    statusText.style.color = '#f59e0b';
                     faceOutline.classList.remove('detected');
                     checkmark.classList.remove('show');
                 }
             } else {
-                if (faceDetectedTime) {
-                    console.log('⚠️ Multiple faces - resetting');
+                // ✅ Multiple faces detected - reset and warn
+                if (faceDetectedTime || predictions.length > 1) {
+                    console.log('⚠️ Multiple faces detected - resetting');
                     faceDetectedTime = null;
-                    statusText.innerText = 'Only one person should be visible';
+                    statusText.innerText = 'Multiple faces detected. Only one person allowed.';
                     statusText.classList.remove('success');
+                    statusText.style.color = '#ef4444';
                     faceOutline.classList.remove('detected');
                     checkmark.classList.remove('show');
                 }
@@ -1503,19 +1767,10 @@ function runCalibration(videoElement) {
 }
 
 function completeCalibration() {
-    if (!requireState(STATE.CALIBRATING, 'Complete Calibration')) {
-        console.error('Cannot complete calibration - not in CALIBRATING state');
-        return;
-    }
-    
     clearInterval(calibrationCheckInterval);
     clearInterval(calibrationProgressInterval);
     
     document.getElementById('calibrationProgressBar').style.width = '100%';
-    
-    if (!transitionState(STATE.CALIBRATION_COMPLETE, { action: 'calibration_completed' })) {
-        return;
-    }
     
     console.log('✅ Calibration complete - loading challenges');
     
@@ -1525,19 +1780,10 @@ function completeCalibration() {
 }
 
 // ============================================================================
-// LOAD CHALLENGES (WITH STATE GUARDS)
+// LOAD CHALLENGES
 // ============================================================================
 
 async function loadChallengesAndStart() {
-    if (!requireState(STATE.CALIBRATION_COMPLETE, 'Load Challenges')) {
-        console.error('Cannot load challenges - calibration not complete');
-        return;
-    }
-    
-    if (!transitionState(STATE.CHALLENGES_LOADING, { action: 'loading_challenges' })) {
-        return;
-    }
-    
     console.log('🔍 Fetching challenges for device:', deviceId);
     
     try {
@@ -1548,7 +1794,6 @@ async function loadChallengesAndStart() {
         
         if (data.error) {
             console.error('❌ Error from server:', data.error);
-            transitionState(STATE.ERROR, { error: 'server_error', message: data.error });
             alert('Failed to load challenges: ' + data.error);
             return;
         }
@@ -1558,18 +1803,10 @@ async function loadChallengesAndStart() {
             token_id: ch.token_id,
             instruction: ch.instruction,
             difficulty: ch.difficulty || "medium",
-            fast_track: ch.fast_track || false,
-            timer_duration: ch.timer_duration || 3  // ← NEW: Random duration from backend
+            fast_track: ch.fast_track || false
         }));
         
         console.log('✅ Challenges loaded:', challenges);
-        
-        if (!transitionState(STATE.CHALLENGES_LOADED, { 
-            action: 'challenges_loaded',
-            challenge_count: challenges.length 
-        })) {
-            return;
-        }
         
         challengeIndex = 0;
         sessionResults = [];
@@ -1578,32 +1815,18 @@ async function loadChallengesAndStart() {
         
     } catch (error) {
         console.error('❌ Network error loading challenges:', error);
-        transitionState(STATE.ERROR, { error: 'network_error', message: error.message });
         alert('Network error. Please check your connection.');
     }
 }
 
 // ============================================================================
-// SCREEN 4: ACTIVE CHALLENGE (WITH STATE GUARDS)
+// SCREEN 4: ACTIVE CHALLENGE
 // ============================================================================
 
 function startChallenge() {
-    // Valid entry states: CHALLENGES_LOADED (first challenge) or TRANSITIONING (subsequent challenges)
-    if (currentState !== STATE.CHALLENGES_LOADED && currentState !== STATE.CHALLENGE_READY) {
-        console.error('Cannot start challenge - invalid state:', currentState);
-        return;
-    }
-    
     if (challengeIndex >= challenges.length) {
         console.log('✅ All challenges complete - finalizing');
         finalizeSession();
-        return;
-    }
-    
-    if (!transitionState(STATE.CHALLENGE_READY, { 
-        action: 'challenge_ready',
-        challenge_index: challengeIndex 
-    })) {
         return;
     }
     
@@ -1612,7 +1835,6 @@ function startChallenge() {
     const totalChallenges = challenges.length;
     
     console.log(`🎯 Starting challenge ${challengeNumber} of ${totalChallenges}:`, challenge.instruction);
-    console.log(`⏱️ Timer duration: ${challenge.timer_duration} seconds (RANDOMIZED)`);
     
     goToScreen4();
     
@@ -1632,39 +1854,38 @@ function startChallenge() {
     if (challenge.instruction.toLowerCase().includes('left')) {
         hintIcon.innerText = '⬅️';
         hintText.innerText = 'Turn left now';
+        hint.style.display = 'inline-flex';
     } else if (challenge.instruction.toLowerCase().includes('right')) {
         hintIcon.innerText = '➡️';
         hintText.innerText = 'Turn right now';
+        hint.style.display = 'inline-flex';
+    } else if (challenge.instruction.toLowerCase().includes('blink')) {
+        hintIcon.innerText = '👁️';
+        hintText.innerText = 'Blink twice';
+        hint.style.display = 'inline-flex';
+    } else if (challenge.instruction.toLowerCase().includes('nod')) {
+        hintIcon.innerText = '↕️';
+        hintText.innerText = 'Nod your head';
+        hint.style.display = 'inline-flex';
+    } else if (challenge.instruction.toLowerCase().includes('mouth')) {
+        hintIcon.innerText = '😮';
+        hintText.innerText = 'Open your mouth';
+        hint.style.display = 'inline-flex';
+    } else if (challenge.instruction.toLowerCase().includes('eyebrow')) {
+        hintIcon.innerText = '🤨';
+        hintText.innerText = 'Raise eyebrows';
+        hint.style.display = 'inline-flex';
     } else {
         hint.style.display = 'none';
     }
     
     setTimeout(() => {
-        if (!transitionState(STATE.CHALLENGE_ACTIVE, { 
-            action: 'challenge_active',
-            challenge_id: challenge.challenge_id 
-        })) {
-            return;
-        }
-        
         runChallengeTimer(challenge);
     }, 1000);
 }
 
 function runChallengeTimer(challenge) {
-    if (!requireState(STATE.CHALLENGE_ACTIVE, 'Run Challenge Timer')) {
-        console.error('Cannot run timer - challenge not active');
-        return;
-    }
-    
-    if (!transitionState(STATE.CAPTURE_WINDOW_OPEN, { 
-        action: 'capture_started',
-        timer_duration: challenge.timer_duration 
-    })) {
-        return;
-    }
-    
-    console.log(`⏱️ Starting ${challenge.timer_duration}-second validation window (RANDOMIZED)`);
+    console.log('⏱️ Starting 3-second validation window');
     
     document.getElementById('screen4Status').innerText = 'Listening...';
     document.getElementById('screen4Status').classList.add('listening');
@@ -1679,10 +1900,7 @@ function runChallengeTimer(challenge) {
     
     console.log('🔴 Recording started');
     
-    // ← USE RANDOM DURATION FROM BACKEND
-    let timeLeft = challenge.timer_duration;
-    const timerDuration = challenge.timer_duration;
-    
+    let timeLeft = 3;
     const timerCountdown = document.getElementById('screen4TimerCountdown');
     const timerBar = document.getElementById('screen4TimerBar');
     
@@ -1696,7 +1914,7 @@ function runChallengeTimer(challenge) {
         
         timerCountdown.innerText = timeLeft;
         
-        const progress = (timeLeft / timerDuration) * 100;
+        const progress = (timeLeft / 3) * 100;
         timerBar.style.width = progress + '%';
         
         if (timeLeft === 1) {
@@ -1707,12 +1925,6 @@ function runChallengeTimer(challenge) {
         if (timeLeft <= 0) {
             clearInterval(challengeTimerInterval);
             console.log('⏹️ Timer complete - stopping recording');
-            
-            if (!transitionState(STATE.CAPTURE_WINDOW_CLOSED, { 
-                action: 'capture_closed' 
-            })) {
-                return;
-            }
             
             if (mediaRecorder && mediaRecorder.state === 'recording') {
                 mediaRecorder.stop();
@@ -1727,18 +1939,6 @@ function runChallengeTimer(challenge) {
 }
 
 async function handleChallengeComplete(challenge) {
-    if (!requireState(STATE.CAPTURE_WINDOW_CLOSED, 'Handle Challenge Complete')) {
-        console.error('Cannot process challenge - capture window not closed properly');
-        return;
-    }
-    
-    if (!transitionState(STATE.VALIDATING, { 
-        action: 'validating',
-        challenge_id: challenge.challenge_id 
-    })) {
-        return;
-    }
-    
     console.log('📤 Challenge complete - submitting video');
     
     const blob = new Blob(recordedChunks, { type: "video/webm" });
@@ -1764,42 +1964,19 @@ async function handleChallengeComplete(challenge) {
         currentChallengeResult = result;
         sessionResults.push(result);
         
-        if (result.challenge_passed) {
-            if (!transitionState(STATE.CHALLENGE_PASSED, { 
-                action: 'challenge_passed',
-                liveness_score: result.liveness_score 
-            })) {
-                return;
-            }
-        } else {
-            if (!transitionState(STATE.CHALLENGE_FAILED, { 
-                action: 'challenge_failed',
-                reason: result.error || 'unknown' 
-            })) {
-                return;
-            }
-        }
-        
         showResultScreen(result, challenge);
         
     } catch (error) {
         console.error('❌ Submission error:', error);
-        transitionState(STATE.ERROR, { error: 'submission_failed', message: error.message });
         alert('Failed to submit challenge. Please try again.');
     }
 }
 
 // ============================================================================
-// SCREEN 5: RESULT LOCK (WITH STATE GUARDS)
+// SCREEN 5: CHALLENGE RESULT LOCK
 // ============================================================================
 
 function showResultScreen(result, challenge) {
-    // Valid entry states: CHALLENGE_PASSED or CHALLENGE_FAILED
-    if (currentState !== STATE.CHALLENGE_PASSED && currentState !== STATE.CHALLENGE_FAILED) {
-        console.error('Cannot show result - invalid state:', currentState);
-        return;
-    }
-    
     console.log('📋 Showing result screen:', result);
     
     goToScreen5();
@@ -1821,17 +1998,8 @@ function showResultScreen(result, challenge) {
         title.className = 'result-title success';
         title.innerText = 'Challenge Completed';
         
-        const instruction = challenge.instruction.toLowerCase();
-        if (instruction.includes('left')) {
-            subtitle.innerText = 'Head movement to the left detected';
-            detailValue.innerText = 'Movement to the left verified';
-        } else if (instruction.includes('right')) {
-            subtitle.innerText = 'Head movement to the right detected';
-            detailValue.innerText = 'Movement to the right verified';
-        } else {
-            subtitle.innerText = 'Challenge completed successfully';
-            detailValue.innerText = 'Action verified';
-        }
+        subtitle.innerText = 'Action detected successfully';
+        detailValue.innerText = `${challenge.instruction} verified`;
         
         successButtons.style.display = 'block';
         failureButtons.style.display = 'none';
@@ -1856,19 +2024,8 @@ function showResultScreen(result, challenge) {
         title.className = 'result-title failure';
         title.innerText = 'Challenge Not Completed';
         
-        if (result.error) {
-            subtitle.innerText = result.error;
-            detailValue.innerText = result.error;
-        } else if (result.direction_detected === 'none') {
-            subtitle.innerText = 'We didn\'t detect enough movement';
-            detailValue.innerText = 'No significant head movement detected';
-        } else if (!result.direction_matched) {
-            subtitle.innerText = 'Movement in wrong direction detected';
-            detailValue.innerText = `Expected: ${challenge.instruction} | Detected: ${result.direction_detected}`;
-        } else {
-            subtitle.innerText = 'We didn\'t detect enough movement';
-            detailValue.innerText = 'Insufficient movement detected';
-        }
+        subtitle.innerText = result.error || 'Action not detected';
+        detailValue.innerText = `Expected: ${challenge.instruction}`;
         
         successButtons.style.display = 'none';
         failureButtons.style.display = 'block';
@@ -1876,15 +2033,10 @@ function showResultScreen(result, challenge) {
 }
 
 // ============================================================================
-// SCREEN 5: BUTTON ACTIONS (WITH STATE GUARDS)
+// SCREEN 5: BUTTON ACTIONS
 // ============================================================================
 
 function continueToNextChallenge() {
-    if (currentState !== STATE.CHALLENGE_PASSED) {
-        console.error('Cannot continue - challenge not passed');
-        return;
-    }
-    
     if (autoAdvanceInterval) clearInterval(autoAdvanceInterval);
     
     console.log('✅ Continuing to next challenge');
@@ -1899,30 +2051,16 @@ function continueToNextChallenge() {
 }
 
 function retryCurrentChallenge() {
-    if (currentState !== STATE.CHALLENGE_FAILED) {
-        console.error('Cannot retry - challenge not failed');
-        return;
-    }
-    
     if (autoAdvanceInterval) clearInterval(autoAdvanceInterval);
     
     console.log('🔄 Retrying current challenge');
     
     sessionResults.pop();
     
-    if (!transitionState(STATE.CHALLENGE_READY, { action: 'retry_challenge' })) {
-        return;
-    }
-    
     startChallenge();
 }
 
 function skipToNextChallenge() {
-    if (currentState !== STATE.CHALLENGE_FAILED) {
-        console.error('Cannot skip - challenge not failed');
-        return;
-    }
-    
     if (autoAdvanceInterval) clearInterval(autoAdvanceInterval);
     
     console.log('⏭️ Skipping to next challenge');
@@ -1937,23 +2075,10 @@ function skipToNextChallenge() {
 }
 
 // ============================================================================
-// SCREEN 6: TRANSITION (WITH STATE GUARDS)
+// SCREEN 6: NEXT CHALLENGE TRANSITION
 // ============================================================================
 
 function showTransitionScreen() {
-    // Valid entry states: CHALLENGE_PASSED or CHALLENGE_FAILED
-    if (currentState !== STATE.CHALLENGE_PASSED && currentState !== STATE.CHALLENGE_FAILED) {
-        console.error('Cannot transition - invalid state:', currentState);
-        return;
-    }
-    
-    if (!transitionState(STATE.TRANSITIONING, { 
-        action: 'transitioning',
-        next_challenge_index: challengeIndex 
-    })) {
-        return;
-    }
-    
     console.log('🔄 Showing transition screen');
     
     goToScreen6();
@@ -1965,33 +2090,15 @@ function showTransitionScreen() {
     
     setTimeout(() => {
         console.log('✅ Transition complete - starting next challenge');
-        
-        if (!transitionState(STATE.CHALLENGE_READY, { action: 'transition_complete' })) {
-            return;
-        }
-        
         startChallenge();
     }, 1000);
 }
 
 // ============================================================================
-// SCREEN 7: FINAL DECISION (WITH STATE GUARDS)
+// SCREEN 7: FINAL DECISION
 // ============================================================================
 
 async function finalizeSession() {
-    // Valid entry states: CHALLENGE_PASSED or CHALLENGE_FAILED (when no more challenges)
-    if (currentState !== STATE.CHALLENGE_PASSED && currentState !== STATE.CHALLENGE_FAILED) {
-        console.error('Cannot finalize - invalid state:', currentState);
-        return;
-    }
-    
-    if (!transitionState(STATE.SESSION_FINALIZING, { 
-        action: 'finalizing_session',
-        total_results: sessionResults.length 
-    })) {
-        return;
-    }
-    
     console.log('🔐 Finalizing session...');
     
     try {
@@ -2007,34 +2114,19 @@ async function finalizeSession() {
         
         finalSessionData = final;
         
-        if (!transitionState(STATE.SESSION_COMPLETE, { 
-            action: 'session_complete',
-            trust_score: final.trust_score,
-            trust_level: final.trust_level 
-        })) {
-            return;
-        }
-        
         showFinalDecisionScreen(final);
         
     } catch (error) {
         console.error('❌ Finalization error:', error);
-        transitionState(STATE.ERROR, { error: 'finalization_failed', message: error.message });
         alert('Failed to finalize verification.');
     }
 }
 
 function showFinalDecisionScreen(final) {
-    if (!requireState(STATE.SESSION_COMPLETE, 'Show Final Decision')) {
-        console.error('Cannot show final decision - session not complete');
-        return;
-    }
-    
     console.log('🎉 Showing final decision screen:', final);
     
     goToScreen7();
     
-    // Stop camera stream
     if (window.cameraStream) {
         window.cameraStream.getTracks().forEach(track => track.stop());
         window.cameraStream = null;
@@ -2125,30 +2217,15 @@ function showFinalDecisionScreen(final) {
 }
 
 // ============================================================================
-// SCREEN 7: BUTTON ACTIONS (WITH STATE GUARDS)
+// SCREEN 7: BUTTON ACTIONS
 // ============================================================================
 
 function closeVerification() {
-    if (!requireState(STATE.SESSION_COMPLETE, 'Close Verification')) {
-        console.error('Cannot close - session not complete');
-        return;
-    }
-    
     console.log('✅ User closed verification');
-    
-    if (!transitionState(STATE.IDLE, { action: 'user_closed' })) {
-        return;
-    }
-    
     alert('Verification complete! This would close the verification flow.');
 }
 
 function retryEntireProcess() {
-    if (!requireState(STATE.SESSION_COMPLETE, 'Retry Entire Process')) {
-        console.error('Cannot retry - session not complete');
-        return;
-    }
-    
     console.log('🔄 User chose to retry entire verification');
     
     challenges = [];
@@ -2157,278 +2234,9 @@ function retryEntireProcess() {
     currentChallengeResult = null;
     finalSessionData = null;
     
-    if (!transitionState(STATE.IDLE, { action: 'user_retry' })) {
-        return;
-    }
-    
     goToScreen1();
 }
 
-// ============================================================================
-// BOT DETECTION (Hidden from user - remains unchanged)
-// ============================================================================
-
-const BotDetector = {
-    checks: {},
-    
-    checkWebDriver() {
-        this.checks.webdriver = navigator.webdriver === true;
-        return this.checks.webdriver;
-    },
-    
-    checkHeadless() {
-        const checks = {
-            userAgent: /HeadlessChrome|PhantomJS|Nightmare/i.test(navigator.userAgent),
-            noPlugins: navigator.plugins.length === 0,
-            noLanguages: navigator.languages.length === 0,
-            chromeRuntime: !window.chrome && /Chrome/.test(navigator.userAgent),
-            permissions: navigator.permissions === undefined,
-            devtools: window.outerWidth - window.innerWidth > 160 ||
-                     window.outerHeight - window.innerHeight > 160
-        };
-        
-        this.checks.headless = Object.values(checks).filter(v => v).length >= 2;
-        this.checks.headlessDetails = checks;
-        return this.checks.headless;
-    },
-    
-    checkAutomation() {
-        const checks = {
-            selenium: window.document.$cdc_asdjflasutopfhvcZLmcfl_ !== undefined ||
-                     window.document.documentElement.getAttribute('selenium') !== null ||
-                     window.document.documentElement.getAttribute('webdriver') !== null ||
-                     window.document.documentElement.getAttribute('driver') !== null,
-            puppeteer: window.navigator.webdriver ||
-                      window.callPhantom !== undefined ||
-                      window._phantom !== undefined,
-            nightmare: window.__nightmare !== undefined,
-            domAutomation: window.domAutomation !== undefined ||
-                          window.domAutomationController !== undefined
-        };
-        
-        this.checks.automation = Object.values(checks).some(v => v);
-        this.checks.automationDetails = checks;
-        return this.checks.automation;
-    },
-    
-    checkBrowserConsistency() {
-        const issues = [];
-        
-        if (/Chrome/.test(navigator.userAgent) && !window.chrome) {
-            issues.push('chrome_missing');
-        }
-        
-        if (!navigator.platform) issues.push('no_platform');
-        if (!navigator.hardwareConcurrency) issues.push('no_hardware');
-        if (!screen.colorDepth) issues.push('no_color_depth');
-        
-        if (screen.width < 100 || screen.height < 100) {
-            issues.push('tiny_screen');
-        }
-        
-        if (typeof Date.prototype.toJSON !== 'function') {
-            issues.push('missing_date_json');
-        }
-        
-        this.checks.inconsistencies = issues;
-        return issues.length > 0;
-    },
-    
-    checkCanvas() {
-        try {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            
-            if (!ctx) {
-                this.checks.canvasBlocked = true;
-                return true;
-            }
-            
-            ctx.textBaseline = 'top';
-            ctx.font = '14px Arial';
-            ctx.textBaseline = 'alphabetic';
-            ctx.fillStyle = '#f60';
-            ctx.fillRect(125, 1, 62, 20);
-            ctx.fillStyle = '#069';
-            ctx.fillText('BotCheck', 2, 15);
-            ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
-            ctx.fillText('BotCheck', 4, 17);
-            
-            const dataUrl = canvas.toDataURL();
-            
-            this.checks.canvasBlank = dataUrl === 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-            this.checks.canvasFingerprint = dataUrl.slice(-20);
-            
-            return this.checks.canvasBlank;
-        } catch (e) {
-            this.checks.canvasError = true;
-            return true;
-        }
-    },
-    
-    checkWebGL() {
-        try {
-            const canvas = document.createElement('canvas');
-            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-            
-            if (!gl) {
-                this.checks.webglBlocked = true;
-                return true;
-            }
-            
-            const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-            if (debugInfo) {
-                this.checks.webglVendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
-                this.checks.webglRenderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
-                
-                const suspicious = /SwiftShader|llvmpipe|Microsoft Basic Render/i.test(
-                    this.checks.webglRenderer
-                );
-                this.checks.webglSuspicious = suspicious;
-                return suspicious;
-            }
-            
-            return false;
-        } catch (e) {
-            this.checks.webglError = true;
-            return true;
-        }
-    },
-    
-    async checkTimingConsistency() {
-        const delays = [];
-        
-        for (let i = 0; i < 5; i++) {
-            const start = performance.now();
-            await new Promise(resolve => setTimeout(resolve, 100));
-            const end = performance.now();
-            delays.push(end - start);
-        }
-        
-        const avg = delays.reduce((a, b) => a + b) / delays.length;
-        const variance = delays.reduce((sum, delay) => sum + Math.pow(delay - avg, 2), 0) / delays.length;
-        
-        this.checks.timingVariance = variance;
-        this.checks.timingInconsistent = variance < 1 || variance > 1000;
-        
-        return this.checks.timingInconsistent;
-    },
-    
-    checkWindowProperties() {
-        const issues = [];
-        
-        if (window.callPhantom || window._phantom) {
-            issues.push('phantom_detected');
-        }
-        
-        const botProps = [
-            '__webdriver_evaluate', '__selenium_evaluate',
-            '__webdriver_script_function', '__webdriver_script_func',
-            '__webdriver_script_fn', '__fxdriver_evaluate',
-            '__driver_unwrapped', '__webdriver_unwrapped',
-            '__driver_evaluate', '__selenium_unwrapped',
-            '__fxdriver_unwrapped'
-        ];
-        
-        botProps.forEach(prop => {
-            if (window[prop]) issues.push(`bot_prop_${prop}`);
-        });
-        
-        this.checks.windowIssues = issues;
-        return issues.length > 0;
-    },
-    
-    async checkMediaDevices() {
-        try {
-            if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
-                this.checks.noMediaDevices = true;
-                return true;
-            }
-            
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const cameras = devices.filter(d => d.kind === 'videoinput');
-            
-            this.checks.cameraCount = cameras.length;
-            this.checks.noCameras = cameras.length === 0;
-            
-            const suspiciousLabels = cameras.some(c => 
-                !c.label || c.label === '' || /fake|virtual|obs/i.test(c.label)
-            );
-            this.checks.suspiciousCameraLabels = suspiciousLabels;
-            
-            return this.checks.noCameras || suspiciousLabels;
-        } catch (e) {
-            this.checks.mediaDeviceError = true;
-            return true;
-        }
-    },
-    
-    async runAllChecks() {
-        console.log("🔍 Running bot detection checks...");
-        
-        this.checkWebDriver();
-        this.checkHeadless();
-        this.checkAutomation();
-        this.checkBrowserConsistency();
-        this.checkCanvas();
-        this.checkWebGL();
-        this.checkWindowProperties();
-        
-        await this.checkTimingConsistency();
-        await this.checkMediaDevices();
-        
-        const suspicionPoints = [
-            this.checks.webdriver ? 3 : 0,
-            this.checks.headless ? 3 : 0,
-            this.checks.automation ? 5 : 0,
-            this.checks.inconsistencies?.length > 0 ? 2 : 0,
-            this.checks.canvasBlocked || this.checks.canvasBlank ? 2 : 0,
-            this.checks.webglBlocked || this.checks.webglSuspicious ? 2 : 0,
-            this.checks.windowIssues?.length > 0 ? 3 : 0,
-            this.checks.timingInconsistent ? 1 : 0,
-            this.checks.noCameras ? 2 : 0,
-            this.checks.suspiciousCameraLabels ? 1 : 0
-        ];
-        
-        this.suspicionScore = suspicionPoints.reduce((a, b) => a + b, 0);
-        this.isLikelyBot = this.suspicionScore >= 5;
-        
-        console.log("🤖 Bot detection results:", {
-            suspicionScore: this.suspicionScore,
-            isLikelyBot: this.isLikelyBot,
-            checks: this.checks
-        });
-        
-        return {
-            isBot: this.isLikelyBot,
-            score: this.suspicionScore,
-            checks: this.checks
-        };
-    },
-    
-    getFingerprint() {
-        return {
-            userAgent: navigator.userAgent,
-            platform: navigator.platform,
-            language: navigator.language,
-            languages: navigator.languages,
-            hardwareConcurrency: navigator.hardwareConcurrency,
-            deviceMemory: navigator.deviceMemory,
-            screenResolution: `${screen.width}x${screen.height}`,
-            colorDepth: screen.colorDepth,
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            timezoneOffset: new Date().getTimezoneOffset(),
-            canvasFingerprint: this.checks.canvasFingerprint,
-            webglVendor: this.checks.webglVendor,
-            webglRenderer: this.checks.webglRenderer,
-            cookieEnabled: navigator.cookieEnabled,
-            doNotTrack: navigator.doNotTrack,
-            plugins: Array.from(navigator.plugins || []).map(p => p.name).slice(0, 5)
-        };
-    }
-};
-
 </script>
-
 </body>
 </html>
