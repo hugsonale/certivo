@@ -1912,6 +1912,12 @@ function runChallengeTimer(challenge) {
     challengeTimerInterval = setInterval(() => {
         timeLeft--;
         
+        // ✅ FIX: Stop at 0, never go negative
+        if (timeLeft < 0) {
+            clearInterval(challengeTimerInterval);
+            return;
+        }
+        
         timerCountdown.innerText = timeLeft;
         
         const progress = (timeLeft / 3) * 100;
@@ -1922,8 +1928,8 @@ function runChallengeTimer(challenge) {
             timerBar.classList.add('warning');
         }
         
-        if (timeLeft <= 0) {
-            clearInterval(challengeTimerInterval);
+        if (timeLeft === 0) {
+            clearInterval(challengeTimerInterval);  // ✅ STOP IMMEDIATELY
             console.log('⏹️ Timer complete - stopping recording');
             
             if (mediaRecorder && mediaRecorder.state === 'recording') {
