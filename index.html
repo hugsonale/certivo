@@ -2234,11 +2234,45 @@ function closeVerification() {
 function retryEntireProcess() {
     console.log('🔄 User chose to retry entire verification');
     
+    // ✅ FIX: Stop camera stream completely
+    if (window.cameraStream) {
+        window.cameraStream.getTracks().forEach(track => {
+            track.stop();
+            console.log('🛑 Camera track stopped:', track.label);
+        });
+        window.cameraStream = null;
+        console.log('✅ Camera stream cleared');
+    }
+    
+    // Clear all intervals
+    if (calibrationCheckInterval) clearInterval(calibrationCheckInterval);
+    if (calibrationProgressInterval) clearInterval(calibrationProgressInterval);
+    if (challengeTimerInterval) clearInterval(challengeTimerInterval);
+    if (autoAdvanceInterval) clearInterval(autoAdvanceInterval);
+    
+    // Reset all state
     challenges = [];
     challengeIndex = 0;
     sessionResults = [];
     currentChallengeResult = null;
     finalSessionData = null;
+    calibrationFaceModel = null;  // ✅ Also reset face model
+    
+    // ✅ Reset button states
+    const allowButton = document.querySelector('#screen2 .btn-primary');
+    if (allowButton) {
+        allowButton.disabled = false;
+        allowButton.innerText = 'Allow Camera';
+        allowButton.style.background = '';  // Reset to default gradient
+    }
+    
+    // ✅ Hide any errors
+    const errorDiv = document.getElementById('cameraError');
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+    }
+    
+    console.log('✅ Complete reset done - returning to start screen');
     
     goToScreen1();
 }
