@@ -1424,17 +1424,52 @@ function goToScreen1() {
     hideAllScreens();
     document.getElementById('screen1').classList.add('active');
     
+    // ✅ FIX: Complete camera cleanup
     if (window.cameraStream) {
-        window.cameraStream.getTracks().forEach(track => track.stop());
+        window.cameraStream.getTracks().forEach(track => {
+            track.stop();
+            console.log('🛑 Stopped track:', track.label);
+        });
         window.cameraStream = null;
-        console.log('🛑 Camera stream stopped');
+        console.log('✅ Camera stream nullified');
     }
     
+    // ✅ Disconnect video elements
+    const calibrationVideo = document.getElementById('calibrationVideo');
+    const challengeVideo = document.getElementById('challengeVideo');
+    
+    if (calibrationVideo && calibrationVideo.srcObject) {
+        calibrationVideo.srcObject = null;
+        console.log('📹 Calibration video disconnected');
+    }
+    
+    if (challengeVideo && challengeVideo.srcObject) {
+        challengeVideo.srcObject = null;
+        console.log('📹 Challenge video disconnected');
+    }
+    
+    // Clear all intervals
     if (calibrationCheckInterval) clearInterval(calibrationCheckInterval);
     if (calibrationProgressInterval) clearInterval(calibrationProgressInterval);
+    if (challengeTimerInterval) clearInterval(challengeTimerInterval);
     if (autoAdvanceInterval) clearInterval(autoAdvanceInterval);
+    
+    // ✅ Reset Screen 2 button state
+    const allowButton = document.querySelector('#screen2 .btn-primary');
+    if (allowButton) {
+        allowButton.disabled = false;
+        allowButton.innerText = 'Allow Camera';
+        allowButton.style.background = '';
+    }
+    
+    // ✅ Hide Screen 2 errors
+    const errorDiv = document.getElementById('cameraError');
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+    }
+    
+    console.log('✅ Returned to Screen 1 - fully reset');
 }
-
 function goToScreen2() {
     hideAllScreens();
     document.getElementById('screen2').classList.add('active');
