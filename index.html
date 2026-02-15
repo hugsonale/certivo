@@ -1474,9 +1474,28 @@ function goToScreen2() {
     hideAllScreens();
     document.getElementById('screen2').classList.add('active');
     
-    // ✅ Check browser support immediately
+    console.log('📸 Screen 2: Camera Permission Gate');
+    console.log('Camera stream exists?', !!window.cameraStream);
+    
+    // ✅ CRITICAL: If camera stream already exists, stop it first
+    if (window.cameraStream) {
+        console.log('⚠️ Camera stream already exists - stopping it');
+        window.cameraStream.getTracks().forEach(track => track.stop());
+        window.cameraStream = null;
+    }
+    
+    // ✅ Reset button to initial state
+    const allowButton = document.querySelector('#screen2 .btn-primary');
+    allowButton.disabled = false;
+    allowButton.innerText = 'Allow Camera';
+    allowButton.style.background = '';  // Reset gradient
+    
+    // ✅ Hide any previous errors
+    const errorDiv = document.getElementById('cameraError');
+    errorDiv.style.display = 'none';
+    
+    // Check browser support
     if (!checkCameraSupport()) {
-        const errorDiv = document.getElementById('cameraError');
         errorDiv.style.display = 'block';
         
         const errorTitle = errorDiv.querySelector('.error-title');
@@ -1485,9 +1504,33 @@ function goToScreen2() {
         errorTitle.innerText = '❌ Browser Not Supported';
         errorText.innerText = 'Your browser doesn\'t support camera access. Please use Chrome, Firefox, Safari, or Edge.';
         
-        // Disable the allow button
-        document.querySelector('#screen2 .btn-primary').disabled = true;
+        allowButton.disabled = true;
     }
+}
+
+// ============================================================================
+// CAMERA STATE CHECKER
+// ============================================================================
+
+function isCameraStreamActive() {
+    if (!window.cameraStream) {
+        return false;
+    }
+    
+    const tracks = window.cameraStream.getTracks();
+    if (tracks.length === 0) {
+        return false;
+    }
+    
+    // Check if any track is active
+    const hasActiveTrack = tracks.some(track => track.readyState === 'live');
+    
+    console.log('📹 Camera state check:');
+    console.log('  - Stream exists:', !!window.cameraStream);
+    console.log('  - Tracks:', tracks.length);
+    console.log('  - Active tracks:', hasActiveTrack);
+    
+    return hasActiveTrack;
 }
 
 function goToScreen3() {
