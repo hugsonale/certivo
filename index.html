@@ -1587,6 +1587,22 @@ async function requestCameraAccess() {
     // Hide any previous errors
     errorDiv.style.display = 'none';
     
+    // ✅ FIX: Check if camera is already active (shouldn't happen but just in case)
+    if (isCameraStreamActive()) {
+        console.log('⚠️ Camera already active - proceeding to calibration');
+        allowButton.innerText = 'Access Granted ✓';
+        allowButton.style.background = '#10b981';
+        
+        setTimeout(() => {
+            startCalibrationScreen();
+        }, 500);
+        return;
+    }
+    
+    // Show loading state on button
+    allowButton.disabled = true;
+    allowButton.innerText = 'Requesting access...';
+    
     // Show loading state on button
     allowButton.disabled = true;
     allowButton.innerText = 'Requesting access...';
