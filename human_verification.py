@@ -2,6 +2,9 @@ import os
 import cv2
 import numpy as np
 from logger import log_event
+from typing import Optional, Dict, Any
+import asyncio
+from functools import lru_cache
 
 # ============================================================================
 # MEDIAPIPE — imported with graceful fallback to OpenCV-only mode
@@ -19,65 +22,125 @@ except ImportError:
 
 
 # ============================================================================
+# PHASE 3: MODEL CACHING - Shared instances across all requests
+# ============================================================================
+
+_CACHED_FACE_MESH = None
+_CACHED_FACE_CASCADE = None
+_CACHED_EYE_CASCADE = None
+_CACHED_MOUTH_CASCADE = None
+
+
+def _get_face_mesh():
+    """
+    Return cached FaceMesh instance (singleton pattern).
+    Creates it once, reuses for all requests → saves ~500ms per verification.
+    """
+    global _CACHED_FACE_MESH
+    
+    if MEDIAPIPE_AVAILABLE:
+        if _CACHED_FACE_MESH is None:
+            print("🔧 Creating MediaPipe FaceMesh model (cached)")
+            _CACHED_FACE_MESH = _MP_FACE_MESH.FaceMesh(
+                static_image_mode=False,
+                max_num_faces=1,
+                refine_landmarks=True,
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.5,
+            )
+        return _CACHED_FACE_MESH
+    return None
+
+
+def _get_face_cascade():
+    """Return cached OpenCV face cascade."""
+    global _CACHED_FACE_CASCADE
+    
+    if _CACHED_FACE_CASCADE is None:
+        _CACHED_FACE_CASCADE = cv2.CascadeClassifier(
+            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        )
+    return _CACHED_FACE_CASCADE
+
+
+def _get_eye_cascade():
+    """Return cached OpenCV eye cascade."""
+    global _CACHED_EYE_CASCADE
+    
+    if _CACHED_EYE_CASCADE is None:
+        _CACHED_EYE_CASCADE = cv2.CascadeClassifier(
+            cv2.data.haarcascades + "haarcascade_eye.xml"
+        )
+    return _CACHED_EYE_CASCADE
+
+
+def _get_mouth_cascade():
+    """Return cached OpenCV mouth cascade."""
+    global _CACHED_MOUTH_CASCADE
+    
+    if _CACHED_MOUTH_CASCADE is None:
+        _CACHED_MOUTH_CASCADE = cv2.CascadeClassifier(
+            cv2.data.haarcascades + "haarcascade_smile.xml"
+        )
+    return _CACHED_MOUTH_CASCADE
+
+
+# ============================================================================
 # MEDIAPIPE LANDMARK INDICES
 # ============================================================================
 
-# Left eye  (6-point EAR formula)
-LEFT_EYE_IDX  = [33,  160, 158, 133, 153, 144]
-# Right eye (6-point EAR formula)
-RIGHT_EYE_IDX = [362, 385, 387, 263, 373, 380]
-
-# Mouth — inner lip
+LEFT_EYE_IDX     = [33,  160, 158, 133, 153, 144]
+RIGHT_EYE_IDX    = [362, 385, 387, 263, 373, 380]
 MOUTH_TOP_IDX    = 13
 MOUTH_BOTTOM_IDX = 14
 MOUTH_LEFT_IDX   = 78
 MOUTH_RIGHT_IDX  = 308
-
-# Nose tip  (used for head-turn & nod tracking)
-NOSE_TIP_IDX = 1
-
-# Eyebrows — middle landmark on each brow
-LEFT_BROW_IDX  = [70, 63, 105, 66, 107]   # top of left brow
-RIGHT_BROW_IDX = [300, 293, 334, 296, 336] # top of right brow
-
-# Eye-centre landmark (for eyebrow-distance ratio)
-LEFT_EYE_TOP_IDX  = 159   # top of left iris
-RIGHT_EYE_TOP_IDX = 386   # top of right iris
+NOSE_TIP_IDX     = 1
+LEFT_BROW_IDX    = [70, 63, 105, 66, 107]
+RIGHT_BROW_IDX   = [300, 293, 334, 296, 336]
+LEFT_EYE_TOP_IDX = 159
+RIGHT_EYE_TOP_IDX = 386
 
 
 # ============================================================================
 # DETECTION THRESHOLDS
 # ============================================================================
 
-# ---- Head turn ----
-HEAD_TURN_MIN_DELTA   = 0.06   # minimum normalised horizontal movement (6 % of frame)
-HEAD_TURN_EASY_DELTA  = 0.04   # easy / fast-track threshold
+# Head turn
+HEAD_TURN_MIN_DELTA   = 0.06
+HEAD_TURN_EASY_DELTA  = 0.04
 
-# ---- Blink ----
-EAR_CLOSED_THRESH     = 0.22   # EAR below this → eyes closed
-EAR_OPEN_THRESH       = 0.26   # EAR above this → eyes open (hysteresis)
-MIN_BLINK_FRAMES      = 2      # blink must last at least 2 frames
-MIN_BLINKS_REQUIRED   = 2      # user must blink at least twice
+# Blink
+EAR_CLOSED_THRESH     = 0.22
+EAR_OPEN_THRESH       = 0.26
+MIN_BLINK_FRAMES      = 2
+MIN_BLINKS_REQUIRED   = 2
 
-# ---- Nod ----
-NOD_MIN_DELTA         = 0.05   # minimum normalised vertical movement
-NOD_MIN_CYCLES        = 1      # at least 1 complete down-up or up-down cycle
-NOD_EASY_DELTA        = 0.03   # easy / fast-track threshold
+# Nod
+NOD_MIN_DELTA         = 0.05
+NOD_MIN_CYCLES        = 1
+NOD_EASY_DELTA        = 0.03
 
-# ---- Mouth open ----
-MAR_OPEN_THRESH       = 0.45   # MAR above this → mouth open
-MAR_EASY_THRESH       = 0.35   # easy / fast-track threshold
-MIN_MOUTH_OPEN_FRAMES = 5      # must stay open for at least 5 frames
+# Mouth
+MAR_OPEN_THRESH       = 0.45
+MAR_EASY_THRESH       = 0.35
+MIN_MOUTH_OPEN_FRAMES = 5
 
-# ---- Eyebrow raise ----
-BROW_RAISE_THRESH     = 0.015  # normalised upward movement of brow relative to eye
-BROW_EASY_THRESH      = 0.008  # easy / fast-track threshold
-MIN_BROW_RAISE_FRAMES = 5      # must stay raised for at least 5 frames
+# Eyebrow
+BROW_RAISE_THRESH     = 0.015
+BROW_EASY_THRESH      = 0.008
+MIN_BROW_RAISE_FRAMES = 5
 
-# ---- General ----
-MIN_FACE_FRAMES       = 8      # face must be visible in at least 8 frames
-MIN_FACE_FRAMES_EASY  = 5      # easy / fast-track
-MAX_FRAMES_TO_ANALYSE = 150    # cap at ~5 seconds @ 30 fps
+# General
+MIN_FACE_FRAMES       = 8
+MIN_FACE_FRAMES_EASY  = 5
+MAX_FRAMES_TO_ANALYSE = 150
+
+# ============================================================================
+# PHASE 2: FRAME SAMPLING - Speed up 2x by skipping frames
+# ============================================================================
+
+FRAME_SKIP = 2  # Process every 2nd frame (2x speed boost)
 
 
 # ============================================================================
@@ -85,11 +148,7 @@ MAX_FRAMES_TO_ANALYSE = 150    # cap at ~5 seconds @ 30 fps
 # ============================================================================
 
 def _ear(pts: np.ndarray) -> float:
-    """
-    Eye Aspect Ratio.
-    pts shape: (6, 2)  —  [p1 … p6] following the standard 6-point model.
-    Lower value → more closed.
-    """
+    """Eye Aspect Ratio - lower value = more closed."""
     A = np.linalg.norm(pts[1] - pts[5])
     B = np.linalg.norm(pts[2] - pts[4])
     C = np.linalg.norm(pts[0] - pts[3]) + 1e-6
@@ -102,37 +161,22 @@ def _ear(pts: np.ndarray) -> float:
 
 def _mar(top: np.ndarray, bottom: np.ndarray,
          left: np.ndarray, right: np.ndarray) -> float:
-    """
-    Mouth Aspect Ratio.
-    Higher value → more open.
-    """
+    """Mouth Aspect Ratio - higher value = more open."""
     vertical   = np.linalg.norm(top - bottom)
     horizontal = np.linalg.norm(left - right) + 1e-6
     return vertical / horizontal
 
 
 # ============================================================================
-# UTILITY — build FaceMesh instance
+# PHASE 2: OPTIMIZED FRAME READING with early exit & sampling
 # ============================================================================
 
-def _make_face_mesh():
-    return _MP_FACE_MESH.FaceMesh(
-        static_image_mode=False,
-        max_num_faces=1,
-        refine_landmarks=True,
-        min_detection_confidence=0.5,
-        min_tracking_confidence=0.5,
-    )
-
-
-# ============================================================================
-# UTILITY — read all frames from a video file
-# ============================================================================
-
-def _read_frames(video_path: str):
+def _read_frames_optimized(video_path: str, max_frames: int = MAX_FRAMES_TO_ANALYSE):
     """
-    Read up to MAX_FRAMES_TO_ANALYSE BGR frames from video_path.
-    Returns list of frames, or empty list on failure.
+    Read frames with intelligent sampling:
+    - Skip every other frame (2x speed)
+    - Stop early if we have enough data
+    - Return list of BGR frames
     """
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -140,41 +184,104 @@ def _read_frames(video_path: str):
         return []
 
     frames = []
-    while len(frames) < MAX_FRAMES_TO_ANALYSE:
+    frame_idx = 0
+    
+    while len(frames) < max_frames:
         ret, frame = cap.read()
         if not ret or frame is None:
             break
-        frames.append(frame)
+        
+        # ✅ PHASE 2: Skip frames for 2x speed boost
+        if frame_idx % FRAME_SKIP == 0:
+            frames.append(frame)
+        
+        frame_idx += 1
 
     cap.release()
-    print(f"📹 Read {len(frames)} frames from video")
+    print(f"📹 Read {len(frames)} frames from video (sampled from {frame_idx} total)")
     return frames
 
 
 # ============================================================================
-# DETECTOR 1 — Head Turn  (left / right)
+# PHASE 2: BETTER ERROR MESSAGES - User-friendly explanations
+# ============================================================================
+
+ERROR_MESSAGES = {
+    "video_not_found": {
+        "code": "VIDEO_NOT_FOUND",
+        "user_message": "The video file could not be found. Please try recording again.",
+        "tech_details": "Video file path does not exist or is inaccessible."
+    },
+    "video_too_short": {
+        "code": "VIDEO_TOO_SHORT",
+        "user_message": "Video recording was too short. Please hold still for at least 2 seconds.",
+        "tech_details": "Video contained fewer than 10 frames."
+    },
+    "no_face_detected": {
+        "code": "NO_FACE_DETECTED",
+        "user_message": "We couldn't detect your face clearly. Please ensure good lighting and center your face in the frame.",
+        "tech_details": "Face detection failed in sufficient number of frames."
+    },
+    "action_not_detected": {
+        "code": "ACTION_NOT_DETECTED",
+        "user_message": "We didn't detect the requested action. Please perform the action clearly and try again.",
+        "tech_details": "Challenge-specific action detection failed validation criteria."
+    },
+    "direction_mismatch": {
+        "code": "DIRECTION_MISMATCH",
+        "user_message": "You moved in the wrong direction. Please follow the on-screen instruction carefully.",
+        "tech_details": "Detected movement direction does not match expected direction."
+    },
+    "processing_error": {
+        "code": "PROCESSING_ERROR",
+        "user_message": "Something went wrong while processing your video. Please try again.",
+        "tech_details": "Unexpected error during video analysis."
+    }
+}
+
+
+def _build_error_response(error_type: str, details: str = None) -> Dict[str, Any]:
+    """
+    Build user-friendly error response with both user and technical messages.
+    
+    PHASE 2: Better error messages for debugging and UX.
+    """
+    error_info = ERROR_MESSAGES.get(error_type, ERROR_MESSAGES["processing_error"])
+    
+    return {
+        "challenge_passed": False,
+        "liveness_score": 0.0,
+        "action_detected": "none",
+        "action_matched": False,
+        "direction_detected": "none",
+        "direction_matched": False,
+        "error": error_info["user_message"],
+        "error_code": error_info["code"],
+        "error_details": details or error_info["tech_details"],
+    }
+
+
+# ============================================================================
+# DETECTOR 1 — Head Turn (left / right)
 # ============================================================================
 
 def detect_head_turn(video_path: str, expected_direction: str, fast_track: bool = False):
-    """
-    Detect head turn left or right using nose-tip X position tracking.
-
-    Returns dict with keys:
-        face_detected_frames, direction_detected, direction_matched,
-        movement_magnitude, passed
-    """
+    """Detect head turn left or right using nose-tip X position tracking."""
     threshold = HEAD_TURN_EASY_DELTA if fast_track else HEAD_TURN_MIN_DELTA
     min_face  = MIN_FACE_FRAMES_EASY  if fast_track else MIN_FACE_FRAMES
 
-    frames = _read_frames(video_path)
+    frames = _read_frames_optimized(video_path)
     if not frames:
-        return {"passed": False, "error": "Could not read video", "face_detected_frames": 0}
+        return _build_error_response("video_not_found")
+
+    if len(frames) < 10:
+        return _build_error_response("video_too_short", f"Only {len(frames)} frames")
 
     face_detected_frames = 0
     nose_x_positions = []
 
     if MEDIAPIPE_AVAILABLE:
-        face_mesh = _make_face_mesh()
+        face_mesh = _get_face_mesh()
         for frame in frames:
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             result = face_mesh.process(rgb)
@@ -182,67 +289,53 @@ def detect_head_turn(video_path: str, expected_direction: str, fast_track: bool 
                 face_detected_frames += 1
                 lm = result.multi_face_landmarks[0].landmark
                 nose_x_positions.append(lm[NOSE_TIP_IDX].x)
-        face_mesh.close()
 
     else:
-        # OpenCV fallback
-        cascade = cv2.CascadeClassifier(
-            cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+        cascade = _get_face_cascade()
         for frame in frames:
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             faces = cascade.detectMultiScale(gray, 1.1, 4, minSize=(40, 40))
             if len(faces) > 0:
                 face_detected_frames += 1
                 x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
-                # Normalise to [0,1]
                 nose_x_positions.append((x + w / 2) / frame.shape[1])
 
     print(f"[HEAD TURN] face_frames={face_detected_frames}, positions={len(nose_x_positions)}")
 
     if face_detected_frames < min_face or len(nose_x_positions) < 4:
-        return {
-            "passed": False,
-            "error": "Face not visible enough",
-            "face_detected_frames": face_detected_frames,
-            "direction_detected": "none",
-            "direction_matched": False,
-        }
+        return _build_error_response("no_face_detected", 
+            f"Face visible in {face_detected_frames}/{len(frames)} frames, need {min_face}")
 
-    # Use first-quarter average vs last-quarter average for robustness
+    # Calculate movement
     q = max(len(nose_x_positions) // 4, 1)
     start_x = float(np.mean(nose_x_positions[:q]))
     end_x   = float(np.mean(nose_x_positions[-q:]))
-    delta   = end_x - start_x          # positive = moved right in frame
+    delta   = end_x - start_x
     magnitude = abs(delta)
 
-    print(f"[HEAD TURN] start_x={start_x:.3f} end_x={end_x:.3f} delta={delta:.3f} threshold={threshold:.3f}")
+    print(f"[HEAD TURN] start={start_x:.3f} end={end_x:.3f} delta={delta:.3f} threshold={threshold:.3f}")
 
-    # Camera is mirrored: moving left in the real world → nose moves RIGHT in frame (+delta)
-    # Moving right in the real world → nose moves LEFT in frame  (-delta)
     if magnitude < threshold:
-        return {
-            "passed": False,
-            "error": "Head movement too small",
-            "face_detected_frames": face_detected_frames,
-            "direction_detected": "none",
-            "direction_matched": False,
-            "movement_magnitude": magnitude,
-        }
+        return _build_error_response("action_not_detected",
+            f"Head movement too small: {magnitude:.3f} < {threshold:.3f}")
 
-    # delta > 0 (nose went right in frame) → user turned LEFT
-    # delta < 0 (nose went left  in frame) → user turned RIGHT
+    # Camera mirrored: delta > 0 = turned left, delta < 0 = turned right
     direction_detected = "left" if delta > 0 else "right"
     direction_matched  = (direction_detected == expected_direction)
 
-    print(f"[HEAD TURN] detected={direction_detected} expected={expected_direction} matched={direction_matched}")
+    if not direction_matched:
+        return _build_error_response("direction_mismatch",
+            f"Expected {expected_direction}, detected {direction_detected}")
+
+    print(f"[HEAD TURN] ✅ PASS - detected={direction_detected}")
 
     return {
-        "passed": direction_matched,
+        "passed": True,
         "face_detected_frames": face_detected_frames,
         "direction_detected": direction_detected,
-        "direction_matched": direction_matched,
+        "direction_matched": True,
         "movement_magnitude": magnitude,
-        "error": None if direction_matched else f"Expected {expected_direction}, detected {direction_detected}",
+        "error": None,
     }
 
 
@@ -251,17 +344,15 @@ def detect_head_turn(video_path: str, expected_direction: str, fast_track: bool 
 # ============================================================================
 
 def detect_blinks(video_path: str, fast_track: bool = False):
-    """
-    Detect blinks using Eye Aspect Ratio (EAR) with hysteresis.
-
-    Returns dict with keys:
-        face_detected_frames, blink_count, passed
-    """
+    """Detect blinks using Eye Aspect Ratio (EAR) with hysteresis."""
     min_face = MIN_FACE_FRAMES_EASY if fast_track else MIN_FACE_FRAMES
 
-    frames = _read_frames(video_path)
+    frames = _read_frames_optimized(video_path)
     if not frames:
-        return {"passed": False, "error": "Could not read video", "face_detected_frames": 0}
+        return _build_error_response("video_not_found")
+
+    if len(frames) < 10:
+        return _build_error_response("video_too_short", f"Only {len(frames)} frames")
 
     face_detected_frames = 0
     blink_count   = 0
@@ -269,7 +360,7 @@ def detect_blinks(video_path: str, fast_track: bool = False):
     closed_frames = 0
 
     if MEDIAPIPE_AVAILABLE:
-        face_mesh = _make_face_mesh()
+        face_mesh = _get_face_mesh()
         for frame in frames:
             rgb    = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             result = face_mesh.process(rgb)
@@ -281,7 +372,6 @@ def detect_blinks(video_path: str, fast_track: bool = False):
             lm = result.multi_face_landmarks[0].landmark
             h, w = frame.shape[:2]
 
-            # Extract 2-D coordinates for each eye
             left_pts  = np.array([[lm[i].x * w, lm[i].y * h] for i in LEFT_EYE_IDX])
             right_pts = np.array([[lm[i].x * w, lm[i].y * h] for i in RIGHT_EYE_IDX])
 
@@ -300,13 +390,9 @@ def detect_blinks(video_path: str, fast_track: bool = False):
                 elif not eye_closed:
                     closed_frames = 0
 
-        face_mesh.close()
-
     else:
-        # OpenCV fallback — use eye cascade presence as proxy
-        eye_cascade  = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_eye.xml")
-        face_cascade = cv2.CascadeClassifier(
-            cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+        eye_cascade  = _get_eye_cascade()
+        face_cascade = _get_face_cascade()
 
         for frame in frames:
             gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -330,42 +416,46 @@ def detect_blinks(video_path: str, fast_track: bool = False):
                 else:
                     closed_frames = 0
 
+    if face_detected_frames < min_face:
+        return _build_error_response("no_face_detected",
+            f"Face visible in {face_detected_frames}/{len(frames)} frames")
+
     passed = blink_count >= MIN_BLINKS_REQUIRED
     print(f"[BLINK] face_frames={face_detected_frames} blinks={blink_count} passed={passed}")
 
+    if not passed:
+        return _build_error_response("action_not_detected",
+            f"Only {blink_count} blink(s) detected, need {MIN_BLINKS_REQUIRED}")
+
     return {
-        "passed": passed,
+        "passed": True,
         "face_detected_frames": face_detected_frames,
         "blink_count": blink_count,
-        "error": None if passed else f"Only {blink_count} blink(s) detected, need {MIN_BLINKS_REQUIRED}",
+        "error": None,
     }
 
 
 # ============================================================================
-# DETECTOR 3 — Nod  (up / down vertical movement)
+# DETECTOR 3 — Nod
 # ============================================================================
 
 def detect_nod(video_path: str, fast_track: bool = False):
-    """
-    Detect a head nod by tracking vertical nose-tip position.
-
-    A complete nod = at least one direction reversal (down → up  or  up → down).
-
-    Returns dict with keys:
-        face_detected_frames, nod_cycles, passed
-    """
+    """Detect head nod by tracking vertical nose-tip position."""
     threshold = NOD_EASY_DELTA  if fast_track else NOD_MIN_DELTA
     min_face  = MIN_FACE_FRAMES_EASY if fast_track else MIN_FACE_FRAMES
 
-    frames = _read_frames(video_path)
+    frames = _read_frames_optimized(video_path)
     if not frames:
-        return {"passed": False, "error": "Could not read video", "face_detected_frames": 0}
+        return _build_error_response("video_not_found")
+
+    if len(frames) < 10:
+        return _build_error_response("video_too_short", f"Only {len(frames)} frames")
 
     face_detected_frames = 0
     nose_y_positions     = []
 
     if MEDIAPIPE_AVAILABLE:
-        face_mesh = _make_face_mesh()
+        face_mesh = _get_face_mesh()
         for frame in frames:
             rgb    = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             result = face_mesh.process(rgb)
@@ -373,11 +463,9 @@ def detect_nod(video_path: str, fast_track: bool = False):
                 face_detected_frames += 1
                 lm = result.multi_face_landmarks[0].landmark
                 nose_y_positions.append(lm[NOSE_TIP_IDX].y)
-        face_mesh.close()
 
     else:
-        cascade = cv2.CascadeClassifier(
-            cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+        cascade = _get_face_cascade()
         for frame in frames:
             gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             faces = cascade.detectMultiScale(gray, 1.1, 4, minSize=(40, 40))
@@ -389,44 +477,39 @@ def detect_nod(video_path: str, fast_track: bool = False):
     print(f"[NOD] face_frames={face_detected_frames} y_positions={len(nose_y_positions)}")
 
     if face_detected_frames < min_face or len(nose_y_positions) < 6:
-        return {
-            "passed": False,
-            "error": "Face not visible enough",
-            "face_detected_frames": face_detected_frames,
-            "nod_cycles": 0,
-        }
+        return _build_error_response("no_face_detected",
+            f"Face visible in {face_detected_frames}/{len(frames)} frames")
 
-    # Smooth the position data with a 3-frame rolling average
+    # Smooth and count direction changes
     smoothed = np.convolve(nose_y_positions, np.ones(3) / 3, mode="valid")
-
-    # Count direction changes that exceed the threshold
     direction_changes = 0
     last_direction    = None
 
     for i in range(1, len(smoothed)):
         delta = smoothed[i] - smoothed[i - 1]
-        if abs(delta) < 0.005:          # ignore micro-jitter
+        if abs(delta) < 0.005:
             continue
         current_direction = "down" if delta > 0 else "up"
         if last_direction is not None and current_direction != last_direction:
             direction_changes += 1
         last_direction = current_direction
 
-    # Each full nod = 2 direction changes (down + up)
     nod_cycles = direction_changes // 2
-
-    # Also check overall vertical range as a sanity check
     y_range = float(np.max(smoothed) - np.min(smoothed))
     passed  = nod_cycles >= NOD_MIN_CYCLES and y_range >= threshold
 
-    print(f"[NOD] direction_changes={direction_changes} nod_cycles={nod_cycles} y_range={y_range:.3f} passed={passed}")
+    print(f"[NOD] cycles={nod_cycles} range={y_range:.3f} passed={passed}")
+
+    if not passed:
+        return _build_error_response("action_not_detected",
+            f"Nod not detected clearly (cycles={nod_cycles}, range={y_range:.3f})")
 
     return {
-        "passed": passed,
+        "passed": True,
         "face_detected_frames": face_detected_frames,
         "nod_cycles": nod_cycles,
         "y_range": y_range,
-        "error": None if passed else f"Nod not clearly detected (cycles={nod_cycles}, range={y_range:.3f})",
+        "error": None,
     }
 
 
@@ -435,24 +518,22 @@ def detect_nod(video_path: str, fast_track: bool = False):
 # ============================================================================
 
 def detect_mouth_open(video_path: str, fast_track: bool = False):
-    """
-    Detect open mouth using Mouth Aspect Ratio (MAR).
-
-    Returns dict with keys:
-        face_detected_frames, mouth_open_frames, passed
-    """
+    """Detect open mouth using Mouth Aspect Ratio (MAR)."""
     mar_thresh = MAR_EASY_THRESH       if fast_track else MAR_OPEN_THRESH
     min_face   = MIN_FACE_FRAMES_EASY  if fast_track else MIN_FACE_FRAMES
 
-    frames = _read_frames(video_path)
+    frames = _read_frames_optimized(video_path)
     if not frames:
-        return {"passed": False, "error": "Could not read video", "face_detected_frames": 0}
+        return _build_error_response("video_not_found")
+
+    if len(frames) < 10:
+        return _build_error_response("video_too_short", f"Only {len(frames)} frames")
 
     face_detected_frames = 0
     mouth_open_frames    = 0
 
     if MEDIAPIPE_AVAILABLE:
-        face_mesh = _make_face_mesh()
+        face_mesh = _get_face_mesh()
         for frame in frames:
             rgb    = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             result = face_mesh.process(rgb)
@@ -474,14 +555,9 @@ def detect_mouth_open(video_path: str, fast_track: bool = False):
             if ratio > mar_thresh:
                 mouth_open_frames += 1
 
-        face_mesh.close()
-
     else:
-        # OpenCV fallback — use smile/mouth cascade
-        face_cascade  = cv2.CascadeClassifier(
-            cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-        mouth_cascade = cv2.CascadeClassifier(
-            cv2.data.haarcascades + "haarcascade_smile.xml")
+        face_cascade  = _get_face_cascade()
+        mouth_cascade = _get_mouth_cascade()
 
         for frame in frames:
             gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -490,20 +566,27 @@ def detect_mouth_open(video_path: str, fast_track: bool = False):
                 continue
             face_detected_frames += 1
             x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
-            # Focus on lower half of face
             lower = gray[y + h // 2: y + h, x: x + w]
             mouths = mouth_cascade.detectMultiScale(lower, 1.7, 11)
             if len(mouths) > 0:
                 mouth_open_frames += 1
 
-    passed = face_detected_frames >= min_face and mouth_open_frames >= MIN_MOUTH_OPEN_FRAMES
+    if face_detected_frames < min_face:
+        return _build_error_response("no_face_detected",
+            f"Face visible in {face_detected_frames}/{len(frames)} frames")
+
+    passed = mouth_open_frames >= MIN_MOUTH_OPEN_FRAMES
     print(f"[MOUTH] face_frames={face_detected_frames} open_frames={mouth_open_frames} passed={passed}")
 
+    if not passed:
+        return _build_error_response("action_not_detected",
+            f"Mouth open only in {mouth_open_frames} frame(s), need {MIN_MOUTH_OPEN_FRAMES}")
+
     return {
-        "passed": passed,
+        "passed": True,
         "face_detected_frames": face_detected_frames,
         "mouth_open_frames": mouth_open_frames,
-        "error": None if passed else f"Mouth open only in {mouth_open_frames} frame(s), need {MIN_MOUTH_OPEN_FRAMES}",
+        "error": None,
     }
 
 
@@ -512,28 +595,23 @@ def detect_mouth_open(video_path: str, fast_track: bool = False):
 # ============================================================================
 
 def detect_eyebrow_raise(video_path: str, fast_track: bool = False):
-    """
-    Detect eyebrow raise by comparing eyebrow-to-eye-top distance over time.
-
-    Uses normalised ratio:  eyebrow_y_mean / eye_top_y  (MediaPipe coords, y increases downward)
-    When eyebrows raise, eyebrow Y decreases faster than eye_top Y → ratio drops.
-
-    Returns dict with keys:
-        face_detected_frames, eyebrow_raise_frames, passed
-    """
+    """Detect eyebrow raise by comparing eyebrow-to-eye-top distance."""
     raise_thresh = BROW_EASY_THRESH    if fast_track else BROW_RAISE_THRESH
     min_face     = MIN_FACE_FRAMES_EASY if fast_track else MIN_FACE_FRAMES
 
-    frames = _read_frames(video_path)
+    frames = _read_frames_optimized(video_path)
     if not frames:
-        return {"passed": False, "error": "Could not read video", "face_detected_frames": 0}
+        return _build_error_response("video_not_found")
+
+    if len(frames) < 10:
+        return _build_error_response("video_too_short", f"Only {len(frames)} frames")
 
     face_detected_frames = 0
-    brow_ratios          = []          # one value per frame
+    brow_ratios          = []
     eyebrow_raise_frames = 0
 
     if MEDIAPIPE_AVAILABLE:
-        face_mesh = _make_face_mesh()
+        face_mesh = _get_face_mesh()
         for frame in frames:
             rgb    = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             result = face_mesh.process(rgb)
@@ -544,40 +622,27 @@ def detect_eyebrow_raise(video_path: str, fast_track: bool = False):
             face_detected_frames += 1
             lm = result.multi_face_landmarks[0].landmark
 
-            # Average brow Y (top of brow arches)
             left_brow_y  = np.mean([lm[i].y for i in LEFT_BROW_IDX])
             right_brow_y = np.mean([lm[i].y for i in RIGHT_BROW_IDX])
             avg_brow_y   = (left_brow_y + right_brow_y) / 2.0
 
-            # Eye-top Y reference
             left_eye_y   = lm[LEFT_EYE_TOP_IDX].y
             right_eye_y  = lm[RIGHT_EYE_TOP_IDX].y
             avg_eye_y    = (left_eye_y + right_eye_y) / 2.0
 
-            # Distance between brow and eye top (in normalised coords)
-            # Larger distance = more space = brows raised higher
-            brow_eye_dist = avg_eye_y - avg_brow_y   # positive because brow is above eye
+            brow_eye_dist = avg_eye_y - avg_brow_y
             brow_ratios.append(brow_eye_dist)
 
-        face_mesh.close()
-
         if len(brow_ratios) >= 5:
-            # Baseline = average of first 20% of frames
             baseline_n  = max(len(brow_ratios) // 5, 3)
             baseline    = float(np.mean(brow_ratios[:baseline_n]))
 
             for ratio in brow_ratios:
-                # When eyebrows are raised, brow_eye_dist INCREASES
                 if (ratio - baseline) > raise_thresh:
                     eyebrow_raise_frames += 1
 
-            print(f"[EYEBROW] baseline={baseline:.4f} raise_thresh={raise_thresh:.4f}")
-
     else:
-        # OpenCV fallback — very basic: track upper face brightness change
-        # Not as accurate but provides a usable fallback
-        face_cascade = cv2.CascadeClassifier(
-            cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+        face_cascade = _get_face_cascade()
         brightness_vals = []
 
         for frame in frames:
@@ -587,37 +652,41 @@ def detect_eyebrow_raise(video_path: str, fast_track: bool = False):
                 continue
             face_detected_frames += 1
             x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
-            # Forehead region (top 25% of face)
             forehead = gray[y: y + h // 4, x: x + w]
             brightness_vals.append(float(forehead.mean()))
 
         if len(brightness_vals) >= 5:
             baseline  = float(np.mean(brightness_vals[:3]))
             for val in brightness_vals:
-                if abs(val - baseline) > 3.0:   # 3-unit brightness change
+                if abs(val - baseline) > 3.0:
                     eyebrow_raise_frames += 1
 
-    passed = face_detected_frames >= min_face and eyebrow_raise_frames >= MIN_BROW_RAISE_FRAMES
+    if face_detected_frames < min_face:
+        return _build_error_response("no_face_detected",
+            f"Face visible in {face_detected_frames}/{len(frames)} frames")
+
+    passed = eyebrow_raise_frames >= MIN_BROW_RAISE_FRAMES
 
     print(f"[EYEBROW] face_frames={face_detected_frames} raise_frames={eyebrow_raise_frames} passed={passed}")
 
+    if not passed:
+        return _build_error_response("action_not_detected",
+            f"Eyebrow raise detected in only {eyebrow_raise_frames} frame(s), need {MIN_BROW_RAISE_FRAMES}")
+
     return {
-        "passed": passed,
+        "passed": True,
         "face_detected_frames": face_detected_frames,
         "eyebrow_raise_frames": eyebrow_raise_frames,
-        "error": None if passed else f"Eyebrow raise detected in only {eyebrow_raise_frames} frame(s), need {MIN_BROW_RAISE_FRAMES}",
+        "error": None,
     }
 
 
 # ============================================================================
-# ROUTER — dispatch to correct detector
+# ROUTER
 # ============================================================================
 
 def _run_detector(expected_movement: str, video_path: str, fast_track: bool):
-    """
-    Route to the correct detection function based on expected_movement.
-    Returns a result dict that always contains 'passed' and 'face_detected_frames'.
-    """
+    """Route to correct detection function."""
     m = expected_movement.lower().strip()
 
     if m == "left":
@@ -633,11 +702,7 @@ def _run_detector(expected_movement: str, video_path: str, fast_track: bool):
     elif m == "eyebrows":
         return detect_eyebrow_raise(video_path, fast_track)
     else:
-        return {
-            "passed": False,
-            "face_detected_frames": 0,
-            "error": f"Unknown challenge type: {expected_movement}",
-        }
+        return _build_error_response("processing_error", f"Unknown challenge type: {expected_movement}")
 
 
 # ============================================================================
@@ -650,34 +715,17 @@ def run_human_verification(
     video_path: str,
     fast_track: bool = False,
     expected_movement: str = None,
-    # Legacy parameter kept for backwards compatibility with main.py
     expected_direction: str = None,
 ):
     """
     Run human verification for any supported challenge type.
-
-    Args:
-        session_id        : str   - Session/device identifier for logging.
-        challenge_id      : str   - Unique challenge ID.
-        video_path        : str   - Path to uploaded .webm video.
-        fast_track        : bool  - Trusted device → more lenient thresholds.
-        expected_movement : str   - Challenge type: left|right|blink|nod|mouth|eyebrows
-        expected_direction: str   - Legacy alias for expected_movement (left|right).
-
-    Returns:
-        dict with keys:
-            challenge_passed  : bool
-            liveness_score    : float  (0.0 – 1.0)
-            action_detected   : str
-            action_matched    : bool
-            direction_detected: str    (legacy compat)
-            direction_matched : bool   (legacy compat)
-            error             : str | None
+    
+    PHASE 2 & 3 IMPROVEMENTS:
+    - Model caching (reuse instances)
+    - Frame sampling (2x speed)
+    - Better error messages (user-friendly + tech details)
     """
 
-    # ------------------------------------------------------------------ #
-    # Normalise expected_movement                                         #
-    # ------------------------------------------------------------------ #
     movement = (expected_movement or expected_direction or "").lower().strip()
 
     print(f"\n{'=' * 60}")
@@ -685,23 +733,18 @@ def run_human_verification(
     print(f"   movement={movement}  fast_track={fast_track}")
     print(f"{'=' * 60}\n")
 
-    # ------------------------------------------------------------------ #
-    # Input validation                                                    #
-    # ------------------------------------------------------------------ #
     VALID_MOVEMENTS = {"left", "right", "blink", "nod", "mouth", "eyebrows"}
 
     if not session_id or not challenge_id:
-        return _fail_result("Missing session_id or challenge_id")
+        return _build_error_response("processing_error", "Missing session_id or challenge_id")
 
     if not movement or movement not in VALID_MOVEMENTS:
-        return _fail_result(f"Unknown or missing challenge type: '{movement}'")
+        return _build_error_response("processing_error", f"Unknown challenge type: '{movement}'")
 
     if not video_path or not os.path.exists(video_path):
-        return _fail_result("Video file not found")
+        return _build_error_response("video_not_found", f"Path: {video_path}")
 
-    # ------------------------------------------------------------------ #
-    # Run detector                                                        #
-    # ------------------------------------------------------------------ #
+    # Run detector
     try:
         detection = _run_detector(movement, video_path, fast_track)
     except Exception as exc:
@@ -713,49 +756,33 @@ def run_human_verification(
             challenge_id=challenge_id,
             details={"error": str(exc), "movement": movement},
         )
-        return _fail_result(f"Detection error: {exc}")
+        return _build_error_response("processing_error", str(exc))
 
-    # ------------------------------------------------------------------ #
-    # Face-presence gate                                                  #
-    # ------------------------------------------------------------------ #
-    min_face_required = MIN_FACE_FRAMES_EASY if fast_track else MIN_FACE_FRAMES
-    face_frames = detection.get("face_detected_frames", 0)
-
-    if face_frames < min_face_required:
-        msg = f"Face not visible enough ({face_frames} frames, need {min_face_required})"
-        print(f"❌ FAIL: {msg}")
+    # Check if detection itself returned an error
+    if "error_code" in detection:
         log_event(
             event="challenge_failed",
             session_id=session_id,
             challenge_id=challenge_id,
-            details={"reason": "insufficient_face_presence", "face_frames": face_frames,
-                     "required": min_face_required, "movement": movement},
+            details={"movement": movement, "detection": detection},
         )
-        return _fail_result(msg, face_frames=face_frames)
+        return detection
 
-    # ------------------------------------------------------------------ #
-    # Action gate                                                         #
-    # ------------------------------------------------------------------ #
+    # Check if challenge passed
     challenge_passed = bool(detection.get("passed", False))
-    error_msg        = detection.get("error")
 
     if not challenge_passed:
-        print(f"❌ FAIL: {error_msg}")
         log_event(
             event="challenge_failed",
             session_id=session_id,
             challenge_id=challenge_id,
-            details={"reason": "action_not_detected", "movement": movement,
-                     "detection": detection},
+            details={"movement": movement, "detection": detection},
         )
-        return _fail_result(error_msg or "Action not detected", face_frames=face_frames)
+        return _build_error_response("action_not_detected", detection.get("error", "Unknown"))
 
-    # ------------------------------------------------------------------ #
-    # SUCCESS                                                             #
-    # ------------------------------------------------------------------ #
+    # SUCCESS
     liveness_score = 0.98 if fast_track else 0.96
 
-    # Give a small bonus for head turns with large magnitude
     if movement in ("left", "right"):
         mag = float(detection.get("movement_magnitude", 0))
         liveness_score = min(1.0, liveness_score + mag * 0.05)
@@ -773,7 +800,6 @@ def run_human_verification(
             "movement": movement,
             "liveness_score": liveness_score,
             "fast_track": fast_track,
-            "face_frames": face_frames,
             "detection": detection,
         },
     )
@@ -783,24 +809,8 @@ def run_human_verification(
         "liveness_score":    liveness_score,
         "action_detected":   movement,
         "action_matched":    True,
-        # Legacy compat
         "direction_detected": direction_detected,
         "direction_matched":  direction_matched,
         "error":             None,
-    }
-
-
-# ============================================================================
-# HELPER — build a failed-result dict
-# ============================================================================
-
-def _fail_result(error: str, face_frames: int = 0) -> dict:
-    return {
-        "challenge_passed":  False,
-        "liveness_score":    0.0,
-        "action_detected":   "none",
-        "action_matched":    False,
-        "direction_detected": "none",
-        "direction_matched":  False,
-        "error":             error,
+        "error_code":        None,
     }
