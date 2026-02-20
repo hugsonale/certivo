@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Certivo Admin{% endblock %}</title>
+    <link rel="stylesheet" href="/admin/static/admin.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="admin-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h1>Certivo Admin</h1>
+                <p class="subtitle">Dashboard v1.0</p>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <a href="/admin/dashboard"><span class="icon">📊</span> Overview</a>
+                <a href="/admin/sessions"><span class="icon">📋</span> Sessions</a>
+                <a href="/admin/challenges"><span class="icon">🎯</span> Challenges</a>
+                <a href="/admin/trusted-devices"><span class="icon">🔐</span> Trusted Devices</a>
+                <a href="/admin/bot-activity"><span class="icon">🤖</span> Bot Activity</a>
+                <a href="/admin/logs"><span class="icon">📜</span> Logs</a>
+                <a href="/admin/system-health"><span class="icon">🩺</span> System Health</a>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <div class="user-info">Logged in as: {{ session.username }}</div>
+                <a href="/admin/logout" class="logout-btn">Logout</a>
+            </div>
+        </div>
+        
+        <!-- Main content -->
+        <div class="main-content">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+    
+    <script src="/admin/static/admin.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
