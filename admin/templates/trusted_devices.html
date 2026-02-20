@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Trusted Devices - Certivo Admin{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Trusted Devices</h2>
+    <p class="subtitle">Device trust management</p>
+</div>
+
+<div class="table-container">
+    <div class="table-header">
+        <h3>All Devices</h3>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Device ID</th>
+                <th>Trust Level</th>
+                <th>Total Verifications</th>
+                <th>Success Rate</th>
+                <th>First Seen</th>
+                <th>Last Verified</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for device in devices %}
+            <tr>
+                <td><code>{{ device.device_id[:24] }}...</code></td>
+                <td>
+                    <span class="badge {% if device.trust_level == 'high' %}success{% elif device.trust_level == 'medium' %}warning{% else %}danger{% endif %}">
+                        {{ device.trust_level }}
+                    </span>
+                </td>
+                <td>{{ device.total_verifications }}</td>
+                <td>
+                    {% set rate = (device.successful_verifications / device.total_verifications * 100) if device.total_verifications > 0 else 0 %}
+                    <strong>{{ rate|round(1) }}%</strong>
+                </td>
+                <td>{{ device.first_seen_utc.strftime('%Y-%m-%d %H:%M UTC') if device.first_seen_utc else 'N/A' }}</td>
+                <td>{{ device.last_verified_utc.strftime('%Y-%m-%d %H:%M UTC') if device.last_verified_utc else 'N/A' }}</td>
+                <td>
+                    {% if device.trust_level == 'high' %}
+                    <form method="POST" action="/admin/trusted-devices/{{ device.device_id }}/revoke" style="display:inline;">
+                        <button type="submit" class="btn btn-danger" style="padding: 6px 12px; font-size: 12px;" 
+                                onclick="return confirmAction('Revoke trust for this device?')">
+                            Revoke Trust
+                        </button>
+                    </form>
+                    {% else %}
+                    <span style="color: #94a3b8; font-size: 12px;">No action</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div style="margin-top: 32px; padding: 20px; background: #f8f9fa; border-radius: 12px;">
+    <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 12px;">Trust Level Guide</h3>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; font-size: 14px;">
+        <div>
+            <span class="badge success" style="margin-right: 8px;">High</span>
+            <span style="color: #4a5568;">≥ 5 successful verifications</span>
+        </div>
+        <div>
+            <span class="badge warning" style="margin-right: 8px;">Medium</span>
+            <span style="color: #4a5568;">2-4 successful verifications</span>
+        </div>
+        <div>
+            <span class="badge danger" style="margin-right: 8px;">Low</span>
+            <span style="color: #4a5568;">0-1 successful verifications</span>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

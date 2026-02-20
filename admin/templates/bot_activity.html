@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Bot Activity - Certivo Admin{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Bot & Suspicious Activity</h2>
+    <p class="subtitle">Security monitoring and threat detection</p>
+</div>
+
+<div class="metrics-grid" style="grid-template-columns: repeat(4, 1fr);">
+    <div class="metric-card">
+        <div class="label">Total Reports</div>
+        <div class="value">{{ stats.total_reports }}</div>
+        <div class="subtext">All attempts</div>
+    </div>
+    <div class="metric-card danger">
+        <div class="label">Bots Detected</div>
+        <div class="value">{{ stats.bots_detected }}</div>
+        <div class="subtext">Flagged as bots</div>
+    </div>
+    <div class="metric-card">
+        <div class="label">Detection Rate</div>
+        <div class="value">{{ stats.detection_rate }}%</div>
+        <div class="subtext">Bot catch rate</div>
+    </div>
+    <div class="metric-card warning">
+        <div class="label">Last 24 Hours</div>
+        <div class="value">{{ stats.last_24h }}</div>
+        <div class="subtext">Recent activity</div>
+    </div>
+</div>
+
+<div class="table-container">
+    <div class="table-header">
+        <h3>Recent Bot Reports (Last 100)</h3>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>IP Address</th>
+                <th>Device ID</th>
+                <th>Bot Detected</th>
+                <th>Suspicion Score</th>
+                <th>Timestamp</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for report in reports %}
+            <tr>
+                <td><code>{{ report.ip_address or 'N/A' }}</code></td>
+                <td><code>{{ report.device_id[:20] if report.device_id else 'N/A' }}...</code></td>
+                <td>
+                    {% if report.bot_detected %}
+                    <span class="badge danger">Yes</span>
+                    {% else %}
+                    <span class="badge success">No</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <strong style="color: {% if report.suspicion_score >= 70 %}#ef4444{% elif report.suspicion_score >= 40 %}#f59e0b{% else %}#10b981{% endif %}">
+                        {{ report.suspicion_score }}
+                    </strong>
+                </td>
+                <td>{{ report.timestamp_utc.strftime('%Y-%m-%d %H:%M:%S UTC') if report.timestamp_utc else 'N/A' }}</td>
+                <td>
+                    <button onclick="toggleJSON(this)" class="btn btn-secondary" style="padding: 4px 8px; font-size: 12px;">
+                        Show Details
+                    </button>
+                    <div style="display: none; margin-top: 8px;" class="json-viewer">
+{{ report.backend_signals if report.backend_signals else '{}' }}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div style="margin-top: 32px; padding: 20px; background: #fff7ed; border-left: 4px solid #f59e0b; border-radius: 8px;">
+    <h4 style="font-size: 14px; font-weight: 700; color: #92400e; margin-bottom: 8px;">⚠️ Security Note</h4>
+    <p style="font-size: 14px; color: #78350f; line-height: 1.6;">
+        Bot detection flags suspicious patterns in user agents, headers, and behavior. 
+        High suspicion scores indicate automated clients or unusual traffic patterns. 
+        Review flagged IPs regularly to identify persistent threats.
+    </p>
+</div>
+
+{% endblock %}
