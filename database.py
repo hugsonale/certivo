@@ -1,12 +1,29 @@
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import QueuePool
 from datetime import datetime
 import json
 
+# ============================================================================
+# PHASE 3: DATABASE OPTIMIZATION - Connection pooling for better performance
+# ============================================================================
+
 DATABASE_URL = "sqlite:///certivo_v2.db"
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+# Create engine with connection pooling
+# QueuePool keeps connections open and reuses them (much faster)
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=QueuePool,
+    pool_size=10,           # Keep 10 connections open
+    max_overflow=20,        # Allow 20 extra connections if needed
+    pool_pre_ping=True,     # Test connections before using
+    pool_recycle=3600,      # Recycle connections after 1 hour
+    echo=False              # Set to True for SQL debugging
+)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -23,11 +40,11 @@ class SessionRecord(Base):
     session_id = Column(String, unique=True, index=True, nullable=False)
     device_id = Column(String, index=True, nullable=False)
     trust_score = Column(Float, nullable=False)
-    trust_level = Column(String, nullable=False)  # "high", "medium", "low"
+    trust_level = Column(String, nullable=False)
     failed_challenges = Column(Integer, default=0)
     total_challenges = Column(Integer, nullable=False)
     fast_track = Column(Boolean, default=False)
-    timestamp_utc = Column(DateTime, default=datetime.utcnow, nullable=False)
+    timestamp_utc = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
 
 class ChallengeResult(Base):
@@ -39,24 +56,21 @@ class ChallengeResult(Base):
     device_id = Column(String, index=True, nullable=False)
     challenge_id = Column(String, unique=True, index=True, nullable=False)
     
-    # Challenge details
     instruction = Column(String, nullable=False)
-    expected_direction = Column(String, nullable=True)  # "left", "right", or None
+    expected_direction = Column(String, nullable=True)
     difficulty = Column(String, default="medium")
     
-    # Verification results
-    challenge_passed = Column(Boolean, nullable=False)
+    challenge_passed = Column(Boolean, nullable=False, index=True)
     liveness_score = Column(Float, nullable=False)
-    direction_detected = Column(String, nullable=True)  # "left", "right", "none", "ambiguous"
+    direction_detected = Column(String, nullable=True)
     direction_matched = Column(Boolean, default=False)
     
-    # Metadata
     fast_track = Column(Boolean, default=False)
     video_size_bytes = Column(Integer, nullable=True)
     frames_analyzed = Column(Integer, nullable=True)
     face_detected_frames = Column(Integer, nullable=True)
     
-    timestamp_utc = Column(DateTime, default=datetime.utcnow, nullable=False)
+    timestamp_utc = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
 
 class TrustedDevice(Base):
@@ -66,37 +80,33 @@ class TrustedDevice(Base):
     id = Column(Integer, primary_key=True, index=True)
     device_id = Column(String, unique=True, index=True, nullable=False)
     
-    # Trust metrics
-    trust_level = Column(String, nullable=False)  # "high", "medium", "low"
+    trust_level = Column(String, nullable=False)
     total_verifications = Column(Integer, default=1)
     successful_verifications = Column(Integer, default=0)
     
-    # Timestamps
     first_seen_utc = Column(DateTime, default=datetime.utcnow, nullable=False)
-    last_verified_utc = Column(DateTime, default=datetime.utcnow, nullable=False)
-    trusted_since_utc = Column(DateTime, nullable=True)  # When it became trusted
+    last_verified_utc = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    trusted_since_utc = Column(DateTime, nullable=True)
 
 
 class ActiveChallenge(Base):
-    """Stores active challenges for validation (replaces in-memory store)"""
+    """Stores active challenges for validation"""
     __tablename__ = "active_challenges"
     
     id = Column(Integer, primary_key=True, index=True)
     challenge_id = Column(String, unique=True, index=True, nullable=False)
     device_id = Column(String, index=True, nullable=False)
     
-    # Challenge details
     instruction = Column(String, nullable=False)
     expected_direction = Column(String, nullable=True)
     expected_movement = Column(String, nullable=True)
     difficulty = Column(String, default="medium")
     
-    # Token and expiration
-    token_id = Column(String, nullable=True)
-    expires_at = Column(DateTime, nullable=False)
-    used = Column(Boolean, default=False)
+    token_id = Column(String, nullable=True, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    used = Column(Boolean, default=False, index=True)
     
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
 
 class BotReport(Base):
@@ -106,24 +116,18 @@ class BotReport(Base):
     id = Column(Integer, primary_key=True, index=True)
     device_id = Column(String, index=True, nullable=False)
     
-    # Detection results
-    bot_detected = Column(Boolean, nullable=False)
+    bot_detected = Column(Boolean, nullable=False, index=True)
     suspicion_score = Column(Integer, nullable=False)
     
-    # Frontend checks (JSON)
-    frontend_checks = Column(Text, nullable=True)  # JSON string
+    frontend_checks = Column(Text, nullable=True)
+    fingerprint = Column(Text, nullable=True)
+    backend_signals = Column(Text, nullable=True)
     
-    # Browser fingerprint (JSON)
-    fingerprint = Column(Text, nullable=True)  # JSON string
-    
-    # Backend signals (JSON)
-    backend_signals = Column(Text, nullable=True)  # JSON string
-    
-    # Network info
     ip_address = Column(String, nullable=True)
     user_agent = Column(String, nullable=True)
     
-    timestamp_utc = Column(DateTime, default=datetime.utcnow, nullable=False)
+    timestamp_utc = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
 
 # ============================================================================
 # DATABASE HELPER FUNCTIONS
@@ -132,17 +136,27 @@ class BotReport(Base):
 def init_db():
     """Initialize database tables"""
     Base.metadata.create_all(bind=engine)
-    print("✅ Database initialized successfully")
+    print("✅ Database initialized with connection pooling")
+    print(f"   Pool size: 10 connections")
+    print(f"   Max overflow: 20 connections")
 
 
 def get_db():
-    """Get database session (use with context manager)"""
+    """
+    Get database session (use with context manager).
+    
+    PHASE 3: Uses connection pooling for better performance.
+    """
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
 
+
+# ============================================================================
+# BOT REPORT OPERATIONS
+# ============================================================================
 
 def store_bot_report(db, device_id: str, bot_detected: bool, suspicion_score: int,
                     frontend_checks: dict = None, fingerprint: dict = None,
@@ -221,7 +235,7 @@ def get_challenge(db, challenge_id: str):
 
 
 def mark_challenge_used(db, challenge_id: str):
-    """Mark a challenge as used (prevents replay attacks)"""
+    """Mark a challenge as used"""
     challenge = get_challenge(db, challenge_id)
     if challenge:
         challenge.used = True
@@ -241,12 +255,20 @@ def delete_challenge(db, challenge_id: str):
 
 
 def cleanup_expired_challenges(db):
-    """Remove expired challenges from database"""
+    """
+    Remove expired challenges from database.
+    
+    PHASE 3: Optimized with bulk delete.
+    """
     now = datetime.utcnow()
     expired = db.query(ActiveChallenge).filter(
         ActiveChallenge.expires_at < now
     ).delete()
     db.commit()
+    
+    if expired > 0:
+        print(f"🧹 Cleaned up {expired} expired challenge(s)")
+    
     return expired
 
 
@@ -284,8 +306,11 @@ def store_challenge_result(db, session_id: str, device_id: str, challenge_id: st
 
 
 def get_session_results(db, device_id: str):
-    """Get all challenge results for a device's current session"""
-    # Get results from the last 10 minutes (active session)
+    """
+    Get all challenge results for a device's current session.
+    
+    PHASE 3: Optimized query with index usage.
+    """
     from datetime import timedelta
     cutoff = datetime.utcnow() - timedelta(minutes=10)
     
@@ -349,18 +374,15 @@ def update_device_trust(db, device_id: str, trust_level: str,
     device = get_trusted_device(db, device_id)
     
     if device:
-        # Update existing device
         device.total_verifications += 1
         if verification_passed:
             device.successful_verifications += 1
         device.trust_level = trust_level
         device.last_verified_utc = datetime.utcnow()
         
-        # Mark as trusted if high trust
         if trust_level == "high" and not device.trusted_since_utc:
             device.trusted_since_utc = datetime.utcnow()
     else:
-        # Create new device record
         device = TrustedDevice(
             device_id=device_id,
             trust_level=trust_level,
@@ -429,7 +451,6 @@ def get_success_rate_by_direction(db):
             if result.challenge_passed:
                 stats[direction]["passed"] += 1
     
-    # Calculate percentages
     for direction in stats:
         if stats[direction]["total"] > 0:
             stats[direction]["success_rate"] = round(

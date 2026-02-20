@@ -1,17 +1,16 @@
-from fastapi import FastAPI, Query, Request, UploadFile, File, Form, Depends
+from fastapi import FastAPI, Query, Request, UploadFile, File, Form, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import uuid
-from challenge_engine import generate_adaptive_challenges
-from typing import List
 from fastapi.responses import FileResponse
+import uuid
 import os
-from human_verification import run_human_verification
 import tempfile
-from logger import log_event
 from datetime import datetime, timedelta
-import cv2
-from typing import Dict, Any
-import json
+from typing import Dict, Any, List
+import asyncio
+
+from challenge_engine import generate_adaptive_challenges
+from human_verification import run_human_verification
+from logger import log_event
 
 # Database imports
 from sqlalchemy.orm import Session
@@ -33,10 +32,91 @@ app.add_middleware(
 
 
 # ============================================================================
+# PHASE 2: SUPPORTED VIDEO FORMATS - Multiple format validation
+# ============================================================================
+
+SUPPORTED_VIDEO_FORMATS = {
+    # Extension: (MIME types, description)
+    '.webm': (['video/webm'], 'WebM video'),
+    '.mp4':  (['video/mp4', 'video/mpeg'], 'MP4 video'),
+    '.mov':  (['video/quicktime'], 'QuickTime video'),
+    '.avi':  (['video/x-msvideo', 'video/avi'], 'AVI video'),
+    '.mkv':  (['video/x-matroska'], 'Matroska video'),
+}
+
+# Maximum file sizes
+MAX_VIDEO_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+MIN_VIDEO_SIZE_BYTES = 1000              # 1 KB
+
+
+def validate_video_format(filename: str, content_type: str, file_size: int) -> Dict[str, Any]:
+    """
+    PHASE 2: Validate video file format, MIME type, and size.
+    
+    Returns:
+        dict with 'valid' (bool), 'error' (str), 'format' (str)
+    """
+    
+    # Check size first (fastest check)
+    if file_size > MAX_VIDEO_SIZE_BYTES:
+        return {
+            'valid': False,
+            'error': f'Video file too large ({file_size / 1024 / 1024:.1f} MB). Maximum: 10 MB',
+            'error_code': 'FILE_TOO_LARGE'
+        }
+    
+    if file_size < MIN_VIDEO_SIZE_BYTES:
+        return {
+            'valid': False,
+            'error': f'Video file too small ({file_size} bytes). Minimum: 1 KB',
+            'error_code': 'FILE_TOO_SMALL'
+        }
+    
+    # Extract file extension
+    file_ext = os.path.splitext(filename.lower())[1] if filename else ''
+    
+    # Check if extension is supported
+    if file_ext not in SUPPORTED_VIDEO_FORMATS:
+        supported = ', '.join(SUPPORTED_VIDEO_FORMATS.keys())
+        return {
+            'valid': False,
+            'error': f'Unsupported video format "{file_ext}". Supported: {supported}',
+            'error_code': 'UNSUPPORTED_FORMAT'
+        }
+    
+    # Check MIME type matches extension
+    allowed_mimes = SUPPORTED_VIDEO_FORMATS[file_ext][0]
+    
+    if not content_type:
+        return {
+            'valid': False,
+            'error': 'Missing content type',
+            'error_code': 'NO_CONTENT_TYPE'
+        }
+    
+    if content_type not in allowed_mimes and not content_type.startswith('video/'):
+        return {
+            'valid': False,
+            'error': f'Invalid content type "{content_type}" for {file_ext} file',
+            'error_code': 'INVALID_CONTENT_TYPE'
+        }
+    
+    # All checks passed
+    format_name = SUPPORTED_VIDEO_FORMATS[file_ext][1]
+    return {
+        'valid': True,
+        'error': None,
+        'format': format_name,
+        'extension': file_ext
+    }
+
+
+# ============================================================================
 # BOT DETECTION HELPERS
 # ============================================================================
 
 def analyze_backend_bot_signals(request: Request) -> Dict[str, Any]:
+    """Backend-side bot detection based on HTTP headers and behavior."""
     signals = {}
     suspicion_score = 0
     headers = dict(request.headers)
@@ -68,11 +148,12 @@ def analyze_backend_bot_signals(request: Request) -> Dict[str, Any]:
 
 
 # ============================================================================
-# ADMIN
+# ADMIN ENDPOINTS
 # ============================================================================
 
 @app.get("/v1/admin/bot-stats")
 async def get_bot_statistics_endpoint(db: Session = Depends(get_db)):
+    """Get bot detection statistics."""
     stats = get_bot_statistics(db)
     recent_reports = get_bot_reports(db, limit=10)
     return {
@@ -91,6 +172,7 @@ async def get_bot_statistics_endpoint(db: Session = Depends(get_db)):
 
 @app.post("/v1/bot-report")
 async def report_bot_detection(request: Request, db: Session = Depends(get_db)):
+    """Receive bot detection results from frontend."""
     try:
         data = await request.json()
         device_id = data.get("device_id", "unknown")
@@ -117,8 +199,8 @@ async def get_challenge_endpoint(
 ):
     """
     Returns adaptive challenges for a device.
-    - Trusted devices  → 1 easy fast-track challenge
-    - Untrusted devices → 2 challenges with adaptive difficulty
+    
+    PHASE 3 OPTIMIZATION: Uses database connection pooling
     """
 
     # Bot check
@@ -141,24 +223,20 @@ async def get_challenge_endpoint(
 
     num_challenges = 1 if is_trusted else 2
 
-    # ------------------------------------------------------------------ #
-    # Fetch recent results so adaptive difficulty can use them            #
-    # ------------------------------------------------------------------ #
+    # Fetch recent results for adaptive difficulty
     recent_db_results = get_session_results(db, device_id)
     prev_results = []
     if recent_db_results:
         prev_results = [
             {
                 "challenge_passed":  r.challenge_passed,
-                "expected_movement": r.expected_direction,   # stored in DB as expected_direction
+                "expected_movement": r.expected_direction,
                 "action_detected":   r.direction_detected,
             }
             for r in recent_db_results
         ]
 
-    # ------------------------------------------------------------------ #
-    # Generate challenges                                                 #
-    # ------------------------------------------------------------------ #
+    # Generate challenges
     challenges = generate_adaptive_challenges(
         prev_results=prev_results,
         num=num_challenges,
@@ -166,27 +244,21 @@ async def get_challenge_endpoint(
         device_id=device_id,
     )
 
-    # ------------------------------------------------------------------ #
-    # Store each challenge in DB and build response                       #
-    # ------------------------------------------------------------------ #
+    # Store each challenge in DB
     normalized = []
     for ch in challenges:
-        challenge_id     = ch["challenge_id"]
-        instruction      = ch["challenge_value"]
-        expected_movement = ch["expected_movement"]         # ← NEW: full movement type
-        token_id         = str(uuid.uuid4())
-        expires_at       = datetime.utcnow() + timedelta(minutes=5)
-
-        # For backwards-compatibility, also derive expected_direction for
-        # left/right challenges
-        expected_direction = expected_movement if expected_movement in ("left", "right") else None
+        challenge_id      = ch["challenge_id"]
+        instruction       = ch["challenge_value"]
+        expected_movement = ch["expected_movement"]
+        token_id          = str(uuid.uuid4())
+        expires_at        = datetime.utcnow() + timedelta(minutes=5)
 
         store_challenge(
             db=db,
             challenge_id=challenge_id,
             device_id=device_id,
             instruction=instruction,
-            expected_direction=expected_movement,   # reuse column to store full movement type
+            expected_direction=expected_movement,
             token_id=token_id,
             expires_at=expires_at,
             difficulty=ch["difficulty"],
@@ -223,6 +295,38 @@ async def get_challenge_endpoint(
 
 
 # ============================================================================
+# PHASE 3: ASYNC VIDEO PROCESSING - Process verification in background
+# ============================================================================
+
+async def process_verification_async(
+    device_id: str,
+    challenge_id: str,
+    video_path: str,
+    expected_movement: str,
+    is_trusted: bool
+) -> Dict[str, Any]:
+    """
+    PHASE 3: Run verification in async executor to avoid blocking.
+    
+    This allows multiple verifications to process simultaneously.
+    """
+    loop = asyncio.get_event_loop()
+    
+    # Run CPU-intensive verification in thread pool
+    result = await loop.run_in_executor(
+        None,  # Use default executor
+        run_human_verification,
+        device_id,
+        challenge_id,
+        video_path,
+        is_trusted,
+        expected_movement,
+    )
+    
+    return result
+
+
+# ============================================================================
 # VERIFY CHALLENGE
 # ============================================================================
 
@@ -235,33 +339,55 @@ async def verify_challenge(
     db:           Session    = Depends(get_db)
 ):
     """
-    Receive video submission, run the correct detector for the challenge type,
-    store the result and return pass/fail.
+    PHASE 2 & 3 IMPROVEMENTS:
+    - Multiple video format support
+    - Better error messages
+    - Async video processing
     """
     video_path       = None
     video_size_bytes = 0
 
     try:
-        # ----------------------------------------------------------------#
-        # 1. Validate video                                               #
-        # ----------------------------------------------------------------#
-        if not video.content_type or not video.content_type.startswith("video/"):
-            return _reject("Invalid video format")
-
-        MAX_VIDEO_SIZE = 10 * 1024 * 1024   # 10 MB
+        # ================================================================
+        # PHASE 2: Validate video format
+        # ================================================================
         video_bytes      = await video.read()
         video_size_bytes = len(video_bytes)
-
-        if video_size_bytes > MAX_VIDEO_SIZE:
-            return _reject("Video file too large")
-
-        if video_size_bytes < 1000:
-            return _reject("Video file too small or corrupted")
-
-        # ----------------------------------------------------------------#
-        # 2. Save to temp file                                            #
-        # ----------------------------------------------------------------#
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
+        
+        format_check = validate_video_format(
+            filename=video.filename or '',
+            content_type=video.content_type or '',
+            file_size=video_size_bytes
+        )
+        
+        if not format_check['valid']:
+            log_event(
+                event="verification_rejected",
+                session_id=device_id,
+                challenge_id=challenge_id,
+                details={
+                    "reason": "invalid_video_format",
+                    "error_code": format_check.get('error_code'),
+                    "error": format_check['error']
+                }
+            )
+            return {
+                "challenge_passed": False,
+                "liveness_score": 0.0,
+                "direction_detected": "none",
+                "direction_matched": False,
+                "action_detected": "none",
+                "action_matched": False,
+                "error": format_check['error'],
+                "error_code": format_check.get('error_code'),
+            }
+        
+        # ================================================================
+        # Save to temp file with correct extension
+        # ================================================================
+        file_ext = format_check.get('extension', '.webm')
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp:
             tmp.write(video_bytes)
             video_path = tmp.name
 
@@ -269,33 +395,36 @@ async def verify_challenge(
             event="video_received",
             session_id=device_id,
             challenge_id=challenge_id,
-            details={"video_size_bytes": video_size_bytes}
+            details={
+                "video_size_bytes": video_size_bytes,
+                "format": format_check.get('format'),
+                "extension": file_ext
+            }
         )
 
-        # ----------------------------------------------------------------#
-        # 3. Load and validate challenge from DB                          #
-        # ----------------------------------------------------------------#
+        # ================================================================
+        # Load and validate challenge from DB
+        # ================================================================
         challenge_record = get_challenge(db, challenge_id)
 
         if not challenge_record:
-            return _reject("Challenge not found")
+            return _reject("Challenge not found", "CHALLENGE_NOT_FOUND")
 
         if challenge_record.token_id != token_id:
-            return _reject("Invalid verification token")
+            return _reject("Invalid verification token", "INVALID_TOKEN")
 
         if challenge_record.device_id != device_id:
-            return _reject("Challenge does not belong to this device")
+            return _reject("Challenge does not belong to this device", "DEVICE_MISMATCH")
 
         if datetime.utcnow() > challenge_record.expires_at:
-            return _reject("Challenge has expired")
+            return _reject("Challenge has expired", "CHALLENGE_EXPIRED")
 
         if challenge_record.used:
-            return _reject("Challenge already used")
+            return _reject("Challenge already used", "CHALLENGE_ALREADY_USED")
 
-        # ----------------------------------------------------------------#
-        # 4. Determine what the challenge expects                         #
-        # ----------------------------------------------------------------#
-        # expected_direction column stores the full movement type now
+        # ================================================================
+        # Get challenge details
+        # ================================================================
         expected_movement = (
             challenge_record.expected_movement
             or challenge_record.expected_direction
@@ -305,21 +434,21 @@ async def verify_challenge(
         difficulty  = challenge_record.difficulty
         is_trusted  = is_device_trusted(db, device_id)
 
-        # ----------------------------------------------------------------#
-        # 5. Run human verification                                       #
-        # ----------------------------------------------------------------#
+        # ================================================================
+        # PHASE 3: Run verification asynchronously
+        # ================================================================
         try:
-            result = run_human_verification(
-                session_id=device_id,
+            result = await process_verification_async(
+                device_id=device_id,
                 challenge_id=challenge_id,
                 video_path=video_path,
-                fast_track=is_trusted,
                 expected_movement=expected_movement,
+                is_trusted=is_trusted
             )
 
             # Ensure types are correct
-            result["challenge_passed"] = bool(result["challenge_passed"])
-            result["liveness_score"]   = float(result["liveness_score"])
+            result["challenge_passed"] = bool(result.get("challenge_passed", False))
+            result["liveness_score"]   = float(result.get("liveness_score", 0.0))
 
             log_event(
                 event="verification_completed",
@@ -341,11 +470,11 @@ async def verify_challenge(
                 challenge_id=challenge_id,
                 details={"error": str(e)}
             )
-            return _reject("Verification processing failed")
+            return _reject("Verification processing failed", "PROCESSING_ERROR")
 
-        # ----------------------------------------------------------------#
-        # 6. Mark challenge used & store result                           #
-        # ----------------------------------------------------------------#
+        # ================================================================
+        # Mark challenge used & store result
+        # ================================================================
         delete_challenge(db, challenge_id)
 
         store_challenge_result(
@@ -354,7 +483,7 @@ async def verify_challenge(
             device_id=device_id,
             challenge_id=challenge_id,
             instruction=instruction,
-            expected_direction=expected_movement,   # stores full movement type
+            expected_direction=expected_movement,
             challenge_passed=result["challenge_passed"],
             liveness_score=result["liveness_score"],
             direction_detected=result.get("action_detected", "none"),
@@ -373,14 +502,26 @@ async def verify_challenge(
             challenge_id=challenge_id,
             details={"error": str(e)}
         )
-        return _reject("Server error during verification")
+        return _reject("Server error during verification", "SERVER_ERROR")
 
     finally:
+        # Always cleanup temp file
         if video_path and os.path.exists(video_path):
             try:
                 os.remove(video_path)
-            except Exception:
-                pass
+                log_event(
+                    event="temp_file_cleanup",
+                    session_id=device_id,
+                    challenge_id=challenge_id,
+                    details={"temp_path": video_path, "status": "deleted"}
+                )
+            except Exception as cleanup_error:
+                log_event(
+                    event="temp_file_cleanup_failed",
+                    session_id=device_id,
+                    challenge_id=challenge_id,
+                    details={"error": str(cleanup_error)}
+                )
 
 
 # ============================================================================
@@ -389,6 +530,7 @@ async def verify_challenge(
 
 @app.post("/v1/finalize")
 async def finalize_verification(request: Request, db: Session = Depends(get_db)):
+    """Calculate final trust score based on all challenges."""
     data      = await request.json()
     results   = data.get("results", [])
     device_id = data.get("device_id", "unknown")
@@ -396,6 +538,7 @@ async def finalize_verification(request: Request, db: Session = Depends(get_db))
     if not results:
         return {"trust_score": 0, "trust_level": "low"}
 
+    # PHASE 3: Use database results (more reliable)
     db_results = get_session_results(db, device_id)
 
     if db_results and len(db_results) > 0:
@@ -422,7 +565,7 @@ async def finalize_verification(request: Request, db: Session = Depends(get_db))
     else:
         level = "low"
 
-    session_id   = f"session_{device_id}_{int(datetime.utcnow().timestamp())}"
+    session_id    = f"session_{device_id}_{int(datetime.utcnow().timestamp())}"
     is_fast_track = is_device_trusted(db, device_id)
 
     store_session(
@@ -465,6 +608,7 @@ async def finalize_verification(request: Request, db: Session = Depends(get_db))
 
 @app.get("/v1/device/{device_id}/stats")
 async def get_device_statistics(device_id: str, db: Session = Depends(get_db)):
+    """Get statistics for a specific device."""
     stats = get_device_stats(db, device_id)
     if not stats:
         return {"error": "Device not found", "device_id": device_id}
@@ -477,6 +621,7 @@ async def get_device_statistics(device_id: str, db: Session = Depends(get_db)):
 
 @app.get("/")
 def read_index():
+    """Serve index.html at root."""
     if os.path.exists("index.html"):
         return FileResponse("index.html")
     return {"detail": "index.html not found"}
@@ -486,7 +631,7 @@ def read_index():
 # HELPER
 # ============================================================================
 
-def _reject(reason: str) -> dict:
+def _reject(reason: str, code: str = "ERROR") -> dict:
     """Return a standardised failure response."""
     return {
         "challenge_passed":  False,
@@ -496,4 +641,5 @@ def _reject(reason: str) -> dict:
         "action_detected":   "none",
         "action_matched":    False,
         "error":             reason,
+        "error_code":        code,
     }
