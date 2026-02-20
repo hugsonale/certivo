@@ -2,26 +2,24 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, 
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import QueuePool
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 
 # ============================================================================
-# PHASE 3: DATABASE OPTIMIZATION - Connection pooling for better performance
+# DATABASE OPTIMIZATION - Connection pooling
 # ============================================================================
 
 DATABASE_URL = "sqlite:///certivo_v2.db"
 
-# Create engine with connection pooling
-# QueuePool keeps connections open and reuses them (much faster)
 engine = create_engine(
     DATABASE_URL,
     connect_args={"check_same_thread": False},
     poolclass=QueuePool,
-    pool_size=10,           # Keep 10 connections open
-    max_overflow=20,        # Allow 20 extra connections if needed
-    pool_pre_ping=True,     # Test connections before using
-    pool_recycle=3600,      # Recycle connections after 1 hour
-    echo=False              # Set to True for SQL debugging
+    pool_size=10,
+    max_overflow=20,
+    pool_pre_ping=True,
+    pool_recycle=3600,
+    echo=False
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -80,9 +78,14 @@ class TrustedDevice(Base):
     id = Column(Integer, primary_key=True, index=True)
     device_id = Column(String, unique=True, index=True, nullable=False)
     
-    trust_level = Column(String, nullable=False)
+    trust_level = Column(String, nullable=False, index=True)
     total_verifications = Column(Integer, default=1)
     successful_verifications = Column(Integer, default=0)
+    
+    # SECURITY FEATURE 4: Trust revocation tracking
+    trust_revoked = Column(Boolean, default=False, index=True)
+    revoked_at = Column(DateTime, nullable=True)
+    revocation_reason = Column(String, nullable=True)
     
     first_seen_utc = Column(DateTime, default=datetime.utcnow, nullable=False)
     last_verified_utc = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
@@ -117,36 +120,60 @@ class BotReport(Base):
     device_id = Column(String, index=True, nullable=False)
     
     bot_detected = Column(Boolean, nullable=False, index=True)
-    suspicion_score = Column(Integer, nullable=False)
+    suspicion_score = Column(Integer, nullable=False, index=True)
     
     frontend_checks = Column(Text, nullable=True)
     fingerprint = Column(Text, nullable=True)
     backend_signals = Column(Text, nullable=True)
     
-    ip_address = Column(String, nullable=True)
+    ip_address = Column(String, nullable=True, index=True)
     user_agent = Column(String, nullable=True)
     
     timestamp_utc = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
 
+class SuspiciousDevice(Base):
+    """
+    SECURITY FEATURE: Track devices flagged for suspicious activity.
+    
+    Devices are flagged when:
+    - Video integrity checks fail
+    - Bot-like patterns detected in verification metrics
+    - Repeated failures
+    - Unusual usage patterns
+    """
+    __tablename__ = "suspicious_devices"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    device_id = Column(String, index=True, nullable=False)
+    
+    reason = Column(String, nullable=False)
+    suspicion_score = Column(Integer, nullable=False, index=True)
+    
+    # Evidence
+    evidence = Column(Text, nullable=True)  # JSON data
+    
+    # Status
+    is_blocked = Column(Boolean, default=False, index=True)
+    
+    flagged_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
 # ============================================================================
-# DATABASE HELPER FUNCTIONS
+# DATABASE INIT
 # ============================================================================
 
 def init_db():
     """Initialize database tables"""
     Base.metadata.create_all(bind=engine)
-    print("✅ Database initialized with connection pooling")
+    print("✅ Database initialized with connection pooling + security features")
     print(f"   Pool size: 10 connections")
     print(f"   Max overflow: 20 connections")
+    print(f"   Security: Suspicious device tracking enabled")
 
 
 def get_db():
-    """
-    Get database session (use with context manager).
-    
-    PHASE 3: Uses connection pooling for better performance.
-    """
+    """Get database session."""
     db = SessionLocal()
     try:
         yield db
@@ -179,7 +206,7 @@ def store_bot_report(db, device_id: str, bot_detected: bool, suspicion_score: in
 
 
 def get_bot_reports(db, device_id: str = None, limit: int = 50):
-    """Get bot detection reports, optionally filtered by device"""
+    """Get bot detection reports"""
     query = db.query(BotReport)
     
     if device_id:
@@ -193,14 +220,108 @@ def get_bot_statistics(db):
     total_reports = db.query(BotReport).count()
     bots_detected = db.query(BotReport).filter(BotReport.bot_detected == True).count()
     
+    # Also count suspicious devices
+    suspicious_count = db.query(SuspiciousDevice).filter(
+        SuspiciousDevice.is_blocked == True
+    ).count()
+    
     if total_reports == 0:
-        return {"total_reports": 0, "bots_detected": 0, "bot_rate": 0.0}
+        return {
+            "total_reports": 0,
+            "bots_detected": 0,
+            "bot_rate": 0.0,
+            "suspicious_devices": suspicious_count
+        }
     
     return {
         "total_reports": total_reports,
         "bots_detected": bots_detected,
-        "bot_rate": round((bots_detected / total_reports) * 100, 2)
+        "bot_rate": round((bots_detected / total_reports) * 100, 2),
+        "suspicious_devices": suspicious_count
     }
+
+
+# ============================================================================
+# SECURITY FEATURE: SUSPICIOUS DEVICE OPERATIONS
+# ============================================================================
+
+def flag_suspicious_device(
+    db,
+    device_id: str,
+    reason: str,
+    suspicion_score: int,
+    evidence: dict = None,
+    auto_block: bool = True
+):
+    """
+    Flag a device as suspicious.
+    
+    Args:
+        db: Database session
+        device_id: Device to flag
+        reason: Why it's suspicious
+        suspicion_score: 1-10 severity score
+        evidence: Optional dict of evidence
+        auto_block: If True and score >= 7, automatically block
+    """
+    
+    # Check if already flagged
+    existing = db.query(SuspiciousDevice).filter(
+        SuspiciousDevice.device_id == device_id
+    ).first()
+    
+    if existing:
+        # Update existing record
+        existing.reason = f"{existing.reason}; {reason}"
+        existing.suspicion_score = max(existing.suspicion_score, suspicion_score)
+        existing.flagged_at = datetime.utcnow()
+        
+        if auto_block and suspicion_score >= 7:
+            existing.is_blocked = True
+        
+        if evidence:
+            existing.evidence = json.dumps(evidence)
+    else:
+        # Create new record
+        suspicious = SuspiciousDevice(
+            device_id=device_id,
+            reason=reason,
+            suspicion_score=suspicion_score,
+            evidence=json.dumps(evidence) if evidence else None,
+            is_blocked=(auto_block and suspicion_score >= 7)
+        )
+        db.add(suspicious)
+    
+    db.commit()
+    
+    print(f"🚨 Device {device_id} flagged: {reason} (score: {suspicion_score})")
+    
+    return True
+
+
+def get_suspicious_devices(db, device_id: str = None, limit: int = 50):
+    """Get list of suspicious devices"""
+    query = db.query(SuspiciousDevice)
+    
+    if device_id:
+        query = query.filter(SuspiciousDevice.device_id == device_id)
+    
+    return query.order_by(SuspiciousDevice.flagged_at.desc()).limit(limit).all()
+
+
+def unblock_suspicious_device(db, device_id: str):
+    """Unblock a suspicious device (admin action)"""
+    device = db.query(SuspiciousDevice).filter(
+        SuspiciousDevice.device_id == device_id
+    ).first()
+    
+    if device:
+        device.is_blocked = False
+        db.commit()
+        print(f"✅ Device {device_id} unblocked")
+        return True
+    
+    return False
 
 
 # ============================================================================
@@ -255,11 +376,7 @@ def delete_challenge(db, challenge_id: str):
 
 
 def cleanup_expired_challenges(db):
-    """
-    Remove expired challenges from database.
-    
-    PHASE 3: Optimized with bulk delete.
-    """
+    """Remove expired challenges from database"""
     now = datetime.utcnow()
     expired = db.query(ActiveChallenge).filter(
         ActiveChallenge.expires_at < now
@@ -306,18 +423,20 @@ def store_challenge_result(db, session_id: str, device_id: str, challenge_id: st
 
 
 def get_session_results(db, device_id: str):
-    """
-    Get all challenge results for a device's current session.
-    
-    PHASE 3: Optimized query with index usage.
-    """
-    from datetime import timedelta
+    """Get all challenge results for a device's current session"""
     cutoff = datetime.utcnow() - timedelta(minutes=10)
     
     return db.query(ChallengeResult).filter(
         ChallengeResult.device_id == device_id,
         ChallengeResult.timestamp_utc >= cutoff
     ).order_by(ChallengeResult.timestamp_utc.asc()).all()
+
+
+def get_device_verification_history(db, device_id: str, limit: int = 20):
+    """Get full verification history for a device"""
+    return db.query(ChallengeResult).filter(
+        ChallengeResult.device_id == device_id
+    ).order_by(ChallengeResult.timestamp_utc.desc()).limit(limit).all()
 
 
 # ============================================================================
@@ -361,9 +480,17 @@ def get_trusted_device(db, device_id: str):
 
 
 def is_device_trusted(db, device_id: str) -> bool:
-    """Check if a device is trusted"""
+    """
+    Check if a device is trusted.
+    
+    SECURITY FEATURE 4: Also checks if trust was revoked.
+    """
     device = get_trusted_device(db, device_id)
     if device:
+        # Not trusted if revoked
+        if device.trust_revoked:
+            return False
+        
         return device.trust_level == "high"
     return False
 
@@ -380,20 +507,63 @@ def update_device_trust(db, device_id: str, trust_level: str,
         device.trust_level = trust_level
         device.last_verified_utc = datetime.utcnow()
         
-        if trust_level == "high" and not device.trusted_since_utc:
-            device.trusted_since_utc = datetime.utcnow()
+        # Grant trust if high level and not revoked
+        if trust_level == "high" and not device.trust_revoked:
+            if not device.trusted_since_utc:
+                device.trusted_since_utc = datetime.utcnow()
     else:
         device = TrustedDevice(
             device_id=device_id,
             trust_level=trust_level,
             total_verifications=1,
             successful_verifications=1 if verification_passed else 0,
-            trusted_since_utc=datetime.utcnow() if trust_level == "high" else None
+            trusted_since_utc=datetime.utcnow() if trust_level == "high" else None,
+            trust_revoked=False
         )
         db.add(device)
     
     db.commit()
     return device
+
+
+def revoke_device_trust(db, device_id: str, reason: str):
+    """
+    SECURITY FEATURE 4: Revoke trust from a device.
+    
+    Used when:
+    - Repeated verification failures
+    - Suspicious activity detected
+    - Manual admin action
+    """
+    device = get_trusted_device(db, device_id)
+    
+    if device:
+        device.trust_revoked = True
+        device.revoked_at = datetime.utcnow()
+        device.revocation_reason = reason
+        device.trust_level = "low"
+        db.commit()
+        
+        print(f"⚠️  Trust revoked for device {device_id}: {reason}")
+        return True
+    
+    return False
+
+
+def restore_device_trust(db, device_id: str):
+    """Restore trust to a device (admin action)"""
+    device = get_trusted_device(db, device_id)
+    
+    if device:
+        device.trust_revoked = False
+        device.revoked_at = None
+        device.revocation_reason = None
+        db.commit()
+        
+        print(f"✅ Trust restored for device {device_id}")
+        return True
+    
+    return False
 
 
 def get_device_stats(db, device_id: str):
@@ -406,6 +576,11 @@ def get_device_stats(db, device_id: str):
     if device.total_verifications > 0:
         success_rate = (device.successful_verifications / device.total_verifications) * 100
     
+    # Check if flagged as suspicious
+    suspicious = db.query(SuspiciousDevice).filter(
+        SuspiciousDevice.device_id == device_id
+    ).first()
+    
     return {
         "device_id": device_id,
         "trust_level": device.trust_level,
@@ -414,7 +589,12 @@ def get_device_stats(db, device_id: str):
         "success_rate": round(success_rate, 2),
         "first_seen": device.first_seen_utc.isoformat(),
         "last_verified": device.last_verified_utc.isoformat(),
-        "trusted_since": device.trusted_since_utc.isoformat() if device.trusted_since_utc else None
+        "trusted_since": device.trusted_since_utc.isoformat() if device.trusted_since_utc else None,
+        "trust_revoked": device.trust_revoked,
+        "revoked_at": device.revoked_at.isoformat() if device.revoked_at else None,
+        "revocation_reason": device.revocation_reason,
+        "is_suspicious": suspicious is not None,
+        "is_blocked": suspicious.is_blocked if suspicious else False
     }
 
 
