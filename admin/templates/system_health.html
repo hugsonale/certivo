@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}System Health - Certivo Admin{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>System Health</h2>
+    <p class="subtitle">Server and processing metrics</p>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px;">
+    <!-- Server Resources -->
+    <div class="chart-container">
+        <h3>Server Resources</h3>
+        
+        <div class="health-indicator">
+            <div class="label">CPU Usage</div>
+            <div class="value" style="color: {% if health.cpu_percent > 80 %}#ef4444{% elif health.cpu_percent > 60 %}#f59e0b{% else %}#10b981{% endif %}">
+                {{ health.cpu_percent }}%
+            </div>
+        </div>
+        <div class="progress-bar">
+            <div class="progress-fill {% if health.cpu_percent > 80 %}danger{% elif health.cpu_percent > 60 %}warning{% endif %}" 
+                 style="width: {{ health.cpu_percent }}%"></div>
+        </div>
+        
+        <div class="health-indicator" style="margin-top: 24px;">
+            <div class="label">Memory Usage</div>
+            <div class="value" style="color: {% if health.memory_percent > 80 %}#ef4444{% elif health.memory_percent > 60 %}#f59e0b{% else %}#10b981{% endif %}">
+                {{ health.memory_percent }}%
+            </div>
+        </div>
+        <div class="progress-bar">
+            <div class="progress-fill {% if health.memory_percent > 80 %}danger{% elif health.memory_percent > 60 %}warning{% endif %}" 
+                 style="width: {{ health.memory_percent }}%"></div>
+        </div>
+        <div style="margin-top: 8px; font-size: 13px; color: #718096;">
+            {{ health.memory_used }} / {{ health.memory_total }}
+        </div>
+        
+        <div class="health-indicator" style="margin-top: 24px;">
+            <div class="label">Disk Usage</div>
+            <div class="value" style="color: {% if health.disk_percent > 80 %}#ef4444{% elif health.disk_percent > 60 %}#f59e0b{% else %}#10b981{% endif %}">
+                {{ health.disk_percent }}%
+            </div>
+        </div>
+        <div class="progress-bar">
+            <div class="progress-fill {% if health.disk_percent > 80 %}danger{% elif health.disk_percent > 60 %}warning{% endif %}" 
+                 style="width: {{ health.disk_percent }}%"></div>
+        </div>
+        <div style="margin-top: 8px; font-size: 13px; color: #718096;">
+            {{ health.disk_used }} / {{ health.disk_total }}
+        </div>
+        
+        <div class="health-indicator" style="margin-top: 24px;">
+            <div class="label">Server Uptime</div>
+            <div class="value" style="color: #667eea;">{{ health.uptime_hours|round(1) }}h</div>
+        </div>
+        <div style="font-size: 13px; color: #718096;">
+            Running for {{ health.uptime_hours|round(2) }} hours
+        </div>
+    </div>
+    
+    <!-- Processing Metrics -->
+    <div class="chart-container">
+        <h3>Processing Metrics</h3>
+        
+        <div class="health-indicator">
+            <div class="label">Average Liveness Score</div>
+            <div class="value" style="color: #10b981;">{{ processing.avg_liveness_score }}%</div>
+        </div>
+        <div style="margin-top: 8px; font-size: 13px; color: #718096; margin-bottom: 24px;">
+            Average score for successful verifications
+        </div>
+        
+        <div class="health-indicator">
+            <div class="label">Active Verifications</div>
+            <div class="value">{{ processing.active_verifications }}</div>
+        </div>
+        <div style="margin-top: 8px; font-size: 13px; color: #718096; margin-bottom: 24px;">
+            Challenges currently in progress
+        </div>
+        
+        <div class="health-indicator">
+            <div class="label">Verifications (Last Hour)</div>
+            <div class="value">{{ processing.verifications_last_hour }}</div>
+        </div>
+        <div style="margin-top: 8px; font-size: 13px; color: #718096;">
+            Processing rate over the last 60 minutes
+        </div>
+    </div>
+</div>
+
+<!-- System Status -->
+<div class="chart-container">
+    <h3>System Status</h3>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+        <div style="text-align: center; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+            <div style="font-size: 40px; margin-bottom: 8px;">
+                {% if health.cpu_percent < 60 and health.memory_percent < 60 %}✅{% elif health.cpu_percent < 80 and health.memory_percent < 80 %}⚠️{% else %}🔴{% endif %}
+            </div>
+            <div style="font-size: 14px; font-weight: 600; color: #4a5568;">Server Health</div>
+            <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">
+                {% if health.cpu_percent < 60 and health.memory_percent < 60 %}Healthy{% elif health.cpu_percent < 80 and health.memory_percent < 80 %}Warning{% else %}Critical{% endif %}
+            </div>
+        </div>
+        
+        <div style="text-align: center; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+            <div style="font-size: 40px; margin-bottom: 8px;">
+                {% if processing.avg_liveness_score > 80 %}✅{% elif processing.avg_liveness_score > 60 %}⚠️{% else %}🔴{% endif %}
+            </div>
+            <div style="font-size: 14px; font-weight: 600; color: #4a5568;">Verification Quality</div>
+            <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">
+                {% if processing.avg_liveness_score > 80 %}Excellent{% elif processing.avg_liveness_score > 60 %}Good{% else %}Poor{% endif %}
+            </div>
+        </div>
+        
+        <div style="text-align: center; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+            <div style="font-size: 40px; margin-bottom: 8px;">
+                {% if processing.verifications_last_hour > 0 %}✅{% else %}⚠️{% endif %}
+            </div>
+            <div style="font-size: 14px; font-weight: 600; color: #4a5568;">Processing Activity</div>
+            <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">
+                {% if processing.verifications_last_hour > 0 %}Active{% else %}Idle{% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div style="margin-top: 24px; display: flex; gap: 12px;">
+    <button onclick="window.location.reload()" class="btn btn-primary">
+        Refresh Metrics
+    </button>
+    <button onclick="enableAutoRefresh(30)" class="btn btn-secondary">
+        Auto-Refresh (30s)
+    </button>
+    <button onclick="disableAutoRefresh()" class="btn btn-secondary">
+        Stop Auto-Refresh
+    </button>
+</div>
+
+{% endblock %}

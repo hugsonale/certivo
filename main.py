@@ -34,6 +34,10 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+from admin import admin_router
+from fastapi.staticfiles import StaticFiles
+app.include_router(admin_router)
+app.mount("/admin/static", StaticFiles(directory="admin/static"), name="admin_static")
 
 # ============================================================================
 # SECURITY FEATURE 1: RATE LIMITING - Multi-layer protection (10/10)

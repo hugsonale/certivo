@@ -12,7 +12,7 @@ from typing import List, Optional
 
 # Admin credentials (In production: use environment variables + hashed passwords)
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "certivo_admin_2026")  # Change this!
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")  # Change this!
 
 # Session configuration
 SECRET_KEY = os.getenv("ADMIN_SECRET_KEY", "certivo-admin-dashboard-secret-key-change-in-production")

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Logs - Certivo Admin{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>System Logs</h2>
+    <p class="subtitle">Event and error logs</p>
+</div>
+
+<div style="margin-bottom: 24px;">
+    <input type="text" id="logSearch" placeholder="Search logs..." 
+           style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;"
+           onkeyup="filterTable('logSearch', 'logsTable')">
+</div>
+
+<div class="table-container">
+    <div class="table-header">
+        <h3>Recent Events (Last 200)</h3>
+    </div>
+    <table id="logsTable">
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Event Type</th>
+                <th>Session ID</th>
+                <th>Status</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+            <tr>
+                <td style="white-space: nowrap;">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') if log.timestamp else 'N/A' }}</td>
+                <td>
+                    <code style="font-size: 12px; background: #f8f9fa; padding: 4px 8px; border-radius: 4px;">
+                        {{ log.event_type }}
+                    </code>
+                </td>
+                <td>
+                    {% if log.session_id %}
+                    <code>{{ log.session_id[:16] }}...</code>
+                    {% else %}
+                    <span style="color: #94a3b8;">N/A</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if log.error %}
+                    <span class="badge danger">Error</span>
+                    {% else %}
+                    <span class="badge success">Success</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <button onclick="toggleJSON(this)" class="btn btn-secondary" style="padding: 4px 8px; font-size: 12px;">
+                        Show
+                    </button>
+                    <div style="display: none; margin-top: 8px;" class="json-viewer">
+{% if log.details is mapping %}
+{{ log.details|tojson(indent=2) }}
+{% else %}
+{{ log.details }}
+{% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div style="margin-top: 24px; display: flex; gap: 12px;">
+    <button onclick="exportTableToCSV('logsTable', 'certivo-logs.csv')" class="btn btn-secondary">
+        Export to CSV
+    </button>
+    <button onclick="window.location.reload()" class="btn btn-secondary">
+        Refresh Logs
+    </button>
+</div>
+
+{% endblock %}
