@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Sessions - Certivo Admin{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Verification Sessions</h2>
+    <p class="subtitle">All verification sessions</p>
+</div>
+
+<div class="table-container">
+    <div class="table-header">
+        <h3>Recent Sessions (Last 100)</h3>
+    </div>
+    <table id="sessionsTable">
+        <thead>
+            <tr>
+                <th>Session ID</th>
+                <th>Device ID</th>
+                <th>Trust Score</th>
+                <th>Trust Level</th>
+                <th>Challenges</th>
+                <th>Fast-Track</th>
+                <th>Timestamp</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for session in sessions %}
+            <tr>
+                <td><code>{{ session.session_id[:16] }}...</code></td>
+                <td><code>{{ session.device_id[:16] }}...</code></td>
+                <td><strong>{{ session.trust_score }}%</strong></td>
+                <td>
+                    <span class="badge {% if session.trust_level == 'high' %}success{% elif session.trust_level == 'medium' %}warning{% else %}danger{% endif %}">
+                        {{ session.trust_level }}
+                    </span>
+                </td>
+                <td>{{ session.total_challenges - session.failed_challenges }}/{{ session.total_challenges }}</td>
+                <td>
+                    {% if session.fast_track %}
+                    <span class="badge success">Yes</span>
+                    {% else %}
+                    <span class="badge neutral">No</span>
+                    {% endif %}
+                </td>
+                <td>{{ session.timestamp_utc.strftime('%Y-%m-%d %H:%M:%S UTC') if session.timestamp_utc else 'N/A' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

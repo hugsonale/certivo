@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Certivo Admin{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Dashboard Overview</h2>
+    <p class="subtitle">System metrics and activity</p>
+</div>
+
+<!-- Metrics Grid -->
+<div class="metrics-grid">
+    <div class="metric-card">
+        <div class="label">Total Verifications</div>
+        <div class="value">{{ metrics.total_verifications }}</div>
+        <div class="subtext">All time</div>
+    </div>
+    
+    <div class="metric-card success">
+        <div class="label">Verifications Today</div>
+        <div class="value">{{ metrics.verifications_today }}</div>
+        <div class="subtext">Last 24 hours</div>
+    </div>
+    
+    <div class="metric-card success">
+        <div class="label">Success Rate</div>
+        <div class="value">{{ metrics.success_rate }}%</div>
+        <div class="subtext">{{ metrics.successful_challenges }} passed</div>
+    </div>
+    
+    <div class="metric-card danger">
+        <div class="label">Failure Rate</div>
+        <div class="value">{{ metrics.failure_rate }}%</div>
+        <div class="subtext">{{ metrics.failed_challenges }} failed</div>
+    </div>
+    
+    <div class="metric-card">
+        <div class="label">Fast-Track</div>
+        <div class="value">{{ metrics.fast_track_count }}</div>
+        <div class="subtext">Trusted verifications</div>
+    </div>
+    
+    <div class="metric-card warning">
+        <div class="label">Suspicious</div>
+        <div class="value">{{ metrics.suspicious_count }}</div>
+        <div class="subtext">Bot attempts</div>
+    </div>
+    
+    <div class="metric-card">
+        <div class="label">Trusted Devices</div>
+        <div class="value">{{ metrics.trusted_devices_count }}</div>
+        <div class="subtext">Active devices</div>
+    </div>
+</div>
+
+<!-- Alerts -->
+{% if alerts %}
+<div class="alerts">
+    <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 16px;">System Alerts</h3>
+    {% for alert in alerts %}
+    <div class="alert {{ alert.type }}">
+        {{ alert.message }}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Charts -->
+<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
+    <div class="chart-container">
+        <h3>Verifications (Last 7 Days)</h3>
+        <canvas id="activityChart" height="250"></canvas>
+    </div>
+    
+    <div class="chart-container">
+        <h3>Success vs Failure</h3>
+        <canvas id="breakdownChart" height="250"></canvas>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    createLineChart('activityChart', {{ activity_data.labels|tojson }}, {{ activity_data.data|tojson }});
+    createBarChart('breakdownChart', {{ breakdown_data.labels|tojson }}, {{ breakdown_data.data|tojson }});
+</script>
+{% endblock %}

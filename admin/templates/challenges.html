@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}Challenges - Certivo Admin{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Challenge Monitoring</h2>
+    <p class="subtitle">Active and completed challenges</p>
+</div>
+
+<div class="metrics-grid" style="grid-template-columns: repeat(4, 1fr);">
+    <div class="metric-card">
+        <div class="label">Active</div>
+        <div class="value">{{ stats.total_active }}</div>
+        <div class="subtext">Pending challenges</div>
+    </div>
+    <div class="metric-card success">
+        <div class="label">Completed</div>
+        <div class="value">{{ stats.total_completed }}</div>
+        <div class="subtext">Total verified</div>
+    </div>
+    <div class="metric-card warning">
+        <div class="label">Expired</div>
+        <div class="value">{{ stats.expired }}</div>
+        <div class="subtext">Not used in time</div>
+    </div>
+    <div class="metric-card">
+        <div class="label">Used</div>
+        <div class="value">{{ stats.used }}</div>
+        <div class="subtext">Active used</div>
+    </div>
+</div>
+
+<div class="table-container">
+    <div class="table-header">
+        <h3>Completed Challenges (Last 100)</h3>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Challenge ID</th>
+                <th>Instruction</th>
+                <th>Expected</th>
+                <th>Detected</th>
+                <th>Matched</th>
+                <th>Passed</th>
+                <th>Liveness</th>
+                <th>Timestamp</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for challenge in challenges.completed[:100] %}
+            <tr>
+                <td><code>{{ challenge.challenge_id[:16] }}...</code></td>
+                <td>{{ challenge.instruction }}</td>
+                <td><strong>{{ challenge.expected_direction }}</strong></td>
+                <td>{{ challenge.direction_detected or 'none' }}</td>
+                <td>
+                    {% if challenge.direction_matched %}
+                    <span class="badge success">✓</span>
+                    {% else %}
+                    <span class="badge danger">✗</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if challenge.challenge_passed %}
+                    <span class="badge success">Pass</span>
+                    {% else %}
+                    <span class="badge danger">Fail</span>
+                    {% endif %}
+                </td>
+                <td>{{ (challenge.liveness_score * 100)|round(1) if challenge.liveness_score else 0 }}%</td>
+                <td>{{ challenge.timestamp_utc.strftime('%Y-%m-%d %H:%M:%S UTC') if challenge.timestamp_utc else 'N/A' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if challenges.active %}
+<div class="table-container" style="margin-top: 32px;">
+    <div class="table-header">
+        <h3>Active Challenges</h3>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Challenge ID</th>
+                <th>Token ID</th>
+                <th>Expected Direction</th>
+                <th>Fast-Track</th>
+                <th>Created</th>
+                <th>Expires</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for challenge in challenges.active[:50] %}
+            <tr>
+                <td><code>{{ challenge.challenge_id[:16] }}...</code></td>
+                <td><code>{{ challenge.token_id[:16] }}...</code></td>
+                <td><strong>{{ challenge.expected_direction }}</strong></td>
+                <td>
+                    {% if challenge.fast_track %}
+                    <span class="badge success">Yes</span>
+                    {% else %}
+                    <span class="badge neutral">No</span>
+                    {% endif %}
+                </td>
+                <td>{{ challenge.created_at.strftime('%Y-%m-%d %H:%M:%S UTC') if challenge.created_at else 'N/A' }}</td>
+                <td>{{ challenge.expires_at.strftime('%Y-%m-%d %H:%M:%S UTC') if challenge.expires_at else 'N/A' }}</td>
+                <td>
+                    {% if challenge.used %}
+                    <span class="badge info">Used</span>
+                    {% elif challenge.expires_at and challenge.expires_at < now %}
+                    <span class="badge warning">Expired</span>
+                    {% else %}
+                    <span class="badge neutral">Pending</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Add current time for status check
+    const now = new Date();
+</script>
+{% endblock %}
