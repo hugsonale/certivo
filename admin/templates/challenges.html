@@ -112,8 +112,6 @@
                 <td>
                     {% if challenge.used %}
                     <span class="badge info">Used</span>
-                    {% elif challenge.expires_at and challenge.expires_at < now %}
-                    <span class="badge warning">Expired</span>
                     {% else %}
                     <span class="badge neutral">Pending</span>
                     {% endif %}

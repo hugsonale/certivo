@@ -20,8 +20,15 @@ from database import (
     BotReport,
     get_recent_sessions,
     get_failed_challenges,
-    get_success_rate_by_direction
 )
+
+# Try to import get_success_rate_by_direction, if not available create fallback
+try:
+    from database import get_success_rate_by_direction
+except ImportError:
+    def get_success_rate_by_direction(db: Session) -> Dict[str, Any]:
+        """Fallback function if not available in database.py"""
+        return {}
 
 from admin import utils
 from admin.config import METRICS_DEFAULT_DAYS
@@ -34,42 +41,69 @@ from admin.config import METRICS_DEFAULT_DAYS
 def get_dashboard_metrics(db: Session) -> Dict[str, Any]:
     """
     Get all metrics for the dashboard overview page
+    Safe fallback if tables don't exist yet
     """
     
-    # Total verifications (all time)
-    total_verifications = db.query(SessionRecord).count()
+    try:
+        # Total verifications (all time)
+        total_verifications = db.query(SessionRecord).count()
+    except Exception as e:
+        print(f"Warning: Could not query sessions: {e}")
+        total_verifications = 0
     
-    # Verifications today
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    verifications_today = db.query(SessionRecord).filter(
-        SessionRecord.timestamp_utc >= today_start
-    ).count()
+    try:
+        # Verifications today
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        verifications_today = db.query(SessionRecord).filter(
+            SessionRecord.timestamp_utc >= today_start
+        ).count()
+    except Exception as e:
+        print(f"Warning: Could not query today's sessions: {e}")
+        verifications_today = 0
     
-    # Success rate
-    total_challenges = db.query(ChallengeResult).count()
-    successful_challenges = db.query(ChallengeResult).filter(
-        ChallengeResult.challenge_passed == True
-    ).count()
+    try:
+        # Success rate
+        total_challenges = db.query(ChallengeResult).count()
+        successful_challenges = db.query(ChallengeResult).filter(
+            ChallengeResult.challenge_passed == True
+        ).count()
+    except Exception as e:
+        print(f"Warning: Could not query challenges: {e}")
+        total_challenges = 0
+        successful_challenges = 0
+    
     success_rate = utils.calculate_success_rate(total_challenges, successful_challenges)
     
     # Failure rate
     failed_challenges = total_challenges - successful_challenges
     failure_rate = utils.calculate_failure_rate(total_challenges, failed_challenges)
     
-    # Fast-track verifications
-    fast_track_count = db.query(SessionRecord).filter(
-        SessionRecord.fast_track == True
-    ).count()
+    try:
+        # Fast-track verifications
+        fast_track_count = db.query(SessionRecord).filter(
+            SessionRecord.fast_track == True
+        ).count()
+    except Exception as e:
+        print(f"Warning: Could not query fast-track sessions: {e}")
+        fast_track_count = 0
     
-    # Suspicious attempts
-    suspicious_count = db.query(BotReport).filter(
-        BotReport.bot_detected == True
-    ).count()
+    try:
+        # Suspicious attempts
+        suspicious_count = db.query(BotReport).filter(
+            BotReport.bot_detected == True
+        ).count()
+    except Exception as e:
+        print(f"Warning: Could not query bot reports: {e}")
+        suspicious_count = 0
     
-    # Active trusted devices
-    trusted_devices_count = db.query(TrustedDevice).filter(
-        TrustedDevice.trust_level == "high"
-    ).count()
+    try:
+        # Active trusted devices - query without trust_revoked column
+        trusted_devices_count = db.query(TrustedDevice).filter(
+            TrustedDevice.trust_level == "high"
+        ).count()
+    except Exception as e:
+        print(f"Warning: Could not query trusted devices: {e}")
+        trusted_devices_count = 0
     
     return {
         "total_verifications": total_verifications,
@@ -90,41 +124,56 @@ def get_activity_chart_data(db: Session, days: int = 7) -> Dict[str, Any]:
     Get verification activity for the last N days
     Returns data formatted for Chart.js
     """
-    start_date, end_date = utils.get_date_range(days)
-    
-    # Get all sessions in date range
-    sessions = db.query(SessionRecord).filter(
-        SessionRecord.timestamp_utc >= start_date
-    ).all()
-    
-    # Group by date
-    activity_by_date = utils.group_by_date(sessions, 'timestamp_utc')
-    
-    # Prepare chart data
-    chart_data = utils.prepare_line_chart_data(activity_by_date, days)
-    
-    return chart_data
+    try:
+        start_date, end_date = utils.get_date_range(days)
+        
+        # Get all sessions in date range
+        sessions = db.query(SessionRecord).filter(
+            SessionRecord.timestamp_utc >= start_date
+        ).all()
+        
+        # Group by date
+        activity_by_date = utils.group_by_date(sessions, 'timestamp_utc')
+        
+        # Prepare chart data
+        chart_data = utils.prepare_line_chart_data(activity_by_date, days)
+        
+        return chart_data
+    except Exception as e:
+        print(f"Warning: Could not get activity chart data: {e}")
+        # Return empty chart data
+        return {
+            "labels": [],
+            "data": []
+        }
 
 
 def get_success_failure_breakdown(db: Session, days: int = 7) -> Dict[str, Any]:
     """
     Get success vs failure breakdown
     """
-    start_date, end_date = utils.get_date_range(days)
-    
-    # Get challenges in date range
-    challenges = db.query(ChallengeResult).filter(
-        ChallengeResult.timestamp_utc >= start_date
-    ).all()
-    
-    # Count successes and failures
-    success_count = sum(1 for c in challenges if c.challenge_passed)
-    failure_count = len(challenges) - success_count
-    
-    return {
-        "labels": ["Success", "Failure"],
-        "data": [success_count, failure_count]
-    }
+    try:
+        start_date, end_date = utils.get_date_range(days)
+        
+        # Get challenges in date range
+        challenges = db.query(ChallengeResult).filter(
+            ChallengeResult.timestamp_utc >= start_date
+        ).all()
+        
+        # Count successes and failures
+        success_count = sum(1 for c in challenges if c.challenge_passed)
+        failure_count = len(challenges) - success_count
+        
+        return {
+            "labels": ["Success", "Failure"],
+            "data": [success_count, failure_count]
+        }
+    except Exception as e:
+        print(f"Warning: Could not get breakdown data: {e}")
+        return {
+            "labels": ["Success", "Failure"],
+            "data": [0, 0]
+        }
 
 
 def get_alerts(db: Session) -> List[Dict[str, str]]:
@@ -133,36 +182,35 @@ def get_alerts(db: Session) -> List[Dict[str, str]]:
     """
     alerts = []
     
-    # Check high failure rate
-    total = db.query(ChallengeResult).count()
-    failed = db.query(ChallengeResult).filter(
-        ChallengeResult.challenge_passed == False
-    ).count()
+    try:
+        # Check high failure rate
+        total = db.query(ChallengeResult).count()
+        failed = db.query(ChallengeResult).filter(
+            ChallengeResult.challenge_passed == False
+        ).count()
+        
+        if utils.detect_high_failure_rate(total, failed, threshold=30.0):
+            failure_rate = utils.calculate_failure_rate(total, failed)
+            alerts.append({
+                "type": "warning",
+                "message": f"High failure rate detected: {failure_rate}% of challenges failing"
+            })
+    except Exception as e:
+        print(f"Warning: Could not check failure rate: {e}")
     
-    if utils.detect_high_failure_rate(total, failed, threshold=30.0):
-        failure_rate = utils.calculate_failure_rate(total, failed)
-        alerts.append({
-            "type": "warning",
-            "message": f"High failure rate detected: {failure_rate}% of challenges failing"
-        })
-    
-    # Check for suspicious IPs
-    # Note: This would require storing IP addresses in ChallengeResult
-    # For now, check bot reports
-    recent_bots = db.query(BotReport).filter(
-        BotReport.timestamp_utc >= datetime.utcnow() - timedelta(hours=24)
-    ).all()
-    
-    if len(recent_bots) > 10:
-        alerts.append({
-            "type": "danger",
-            "message": f"{len(recent_bots)} suspicious bot attempts detected in the last 24 hours"
-        })
-    
-    # Check for high no-face detection rate
-    total_challenges = db.query(ChallengeResult).count()
-    # Assuming 'no_face' is in error messages
-    # You might need to adjust this based on your actual error tracking
+    try:
+        # Check for suspicious IPs
+        recent_bots = db.query(BotReport).filter(
+            BotReport.timestamp_utc >= datetime.utcnow() - timedelta(hours=24)
+        ).all()
+        
+        if len(recent_bots) > 10:
+            alerts.append({
+                "type": "danger",
+                "message": f"{len(recent_bots)} suspicious bot attempts detected in the last 24 hours"
+            })
+    except Exception as e:
+        print(f"Warning: Could not check bot reports: {e}")
     
     return alerts
 
@@ -227,18 +275,26 @@ def search_sessions(db: Session, **filters) -> List[SessionRecord]:
 # CHALLENGES
 # ============================================================================
 
-def get_all_challenges(db: Session, limit: int = 100, include_expired: bool = True) -> List:
+def get_all_challenges(db: Session, limit: int = 100, include_expired: bool = True) -> Dict:
     """Get all challenges (both active and completed)"""
     
-    # Get active challenges
-    active = db.query(ActiveChallenge).order_by(
-        desc(ActiveChallenge.created_at)
-    ).limit(limit).all()
+    try:
+        # Get active challenges
+        active = db.query(ActiveChallenge).order_by(
+            desc(ActiveChallenge.created_at)
+        ).limit(limit).all()
+    except Exception as e:
+        print(f"Warning: Could not query active challenges: {e}")
+        active = []
     
-    # Get completed challenges (from results)
-    completed = db.query(ChallengeResult).order_by(
-        desc(ChallengeResult.timestamp_utc)
-    ).limit(limit).all()
+    try:
+        # Get completed challenges (from results)
+        completed = db.query(ChallengeResult).order_by(
+            desc(ChallengeResult.timestamp_utc)
+        ).limit(limit).all()
+    except Exception as e:
+        print(f"Warning: Could not query completed challenges: {e}")
+        completed = []
     
     # Combine and return
     return {
@@ -250,23 +306,34 @@ def get_all_challenges(db: Session, limit: int = 100, include_expired: bool = Tr
 def get_challenge_stats(db: Session) -> Dict[str, Any]:
     """Get challenge statistics"""
     
-    # Total challenges
-    total_active = db.query(ActiveChallenge).count()
-    total_completed = db.query(ChallengeResult).count()
+    try:
+        # Total challenges
+        total_active = db.query(ActiveChallenge).count()
+        total_completed = db.query(ChallengeResult).count()
+        
+        # Expired challenges
+        now = datetime.utcnow()
+        expired = db.query(ActiveChallenge).filter(
+            ActiveChallenge.expires_at < now
+        ).count()
+        
+        # Used challenges
+        used = db.query(ActiveChallenge).filter(
+            ActiveChallenge.used == True
+        ).count()
+    except Exception as e:
+        print(f"Warning: Could not get challenge stats: {e}")
+        total_active = 0
+        total_completed = 0
+        expired = 0
+        used = 0
     
-    # Expired challenges
-    now = datetime.utcnow()
-    expired = db.query(ActiveChallenge).filter(
-        ActiveChallenge.expires_at < now
-    ).count()
-    
-    # Used challenges
-    used = db.query(ActiveChallenge).filter(
-        ActiveChallenge.used == True
-    ).count()
-    
-    # Success rate by direction
-    direction_stats = get_success_rate_by_direction(db)
+    # Success rate by direction - with error handling
+    try:
+        direction_stats = get_success_rate_by_direction(db)
+    except Exception as e:
+        print(f"Warning: Could not get direction stats: {e}")
+        direction_stats = {}
     
     return {
         "total_active": total_active,
@@ -283,9 +350,13 @@ def get_challenge_stats(db: Session) -> Dict[str, Any]:
 
 def get_all_trusted_devices(db: Session) -> List[TrustedDevice]:
     """Get all trusted devices"""
-    return db.query(TrustedDevice).order_by(
-        desc(TrustedDevice.last_verified_utc)
-    ).all()
+    try:
+        return db.query(TrustedDevice).order_by(
+            desc(TrustedDevice.last_verified_utc)
+        ).all()
+    except Exception as e:
+        print(f"Warning: Could not query trusted devices: {e}")
+        return []
 
 
 def get_device_details(db: Session, device_id: str) -> Optional[Dict[str, Any]]:

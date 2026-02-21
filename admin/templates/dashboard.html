@@ -82,7 +82,14 @@
 
 {% block scripts %}
 <script>
-    createLineChart('activityChart', {{ activity_data.labels|tojson }}, {{ activity_data.data|tojson }});
-    createBarChart('breakdownChart', {{ breakdown_data.labels|tojson }}, {{ breakdown_data.data|tojson }});
+    // Chart data passed from backend
+    const activityLabels = {{ activity_data.labels|tojson|safe }};
+    const activityData = {{ activity_data.data|tojson|safe }};
+    const breakdownLabels = {{ breakdown_data.labels|tojson|safe }};
+    const breakdownData = {{ breakdown_data.data|tojson|safe }};
+    
+    // Create charts
+    createLineChart('activityChart', activityLabels, activityData);
+    createBarChart('breakdownChart', breakdownLabels, breakdownData);
 </script>
 {% endblock %}

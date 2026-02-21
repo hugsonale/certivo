@@ -59,9 +59,13 @@
                     {% endif %}
                 </td>
                 <td>
-                    <strong style="color: {% if report.suspicion_score >= 70 %}#ef4444{% elif report.suspicion_score >= 40 %}#f59e0b{% else %}#10b981{% endif %}">
-                        {{ report.suspicion_score }}
-                    </strong>
+                    {% if report.suspicion_score >= 70 %}
+                    <strong style="color: #ef4444;">{{ report.suspicion_score }}</strong>
+                    {% elif report.suspicion_score >= 40 %}
+                    <strong style="color: #f59e0b;">{{ report.suspicion_score }}</strong>
+                    {% else %}
+                    <strong style="color: #10b981;">{{ report.suspicion_score }}</strong>
+                    {% endif %}
                 </td>
                 <td>{{ report.timestamp_utc.strftime('%Y-%m-%d %H:%M:%S UTC') if report.timestamp_utc else 'N/A' }}</td>
                 <td>
