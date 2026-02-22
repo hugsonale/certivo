@@ -2041,15 +2041,35 @@ function runChallengeTimer(challenge) {
 async function handleChallengeComplete(challenge) {
     console.log('📤 Challenge complete - submitting video');
     
+    // ✅ CRITICAL FIX: Create File object with proper name and MIME type
     const blob = new Blob(recordedChunks, { type: "video/webm" });
+    const videoFile = new File([blob], "challenge.webm", { 
+        type: "video/webm",
+        lastModified: Date.now()
+    });
+    
+    console.log('📹 Video file details:');
+    console.log('  - Name:', videoFile.name);
+    console.log('  - Type:', videoFile.type);
+    console.log('  - Size:', videoFile.size, 'bytes');
+    
+    // Verify we have actual video data
+    if (videoFile.size < 1000) {
+        console.error('❌ Video file too small:', videoFile.size);
+        alert('Recording failed. Video is too short. Please try again.');
+        retryCurrentChallenge();
+        return;
+    }
     
     const formData = new FormData();
-    formData.append("video", blob);
+    formData.append("video", videoFile);
     formData.append("challenge_id", challenge.challenge_id);
     formData.append("token_id", challenge.token_id);
     formData.append("device_id", deviceId);
     
     console.log('📤 Submitting to /v1/verify...');
+    console.log('  - Challenge ID:', challenge.challenge_id);
+    console.log('  - Video size:', videoFile.size);
     
     try {
         const res = await fetch("http://127.0.0.1:8000/v1/verify", {
@@ -2061,6 +2081,11 @@ async function handleChallengeComplete(challenge) {
         
         console.log('📥 Verification result:', result);
         
+        // Check for errors
+        if (result.error) {
+            console.error('❌ Verification error:', result.error);
+        }
+        
         currentChallengeResult = result;
         sessionResults.push(result);
         
@@ -2069,6 +2094,7 @@ async function handleChallengeComplete(challenge) {
     } catch (error) {
         console.error('❌ Submission error:', error);
         alert('Failed to submit challenge. Please try again.');
+        retryCurrentChallenge();
     }
 }
 
