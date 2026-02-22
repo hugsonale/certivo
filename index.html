@@ -1775,7 +1775,7 @@ function runCalibration(videoElement) {
     let faceDetectedTime = null;
     let calibrationStartTime = Date.now();
     const CALIBRATION_DURATION = 5000; // ✅ 5 seconds max
-    const REQUIRED_STABLE_TIME = 500; // Must be stable for 500ms
+    const REQUIRED_STABLE_TIME = 300; // Must be stable for 500ms
     
     let progress = 0;
     calibrationProgressInterval = setInterval(() => {
