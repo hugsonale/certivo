@@ -25,7 +25,7 @@ Recommendation:
 ---------------------------------------------------------
 CHALLENGE 2: HEAD TURN RIGHT
 ---------------------------------------------------------
-Test 1: [ ] Pass  [ ] Fail  Notes: 
+Test 1: [ ] Pass  [❌] Fail  Notes: I performed the challenge but it brought this - Device blocked due to suspicious activity
 Test 2: [ ] Pass  [ ] Fail  Notes: 
 Test 3: [ ] Pass  [ ] Fail  Notes: 
 Test 4: [ ] Pass  [ ] Fail  Notes: 
@@ -43,8 +43,8 @@ Recommendation:
 ---------------------------------------------------------
 CHALLENGE 3: BLINK DETECTION
 ---------------------------------------------------------
-Test 1: [ ] Pass  [ ] Fail  Notes: 
-Test 2: [ ] Pass  [ ] Fail  Notes: 
+Test 1: [ ] Pass  [❌] Fail  Notes: I performed the challenge but it brought this - Device blocked due to suspicious activity
+Test 2: [ ] Pass  [❌] Fail  Notes: I performed the challenge but it brought this - Video content lacks diversity (possible pre-recorded or static)
 Test 3: [ ] Pass  [ ] Fail  Notes: 
 Test 4: [ ] Pass  [ ] Fail  Notes: 
 Test 5: [ ] Pass  [ ] Fail  Notes: 
@@ -79,7 +79,7 @@ Recommendation:
 ---------------------------------------------------------
 CHALLENGE 5: MOUTH OPEN
 ---------------------------------------------------------
-Test 1: [ ] Pass  [ ] Fail  Notes: 
+Test 1: [ ] Pass  [❌] Fail  Notes:  I did the challenge but it brought this "Video content lacks diversity (possible pre-recorded or static)"
 Test 2: [ ] Pass  [ ] Fail  Notes: 
 Test 3: [ ] Pass  [ ] Fail  Notes: 
 Test 4: [ ] Pass  [ ] Fail  Notes: 
