@@ -28,10 +28,10 @@ CHALLENGE 2: HEAD TURN RIGHT
 Test 1: [ ] Pass  [❌] Fail  Notes: I performed the challenge but it brought this - Device blocked due to suspicious activity
 Test 2: [ ] Pass  [❌] Fail  Notes: I performed the challenge but it brought this - Device blocked due to suspicious activity
 Test 3: [ ] Pass  [❌] Fail  Notes: I performed the challenge but it brought this - Video content lacks diversity (possible pre-recorded or static)
-Test 4: [ ] Pass  [❌] Fail  Notes: 
-Test 5: [ ] Pass  [❌] Fail  Notes: 
-Test 6: [ ] Pass  [❌] Fail  Notes: 
-Test 7: [ ] Pass  [] Fail  Notes: 
+Test 4: [ ] Pass  [❌] Fail  Notes: I performed the challenge but it brought this - Video content lacks diversity (possible pre-recorded or static)
+Test 5: [ ] Pass  [❌] Fail  Notes: I performed the challenge but it brought this - Device blocked due to suspicious activity
+Test 6: [ ] Pass  [❌] Fail  Notes: I performed the challenge but it brought this - Video content lacks diversity (possible pre-recorded or static)
+Test 7: [ ] Pass  [❌] Fail  Notes: 
 Test 8: [ ] Pass  [ ] Fail  Notes: 
 Test 9: [ ] Pass  [ ] Fail  Notes: 
 Test 10: [ ] Pass  [ ] Fail  Notes: 
