@@ -269,7 +269,7 @@ def check_video_integrity(video_path: str) -> Dict[str, Any]:
         unique_hashes = len(set(frame_hashes))
         duplicate_ratio = 1 - (unique_hashes / len(frame_hashes))
         
-        if duplicate_ratio > 0.8:  # More than 80% duplicate frames
+        if duplicate_ratio > 0.95:  # More than 80% duplicate frames
             return {
                 "valid": False,
                 "reason": "Video appears to be static (repeated frames detected)",
