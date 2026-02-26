@@ -295,7 +295,7 @@ def check_video_integrity(video_path: str) -> Dict[str, Any]:
         
         avg_motion = np.mean(motion_scores) if motion_scores else 0
         
-        if avg_motion < 0.5:  # Very little motion
+        if avg_motion < 0.2:  # Very little motion
             return {
                 "valid": False,
                 "reason": "No significant motion detected in video",
