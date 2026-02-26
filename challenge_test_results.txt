@@ -18,7 +18,7 @@ Test 8: [ ] Pass  [❌] Fail  Notes: I did not perform the challenge but it brou
 Test 9: [ ] Pass  [❌] Fail  Notes: I performed the challenge but it brought this - Video content lacks diversity (possible pre-recorded or static)
 Test 10: [ ] Pass [❌] Fail  Notes: I performed the challenge but it brought this - Video content lacks diversity (possible pre-recorded or static)
 
-Success Rate: __/10 (__%)
+Success Rate: _0_/10 (__%)
 Issues: 
 Recommendation: 
 
@@ -36,7 +36,7 @@ Test 8: [ ] Pass  [❌] Fail  Notes: I did not perform the challenge but it brou
 Test 9: [ ] Pass  [❌] Fail  Notes: I performed the challenge but it brought this - Video content lacks diversity (possible pre-recorded or static)
 Test 10: [ ] Pass  [❌] Fail  Notes: I performed the challenge but it brought this - Video content lacks diversity (possible pre-recorded or static)
 
-Success Rate: __/10 (__%)
+Success Rate: _0_/10 (__%)
 Issues: 
 Recommendation: 
 
@@ -54,7 +54,7 @@ Test 8: [ ] Pass  [❌] Fail  Notes: I did not blink and it says - Video content
 Test 9: [ ] Pass  [❌] Fail  Notes: I did not blink and it says - Video content lacks diversity (possible pre-recorded or static)
 Test 10: [ ] Pass [❌] Fail  Notes: I performed the challenge but it brought this - Video content lacks diversity (possible pre-recorded or static)
 
-Success Rate: __/10 (__%)
+Success Rate: _0_/10 (__%)
 Issues: 
 Recommendation: 
 
@@ -90,7 +90,7 @@ Test 8: [ ] Pass  [❌] Fail  Notes: I did the challenge but it brought this "Vi
 Test 9: [ ] Pass  [❌] Fail  Notes: At first I performed the challenge but it brought this and even when i retried it without doing anythingDevice blocked due to suspicious activity
 Test 10: [ ] Pass  [❌] Fail  Notes: I performed the challenge but it brought this - Device blocked due to suspicious activity
 
-Success Rate: __/10 (__%)
+Success Rate: _0_/10 (__%)
 Issues: 
 Recommendation: 
 

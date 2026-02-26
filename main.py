@@ -310,7 +310,7 @@ def check_video_integrity(video_path: str) -> Dict[str, Any]:
         # ================================================================
         brightness_variance = np.var(brightness_values)
         
-        if brightness_variance < 5:  # Very little variance
+        if brightness_variance < 1.5:  # Very little variance
             return {
                 "valid": False,
                 "reason": "Video content lacks diversity (possible pre-recorded or static)",
