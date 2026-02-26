@@ -12,11 +12,11 @@ Test 2: [ ] Pass  [❌] Fail  Notes: I performed the challenge but it brought th
 Test 3: [ ] Pass  [❌] Fail  Notes: I performed the challenge but it brought this - Device blocked due to suspicious activity
 Test 4: [ ] Pass  [❌] Fail  Notes: I performed the challenge but it brought this - Device blocked due to suspicious activity
 Test 5: [ ] Pass  [❌] Fail  Notes: I performed the challenge but it brought this - Challenge not complete
-Test 6: [ ] Pass  [ ] Fail  Notes: 
-Test 7: [ ] Pass  [ ] Fail  Notes: 
-Test 8: [ ] Pass  [ ] Fail  Notes: 
-Test 9: [ ] Pass  [ ] Fail  Notes: 
-Test 10: [ ] Pass  [ ] Fail  Notes: 
+Test 6: [ ] Pass  [❌] Fail  Notes: I did not perform the challenge but it brought this - Device blocked due to suspicious activity
+Test 7: [ ] Pass  [❌] Fail  Notes: I performed the challenge but it brought this - Device blocked due to suspicious activity
+Test 8: [ ] Pass  [❌] Fail  Notes: I did not perform the challenge but it brought this - Video content lacks diversity (possible pre-recorded or static)
+Test 9: [ ] Pass  [❌] Fail  Notes: I performed the challenge but it brought this - Video content lacks diversity (possible pre-recorded or static)
+Test 10: [ ] Pass [❌] Fail  Notes: I performed the challenge but it brought this - Video content lacks diversity (possible pre-recorded or static)
 
 Success Rate: __/10 (__%)
 Issues: 
@@ -32,9 +32,9 @@ Test 4: [ ] Pass  [❌] Fail  Notes: I performed the challenge but it brought th
 Test 5: [ ] Pass  [❌] Fail  Notes: I performed the challenge but it brought this - Device blocked due to suspicious activity
 Test 6: [ ] Pass  [❌] Fail  Notes: I performed the challenge but it brought this - Video content lacks diversity (possible pre-recorded or static)
 Test 7: [ ] Pass  [❌] Fail  Notes: 
-Test 8: [ ] Pass  [ ] Fail  Notes: 
-Test 9: [ ] Pass  [ ] Fail  Notes: 
-Test 10: [ ] Pass  [ ] Fail  Notes: 
+Test 8: [ ] Pass  [❌] Fail  Notes: 
+Test 9: [ ] Pass  [❌] Fail  Notes: 
+Test 10: [ ] Pass  [❌] Fail  Notes: 
 
 Success Rate: __/10 (__%)
 Issues: 
