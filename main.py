@@ -14,6 +14,12 @@ from challenge_engine import generate_adaptive_challenges
 from human_verification import run_human_verification
 from logger import log_event
 
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
 # Database imports
 from sqlalchemy.orm import Session
 from database import (
@@ -27,12 +33,6 @@ from database import (
 
 app = FastAPI()
 
-import os
-from dotenv import load_dotenv
-
-
-# Load environment variables
-load_dotenv()
 
 # CORS configuration from environment
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
