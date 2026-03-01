@@ -1,5 +1,43 @@
-venv/
+
 uploads/
+
+
+# Environment variables
+.env
+*.env
+
+# Database
+*.db
+*.db-journal
+
+# Python
 __pycache__/
 *.pyc
-*.db
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp

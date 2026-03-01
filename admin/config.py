@@ -5,20 +5,39 @@ Security settings, authentication, and access control
 
 import os
 from typing import List, Optional
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # ============================================================================
 # ADMIN AUTHENTICATION
 # ============================================================================
 
-# Admin credentials (In production: use environment variables + hashed passwords)
+# Admin credentials from environment variables
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")  # Change this!
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")  # No default - must be in .env!
+
+# Validate that password is set
+if not ADMIN_PASSWORD:
+    raise ValueError(
+        "❌ ADMIN_PASSWORD not set! Please create a .env file with ADMIN_PASSWORD=your_password"
+    )
 
 # Session configuration
-SECRET_KEY = os.getenv("ADMIN_SECRET_KEY", "certivo-admin-dashboard-secret-key-change-in-production")
+SECRET_KEY = os.getenv("ADMIN_SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError(
+        "❌ ADMIN_SECRET_KEY not set! Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+    )
+
 SESSION_COOKIE_NAME = "certivo_admin_session"
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS
+
+# HTTPS enforcement - set to True in production
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+SESSION_COOKIE_SECURE = (ENVIRONMENT == "production")  # True only in production
+
 SESSION_MAX_AGE = 3600 * 8  # 8 hours
 
 # ============================================================================
@@ -74,3 +93,18 @@ ENABLE_DEVICE_REVOCATION = True
 ENABLE_CHALLENGE_DELETION = True
 ENABLE_SESSION_INSPECTION = True
 ENABLE_SYSTEM_HEALTH = True
+
+# ============================================================================
+# SECURITY
+# ============================================================================
+
+# Max upload size (bytes)
+MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", 10485760))  # 10MB default
+
+# Rate limiting
+RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
+
+print("✅ Admin config loaded from environment variables")
+print(f"   Environment: {ENVIRONMENT}")
+print(f"   HTTPS Cookies: {SESSION_COOKIE_SECURE}")
+print(f"   Rate Limiting: {RATE_LIMIT_ENABLED}")
