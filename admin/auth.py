@@ -10,7 +10,7 @@ from typing import Optional, Dict
 import hashlib
 import secrets
 from admin import config
-
+import bcrypt
 
 # ============================================================================
 # SESSION STORAGE (In-memory for simplicity - use Redis in production)
@@ -24,14 +24,25 @@ login_attempts: Dict[str, Dict] = {}  # Track failed login attempts
 # PASSWORD HASHING
 # ============================================================================
 
+
+
 def hash_password(password: str) -> str:
-    """Hash password using SHA-256"""
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Hash password using bcrypt"""
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+    return hashed.decode('utf-8')
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify password against hash"""
-    return hash_password(plain_password) == hashed_password
+    """Verify password against bcrypt hash"""
+    try:
+        return bcrypt.checkpw(
+            plain_password.encode('utf-8'),
+            hashed_password.encode('utf-8')
+        )
+    except Exception as e:
+        print(f"❌ Password verification error: {e}")
+        return False
 
 
 # ============================================================================
@@ -135,7 +146,7 @@ def destroy_session(session_token: str):
 
 def authenticate(username: str, password: str, ip: str) -> Optional[str]:
     """
-    Authenticate admin user
+    Authenticate admin user with bcrypt password hashing
     Returns session token if successful, None otherwise
     """
     
@@ -146,14 +157,32 @@ def authenticate(username: str, password: str, ip: str) -> Optional[str]:
             detail=f"Too many failed login attempts. Try again in {config.LOGIN_LOCKOUT_DURATION // 60} minutes."
         )
     
-    # Validate credentials
-    # In production: Check against database with hashed passwords
-    if username == config.ADMIN_USERNAME and password == config.ADMIN_PASSWORD:
-        reset_login_attempts(ip)
-        return create_session(username, ip)
-    else:
+    # Validate username
+    if username != config.ADMIN_USERNAME:
         record_failed_login(ip)
         return None
+    
+    # ✅ NEW: Hash the stored password on first use (for migration)
+    # This allows smooth transition from plain text to bcrypt
+    stored_password = config.ADMIN_PASSWORD
+    
+    # Check if stored password is already hashed (bcrypt hashes start with $2b$)
+    if not stored_password.startswith('$2b$'):
+        # Plain text password - verify directly and hash for next time
+        if password == stored_password:
+            reset_login_attempts(ip)
+            return create_session(username, ip)
+        else:
+            record_failed_login(ip)
+            return None
+    else:
+        # Hashed password - use bcrypt verification
+        if verify_password(password, stored_password):
+            reset_login_attempts(ip)
+            return create_session(username, ip)
+        else:
+            record_failed_login(ip)
+            return None
 
 
 # ============================================================================

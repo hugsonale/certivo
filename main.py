@@ -27,12 +27,27 @@ from database import (
 
 app = FastAPI()
 
+import os
+from dotenv import load_dotenv
+
+
+# Load environment variables
+load_dotenv()
+
+# CORS configuration from environment
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS if ENVIRONMENT == "production" else ["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
 )
+
+print(f"🌐 CORS configured for {ENVIRONMENT} environment")
+print(f"   Allowed origins: {ALLOWED_ORIGINS if ENVIRONMENT == 'production' else ['*']}")
 
 from admin import admin_router
 from fastapi.staticfiles import StaticFiles
