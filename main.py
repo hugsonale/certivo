@@ -1179,27 +1179,6 @@ async def verify_challenge(
                 os.remove(video_path)
             except Exception:
                 pass
-from logger import log_performance
-
-# After verification completes
-log_performance(
-    operation="video_verification",
-    duration_ms=processing_time,  # You'll need to add timing
-    session_id=device_id,
-    details={
-        "challenge_type": expected_movement,
-        "passed": result["challenge_passed"]
-    }
-)
-
-# Update Prometheus metrics
-if result["challenge_passed"]:
-    verification_success.labels(challenge_type=expected_movement).inc()
-else:
-    verification_failure.labels(
-        challenge_type=expected_movement,
-        failure_reason=result.get("error_code", "unknown")
-    ).inc()
 
 # ============================================================================
 # FINALIZE SESSION
@@ -1319,23 +1298,3 @@ def _reject(reason: str, code: str = "ERROR") -> dict:
         "error":             reason,
         "error_code":        code,
     }
-
-
-@app.get("/v1/device/{device_id}/stats")
-async def get_device_statistics(device_id: str, db: Session = Depends(get_db)):
-    """Get statistics for a specific device - with caching"""
-    
-    # Try cache first
-    cache_key = f"device_stats:{device_id}"
-    cached = cache_get(cache_key)
-    if cached:
-        return cached
-    
-    # Not in cache - query database
-    stats = get_device_stats(db, device_id)
-    
-    if stats:
-        # Store in cache for 5 minutes
-        cache_set(cache_key, stats, ttl=300)
-    
-    return stats or {"error": "Device not found", "device_id": device_id}

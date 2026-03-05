@@ -243,3 +243,33 @@ def paginate(items: List[Any], page: int = 1, per_page: int = 50) -> Dict[str, A
         "has_prev": page > 1,
         "has_next": page < total_pages
     }
+
+
+# ============================================================================
+# JINJA2 TEMPLATE FILTERS
+# ============================================================================
+
+def format_timestamp(dt: datetime) -> str:
+    """Format datetime for display in templates"""
+    if not dt:
+        return "N/A"
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def format_json_pretty(data: str) -> str:
+    """Format JSON string with indentation"""
+    if not data:
+        return ""
+    try:
+        import json
+        parsed = json.loads(data) if isinstance(data, str) else data
+        return json.dumps(parsed, indent=2)
+    except:
+        return str(data)
+
+
+def format_percentage(value: float) -> str:
+    """Format number as percentage"""
+    if value is None:
+        return "0%"
+    return f"{value:.1f}%"
