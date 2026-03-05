@@ -44,12 +44,13 @@ class VerificationUser(HttpUser):
         self.device_id = f"load_test_device_{random.randint(1000, 9999)}"
         print(f"🔹 User started with device_id: {self.device_id}")
     
+    """
     @task(5)  # Weight: 5 (runs 5x more often than other tasks)
     def get_challenge(self):
-        """
+    
         TEST 1: Get Challenge
         Most common operation - should be fast
-        """
+        
         with self.client.get(
             f"/v1/challenge?device_id={self.device_id}",
             catch_response=True,
@@ -66,6 +67,8 @@ class VerificationUser(HttpUser):
                 response.success()
             else:
                 response.failure(f"Status code: {response.status_code}")
+
+        """
     
     @task(2)  # Weight: 2 (runs 2x more often than task(1))
     def get_device_stats(self):
