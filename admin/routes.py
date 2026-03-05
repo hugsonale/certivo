@@ -1,22 +1,25 @@
 """
 Admin Dashboard Routes
-All endpoints for the admin interface
 """
 
 from fastapi import APIRouter, Request, Depends, Form, HTTPException, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from datetime import datetime
+from typing import Optional
 
-from database import get_db
-from admin import auth, services, config, utils
+from admin import auth, config, services, utils
+from database import get_db, revoke_device_trust
+from logger import log_admin_action
 
 # Create router
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 # Templates
 templates = Jinja2Templates(directory="admin/templates")
+
+# ... rest of your routes
 
 
 # ============================================================================
@@ -226,6 +229,9 @@ async def revoke_device(request: Request, device_id: str, db: Session = Depends(
     return RedirectResponse(url="/admin/trusted-devices", status_code=status.HTTP_303_SEE_OTHER)
 
 
+
+
+
 # ============================================================================
 # BOT ACTIVITY
 # ============================================================================
@@ -272,6 +278,31 @@ async def logs_page(request: Request, db: Session = Depends(get_db)):
         "session": session,
         "logs": logs
     })
+
+
+@admin_router.post("/trusted-devices/{device_id}/revoke")
+async def revoke_device_trust_endpoint(
+    device_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    username: str = Depends(require_auth)
+):
+    """Revoke trust for a device"""
+    
+    success = revoke_device_trust(db, device_id, reason="Manual admin revocation")
+    
+    if success:
+        # ✅ Log admin action
+        log_admin_action(
+            admin_user=username,
+            action="revoke_device_trust",
+            target=device_id,
+            details={"reason": "manual_revocation"}
+        )
+        
+        return {"status": "success", "message": f"Trust revoked for device {device_id}"}
+    else:
+        return {"status": "error", "message": "Device not found"}
 
 
 # ============================================================================
