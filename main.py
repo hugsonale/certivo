@@ -17,6 +17,8 @@ from logger import log_event
 import os
 from dotenv import load_dotenv
 
+from cache import cache_get, cache_set
+
 # Load environment variables
 load_dotenv()
 
@@ -605,32 +607,34 @@ async def get_challenge_endpoint(
     # Get client IP
     client_ip = request.client.host if request.client else "unknown"
     
+     # ================================================================
+    # TEMPORARILY DISABLED FOR LOAD TESTING
     # ================================================================
-    # SECURITY: Rate limiting
-    # ================================================================
-    rate_check = rate_limiter.check_rate_limit(
-        ip=client_ip,
-        device_id=device_id,
-        endpoint="challenge"
-    )
+    # rate_check = rate_limiter.check_rate_limit(
+    #     ip=client_ip,
+    #     device_id=device_id,
+    #     endpoint="challenge"
+    # )
+    # 
+    # if not rate_check["allowed"]:
+    #     log_event(
+    #         event="rate_limit_exceeded",
+    #         session_id=device_id,
+    #         challenge_id=None,
+    #         details={
+    #             "ip": client_ip,
+    #             "limit_type": rate_check["limit_type"],
+    #             "retry_after": rate_check["retry_after"]
+    #         }
+    #     )
+    #     
+    #     return {
+    #         "error": rate_check["reason"],
+    #         "code": "RATE_LIMIT_EXCEEDED",
+    #         "retry_after": rate_check["retry_after"]
+    #     }
     
-    if not rate_check["allowed"]:
-        log_event(
-            event="rate_limit_exceeded",
-            session_id=device_id,
-            challenge_id=None,
-            details={
-                "ip": client_ip,
-                "limit_type": rate_check["limit_type"],
-                "retry_after": rate_check["retry_after"]
-            }
-        )
-        
-        return {
-            "error": rate_check["reason"],
-            "code": "RATE_LIMIT_EXCEEDED",
-            "retry_after": rate_check["retry_after"]
-        }
+    # Continue with normal challenge generation...
     
     # ================================================================
     # SECURITY: Bot detection
@@ -1179,3 +1183,23 @@ def _reject(reason: str, code: str = "ERROR") -> dict:
         "error":             reason,
         "error_code":        code,
     }
+
+
+@app.get("/v1/device/{device_id}/stats")
+async def get_device_statistics(device_id: str, db: Session = Depends(get_db)):
+    """Get statistics for a specific device - with caching"""
+    
+    # Try cache first
+    cache_key = f"device_stats:{device_id}"
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+    
+    # Not in cache - query database
+    stats = get_device_stats(db, device_id)
+    
+    if stats:
+        # Store in cache for 5 minutes
+        cache_set(cache_key, stats, ttl=300)
+    
+    return stats or {"error": "Device not found", "device_id": device_id}

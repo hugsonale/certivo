@@ -134,7 +134,7 @@ MIN_BROW_RAISE_FRAMES = 5
 # General
 MIN_FACE_FRAMES       = 8
 MIN_FACE_FRAMES_EASY  = 5
-MAX_FRAMES_TO_ANALYSE = 150
+MAX_FRAMES_TO_ANALYSE = 90
 
 # ============================================================================
 # PHASE 2: FRAME SAMPLING - Speed up 2x by skipping frames
