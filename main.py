@@ -10,53 +10,76 @@ import asyncio
 from collections import defaultdict
 import hashlib
 
-from challenge_engine import generate_adaptive_challenges
-from human_verification import run_human_verification
-from logger import log_event
-
-import os
+# ============================================================================
+# ENVIRONMENT SETUP (Must be first)
+# ============================================================================
 from dotenv import load_dotenv
-
-from cache import cache_get, cache_set
-
-# Load environment variables
 load_dotenv()
 
+# Environment variables
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 
-import sentry_sdk
-from sentry_sdk.integrations.fastapi import FastApiIntegration
-from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+# ============================================================================
+# LOGGING SETUP
+# ============================================================================
+from logger import log_event
+
+# ============================================================================
+# CHALLENGE ENGINE & VERIFICATION
+# ============================================================================
+from challenge_engine import generate_adaptive_challenges
+from human_verification import run_human_verification
 
 # ============================================================================
 # SENTRY ERROR TRACKING (Production Monitoring)
 # ============================================================================
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 
 SENTRY_DSN = os.getenv("SENTRY_DSN", None)
-ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 
 if SENTRY_DSN:
     sentry_sdk.init(
         dsn=SENTRY_DSN,
         environment=ENVIRONMENT,
-        traces_sample_rate=0.1,  # 10% of transactions for performance monitoring
-        profiles_sample_rate=0.1,  # 10% for profiling
+        traces_sample_rate=0.1,
+        profiles_sample_rate=0.1,
         integrations=[
             FastApiIntegration(),
             SqlalchemyIntegration(),
         ],
-        # Send all errors in production, sample in development
         before_send=lambda event, hint: event if ENVIRONMENT == "production" else event,
     )
     print(f"✅ Sentry error tracking enabled ({ENVIRONMENT})")
 else:
     print("ℹ️  Sentry not configured (set SENTRY_DSN in .env to enable)")
 
+# ============================================================================
+# CREATE FASTAPI APP
+# ============================================================================
+app = FastAPI()
 
-from prometheus_fastapi_instrumentator import Instrumentator
+# ============================================================================
+# CORS MIDDLEWARE
+# ============================================================================
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS if ENVIRONMENT == "production" else ["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
+print(f"🌐 CORS configured for {ENVIRONMENT} environment")
+print(f"   Allowed origins: {ALLOWED_ORIGINS if ENVIRONMENT == 'production' else ['*']}")
 
 # ============================================================================
 # PROMETHEUS METRICS (Performance Monitoring)
 # ============================================================================
+from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Counter, Histogram, Gauge
 
 # Initialize Prometheus instrumentation
 instrumentator = Instrumentator(
@@ -64,14 +87,11 @@ instrumentator = Instrumentator(
     should_ignore_untemplated=True,
     should_respect_env_var=True,
     should_instrument_requests_inprogress=True,
-    excluded_handlers=[".*admin.*", "/metrics"],  # Don't track admin or metrics endpoint
+    excluded_handlers=[".*admin.*", "/metrics"],
     env_var_name="ENABLE_METRICS",
     inprogress_name="http_requests_inprogress",
     inprogress_labels=True,
 )
-
-# Add custom metrics
-from prometheus_client import Counter, Histogram, Gauge
 
 # Custom metrics
 verification_success = Counter(
@@ -111,11 +131,13 @@ active_verifications = Gauge(
 
 # Instrument the app
 instrumentator.instrument(app)
+instrumentator.expose(app, endpoint="/metrics")
 
 print("✅ Prometheus metrics enabled at /metrics")
 
-
-# Database imports
+# ============================================================================
+# DATABASE IMPORTS
+# ============================================================================
 from sqlalchemy.orm import Session
 from database import (
     get_db, store_challenge, get_challenge, delete_challenge,
@@ -126,30 +148,18 @@ from database import (
     get_device_verification_history
 )
 
-app = FastAPI()
-
-# Expose metrics endpoint
-instrumentator.expose(app, endpoint="/metrics")
-
-# CORS configuration from environment
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
-ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS if ENVIRONMENT == "production" else ["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
-)
-
-print(f"🌐 CORS configured for {ENVIRONMENT} environment")
-print(f"   Allowed origins: {ALLOWED_ORIGINS if ENVIRONMENT == 'production' else ['*']}")
-
+# ============================================================================
+# ADMIN DASHBOARD
+# ============================================================================
 from admin import admin_router
 from fastapi.staticfiles import StaticFiles
+
 app.include_router(admin_router)
 app.mount("/admin/static", StaticFiles(directory="admin/static"), name="admin_static")
+
+# ============================================================================
+# RATE LIMITING (Security Feature 1)
+# ============================================================================
 
 # ============================================================================
 # SECURITY FEATURE 1: RATE LIMITING - Multi-layer protection (10/10)
@@ -909,6 +919,9 @@ async def verify_challenge(
     video_size_bytes = 0
     client_ip        = "unknown"
 
+
+
+
     try:
         # Get client IP
         # Get client IP from request
@@ -960,6 +973,7 @@ async def verify_challenge(
                 }
             )
             return _reject(format_check['error'], format_check.get('error_code', 'INVALID_FORMAT'))
+
         
         # ================================================================
         # Save to temp file
@@ -1094,7 +1108,7 @@ async def verify_challenge(
                     "video_bot_score":  video_bot_analysis['suspicion_score']
                 }
             )
-
+            
         except Exception as e:
             log_event(
                 event="verification_error",
@@ -1103,6 +1117,8 @@ async def verify_challenge(
                 details={"error": str(e)}
             )
             return _reject("Verification processing failed", "PROCESSING_ERROR")
+        
+        
 
         # ================================================================
         # Store result
@@ -1124,6 +1140,8 @@ async def verify_challenge(
             video_size_bytes=video_size_bytes,
             difficulty=difficulty,
         )
+        
+
         
         # ============================================================
         # SECURITY FEATURE 4: Trust revocation on repeated failures
@@ -1161,7 +1179,27 @@ async def verify_challenge(
                 os.remove(video_path)
             except Exception:
                 pass
+from logger import log_performance
 
+# After verification completes
+log_performance(
+    operation="video_verification",
+    duration_ms=processing_time,  # You'll need to add timing
+    session_id=device_id,
+    details={
+        "challenge_type": expected_movement,
+        "passed": result["challenge_passed"]
+    }
+)
+
+# Update Prometheus metrics
+if result["challenge_passed"]:
+    verification_success.labels(challenge_type=expected_movement).inc()
+else:
+    verification_failure.labels(
+        challenge_type=expected_movement,
+        failure_reason=result.get("error_code", "unknown")
+    ).inc()
 
 # ============================================================================
 # FINALIZE SESSION
