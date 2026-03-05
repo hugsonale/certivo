@@ -52,6 +52,69 @@ else:
     print("ℹ️  Sentry not configured (set SENTRY_DSN in .env to enable)")
 
 
+from prometheus_fastapi_instrumentator import Instrumentator
+
+# ============================================================================
+# PROMETHEUS METRICS (Performance Monitoring)
+# ============================================================================
+
+# Initialize Prometheus instrumentation
+instrumentator = Instrumentator(
+    should_group_status_codes=True,
+    should_ignore_untemplated=True,
+    should_respect_env_var=True,
+    should_instrument_requests_inprogress=True,
+    excluded_handlers=[".*admin.*", "/metrics"],  # Don't track admin or metrics endpoint
+    env_var_name="ENABLE_METRICS",
+    inprogress_name="http_requests_inprogress",
+    inprogress_labels=True,
+)
+
+# Add custom metrics
+from prometheus_client import Counter, Histogram, Gauge
+
+# Custom metrics
+verification_success = Counter(
+    'certivo_verification_success_total',
+    'Total successful verifications',
+    ['challenge_type']
+)
+
+verification_failure = Counter(
+    'certivo_verification_failure_total',
+    'Total failed verifications',
+    ['challenge_type', 'failure_reason']
+)
+
+verification_duration = Histogram(
+    'certivo_verification_duration_seconds',
+    'Time spent processing verification',
+    ['challenge_type']
+)
+
+bot_detections = Counter(
+    'certivo_bot_detections_total',
+    'Total bot detections',
+    ['detection_type']
+)
+
+rate_limits = Counter(
+    'certivo_rate_limits_total',
+    'Total rate limit triggers',
+    ['limit_type']
+)
+
+active_verifications = Gauge(
+    'certivo_active_verifications',
+    'Number of currently processing verifications'
+)
+
+# Instrument the app
+instrumentator.instrument(app)
+
+print("✅ Prometheus metrics enabled at /metrics")
+
+
 # Database imports
 from sqlalchemy.orm import Session
 from database import (
@@ -65,6 +128,8 @@ from database import (
 
 app = FastAPI()
 
+# Expose metrics endpoint
+instrumentator.expose(app, endpoint="/metrics")
 
 # CORS configuration from environment
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
