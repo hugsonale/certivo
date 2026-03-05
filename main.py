@@ -22,6 +22,36 @@ from cache import cache_get, cache_set
 # Load environment variables
 load_dotenv()
 
+
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+
+# ============================================================================
+# SENTRY ERROR TRACKING (Production Monitoring)
+# ============================================================================
+
+SENTRY_DSN = os.getenv("SENTRY_DSN", None)
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        environment=ENVIRONMENT,
+        traces_sample_rate=0.1,  # 10% of transactions for performance monitoring
+        profiles_sample_rate=0.1,  # 10% for profiling
+        integrations=[
+            FastApiIntegration(),
+            SqlalchemyIntegration(),
+        ],
+        # Send all errors in production, sample in development
+        before_send=lambda event, hint: event if ENVIRONMENT == "production" else event,
+    )
+    print(f"✅ Sentry error tracking enabled ({ENVIRONMENT})")
+else:
+    print("ℹ️  Sentry not configured (set SENTRY_DSN in .env to enable)")
+
+
 # Database imports
 from sqlalchemy.orm import Session
 from database import (
@@ -604,38 +634,41 @@ async def get_challenge_endpoint(
     - Suspicious device blocking
     """
     
+    
     # Get client IP
     client_ip = request.client.host if request.client else "unknown"
     
-     # ================================================================
-    # TEMPORARILY DISABLED FOR LOAD TESTING
+
+    """
     # ================================================================
-    # rate_check = rate_limiter.check_rate_limit(
-    #     ip=client_ip,
-    #     device_id=device_id,
-    #     endpoint="challenge"
-    # )
-    # 
-    # if not rate_check["allowed"]:
-    #     log_event(
-    #         event="rate_limit_exceeded",
-    #         session_id=device_id,
-    #         challenge_id=None,
-    #         details={
-    #             "ip": client_ip,
-    #             "limit_type": rate_check["limit_type"],
-    #             "retry_after": rate_check["retry_after"]
-    #         }
-    #     )
-    #     
-    #     return {
-    #         "error": rate_check["reason"],
-    #         "code": "RATE_LIMIT_EXCEEDED",
-    #         "retry_after": rate_check["retry_after"]
-    #     }
+    # SECURITY: Rate limiting
+    # ================================================================
+    rate_check = rate_limiter.check_rate_limit(
+        ip=client_ip,
+        device_id=device_id,
+        endpoint="challenge"
+    )
     
-    # Continue with normal challenge generation...
+    if not rate_check["allowed"]:
+        log_event(
+            event="rate_limit_exceeded",
+            session_id=device_id,
+            challenge_id=None,
+            details={
+                "ip": client_ip,
+                "limit_type": rate_check["limit_type"],
+                "retry_after": rate_check["retry_after"]
+            }
+        )
+        
+        return {
+            "error": rate_check["reason"],
+            "code": "RATE_LIMIT_EXCEEDED",
+            "retry_after": rate_check["retry_after"]
+        }
     
+"""
+        
     # ================================================================
     # SECURITY: Bot detection
     # ================================================================
