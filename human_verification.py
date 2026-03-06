@@ -5,6 +5,7 @@ from logger import log_event
 from typing import Optional, Dict, Any
 import asyncio
 from functools import lru_cache
+from logger import log_performance
 
 # ============================================================================
 # MEDIAPIPE — imported with graceful fallback to OpenCV-only mode
@@ -717,16 +718,15 @@ def run_human_verification(
     expected_movement: str = None,
     expected_direction: str = None,
 ):
-    
-    
     """
     Run human verification for any supported challenge type.
     
-    PHASE 2 & 3 & 5 IMPROVEMENTS:
+    PHASE 2 & 3 & 5 & 6 IMPROVEMENTS:
     - Model caching (reuse instances)
     - Frame sampling (2x speed)
     - Better error messages (user-friendly + tech details)
     - Performance timing logs
+    - Performance metrics logging
     """
     
     # ✅ START TIMING
@@ -740,34 +740,10 @@ def run_human_verification(
     print(f"   movement={movement}  fast_track={fast_track}")
     print(f"{'=' * 60}\n")
 
-
-
-    # ✅ END TIMING
-    end_time = time.time()
-    processing_time = (end_time - start_time) * 1000  # Convert to milliseconds
+    # ================================================================
+    # VALIDATION
+    # ================================================================
     
-    print(f"\n⏱️  PROCESSING TIME: {processing_time:.2f}ms")
-    print(f"   Target: < 3000ms")
-    
-    if processing_time < 1000:
-        print(f"   ✅ EXCELLENT (< 1 second)")
-    elif processing_time < 3000:
-        print(f"   ✅ GOOD (< 3 seconds)")
-    else:
-        print(f"   ⚠️  SLOW (> 3 seconds) - consider optimization")
-
-    return {
-        "challenge_passed":  True,
-        "liveness_score":    liveness_score,
-        "action_detected":   movement,
-        "action_matched":    True,
-        "direction_detected": direction_detected,
-        "direction_matched":  direction_matched,
-        "error":             None,
-        "error_code":        None,
-        "processing_time_ms": processing_time,  # ✅ Add to response
-    }
-
     VALID_MOVEMENTS = {"left", "right", "blink", "nod", "mouth", "eyebrows"}
 
     if not session_id or not challenge_id:
@@ -779,7 +755,10 @@ def run_human_verification(
     if not video_path or not os.path.exists(video_path):
         return _build_error_response("video_not_found", f"Path: {video_path}")
 
-    # Run detector
+    # ================================================================
+    # RUN DETECTION
+    # ================================================================
+    
     try:
         detection = _run_detector(movement, video_path, fast_track)
     except Exception as exc:
@@ -793,6 +772,10 @@ def run_human_verification(
         )
         return _build_error_response("processing_error", str(exc))
 
+    # ================================================================
+    # CHECK DETECTION RESULT
+    # ================================================================
+    
     # Check if detection itself returned an error
     if "error_code" in detection:
         log_event(
@@ -815,7 +798,10 @@ def run_human_verification(
         )
         return _build_error_response("action_not_detected", detection.get("error", "Unknown"))
 
-    # SUCCESS
+    # ================================================================
+    # SUCCESS - BUILD RESPONSE
+    # ================================================================
+    
     liveness_score = 0.98 if fast_track else 0.96
 
     if movement in ("left", "right"):
@@ -839,6 +825,40 @@ def run_human_verification(
         },
     )
 
+    # ================================================================
+    # ✅ CALCULATE TIMING & LOG PERFORMANCE
+    # ================================================================
+    
+    end_time = time.time()
+    processing_time = (end_time - start_time) * 1000  # Convert to milliseconds
+    
+    print(f"\n⏱️  PROCESSING TIME: {processing_time:.2f}ms")
+    print(f"   Target: < 3000ms")
+    
+    if processing_time < 1000:
+        print(f"   ✅ EXCELLENT (< 1 second)")
+    elif processing_time < 3000:
+        print(f"   ✅ GOOD (< 3 seconds)")
+    else:
+        print(f"   ⚠️  SLOW (> 3 seconds) - consider optimization")
+
+    # ✅ PHASE 6: LOG PERFORMANCE METRICS
+    log_performance(
+        operation="video_verification",
+        duration_ms=processing_time,
+        session_id=session_id,
+        details={
+            "challenge_type": movement,
+            "passed": challenge_passed,
+            "fast_track": fast_track,
+            "liveness_score": liveness_score
+        }
+    )
+
+    # ================================================================
+    # RETURN SUCCESS RESPONSE
+    # ================================================================
+    
     return {
         "challenge_passed":  True,
         "liveness_score":    liveness_score,
@@ -848,4 +868,5 @@ def run_human_verification(
         "direction_matched":  direction_matched,
         "error":             None,
         "error_code":        None,
+        "processing_time_ms": processing_time,  # ✅ Include timing in response
     }
