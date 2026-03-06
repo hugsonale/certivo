@@ -919,16 +919,11 @@ async def verify_challenge(
     video_size_bytes = 0
     client_ip        = "unknown"
 
-
-
-
     try:
         # Get client IP
-        # Get client IP from request
         from starlette.requests import Request as StarletteRequest
         if hasattr(verify_challenge, '__globals__'):
-            # Can't access request directly, use workaround
-            client_ip = "rate_limited"  # Placeholder for this implementation
+            client_ip = "rate_limited"
         
         # ================================================================
         # SECURITY: Rate limiting
@@ -973,7 +968,6 @@ async def verify_challenge(
                 }
             )
             return _reject(format_check['error'], format_check.get('error_code', 'INVALID_FORMAT'))
-
         
         # ================================================================
         # Save to temp file
@@ -1000,7 +994,6 @@ async def verify_challenge(
                 }
             )
             
-            # Flag device for suspicious activity
             flag_suspicious_device(
                 db=db,
                 device_id=device_id,
@@ -1084,16 +1077,12 @@ async def verify_challenge(
                     details=video_bot_analysis
                 )
                 
-                # Flag device
                 flag_suspicious_device(
                     db=db,
                     device_id=device_id,
                     reason=f"Suspicious video metrics detected",
                     suspicion_score=video_bot_analysis['suspicion_score']
                 )
-                
-                # Still allow this attempt but log it
-                # (could also reject here for stricter security)
             
             log_event(
                 event="verification_completed",
@@ -1109,6 +1098,31 @@ async def verify_challenge(
                 }
             )
             
+            # ============================================================
+            # ✅ PHASE 6: PROMETHEUS METRICS TRACKING
+            # ============================================================
+            
+            # Track verification success/failure
+            if result["challenge_passed"]:
+                verification_success.labels(challenge_type=expected_movement).inc()
+            else:
+                verification_failure.labels(
+                    challenge_type=expected_movement,
+                    failure_reason=result.get("error_code", "unknown")
+                ).inc()
+            
+            # Track processing duration
+            if "processing_time_ms" in result:
+                verification_duration.labels(
+                    challenge_type=expected_movement
+                ).observe(result["processing_time_ms"] / 1000)  # Convert to seconds
+            
+            # Track bot detections
+            if video_bot_analysis['is_suspicious']:
+                bot_detections.labels(detection_type="video_metrics").inc()
+            
+            # ============================================================
+            
         except Exception as e:
             log_event(
                 event="verification_error",
@@ -1117,8 +1131,6 @@ async def verify_challenge(
                 details={"error": str(e)}
             )
             return _reject("Verification processing failed", "PROCESSING_ERROR")
-        
-        
 
         # ================================================================
         # Store result
@@ -1141,18 +1153,14 @@ async def verify_challenge(
             difficulty=difficulty,
         )
         
-
-        
         # ============================================================
         # SECURITY FEATURE 4: Trust revocation on repeated failures
         # ============================================================
         if not result["challenge_passed"]:
-            # Check recent failure rate
             recent_results = get_session_results(db, device_id)
             if len(recent_results) >= 3:
                 recent_failures = sum(1 for r in recent_results[-3:] if not r.challenge_passed)
                 
-                # 3 consecutive failures = revoke trust
                 if recent_failures >= 3:
                     revoke_device_trust(db, device_id, reason="3 consecutive failed verifications")
                     log_event(

@@ -717,6 +717,8 @@ def run_human_verification(
     expected_movement: str = None,
     expected_direction: str = None,
 ):
+    
+    
     """
     Run human verification for any supported challenge type.
     
