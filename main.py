@@ -1,3 +1,46 @@
+# API Metadata
+tags_metadata = [
+    {
+        "name": "Verification",
+        "description": "Human verification endpoints for challenge generation and validation",
+    },
+    {
+        "name": "Admin",
+        "description": "Administrative endpoints for monitoring and management",
+    },
+    {
+        "name": "Device",
+        "description": "Device tracking and statistics",
+    },
+]
+
+app = FastAPI(
+    title="Certivo - Human Verification System",
+    description="""
+    Advanced human verification system using adaptive video challenges and liveness detection.
+    
+    ## Features
+    * Adaptive challenge difficulty based on device trust
+    * Real-time liveness detection
+    * Bot detection and prevention
+    * Device trust scoring
+    * Rate limiting and security controls
+    
+    ## Authentication
+    Admin endpoints require session authentication via `/admin/login`
+    """,
+    version="1.0.0",
+    openapi_tags=tags_metadata,
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
+
+
+
+
+
+
+
 from fastapi import FastAPI, Query, Request, UploadFile, File, Form, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
