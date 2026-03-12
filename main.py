@@ -694,8 +694,14 @@ async def report_bot_detection(request: Request, db: Session = Depends(get_db)):
 # GET CHALLENGES
 # ============================================================================
 
-@app.get("/v1/challenge")
-async def get_challenge_endpoint(
+@app.get(
+    "/v1/challenge",
+    summary="Generate verification challenge",
+    description="Creates adaptive challenges for device verification based on trust level",
+    response_description="Challenge data including ID, instruction, and token",
+    tags=["Verification"]
+)
+async def get_challenge(
     request: Request,
     device_id: str = Query(...),
     db: Session = Depends(get_db)
@@ -898,7 +904,23 @@ async def process_verification_async(
 # VERIFY CHALLENGE
 # ============================================================================
 
-@app.post("/v1/verify")
+@app.post(
+    "/v1/verify",
+    summary="Verify challenge submission",
+    description="""
+    Validates user video submission against challenge requirements.
+    
+    Security features:
+    - Rate limiting (5 attempts per 5 minutes)
+    - Video integrity checks
+    - Bot detection
+    - Automatic device flagging
+    
+    Returns liveness score and challenge pass/fail status.
+    """,
+    response_description="Verification result with liveness score and pass/fail status",
+    tags=["Verification"]
+)
 async def verify_challenge(
     device_id:    str        = Form(...),
     challenge_id: str        = Form(...),
@@ -1192,8 +1214,14 @@ async def verify_challenge(
 # FINALIZE SESSION
 # ============================================================================
 
-@app.post("/v1/finalize")
-async def finalize_verification(request: Request, db: Session = Depends(get_db)):
+@app.post(
+    "/v1/finalize",
+    summary="Finalize verification session",
+    description="Calculates trust score and determines if device should be trusted",
+    response_description="Trust level, score, and session summary",
+    tags=["Verification"]
+)
+async def finalize_session(request: Request, db: Session = Depends(get_db)):
     """Calculate final trust score."""
     data      = await request.json()
     results   = data.get("results", [])
