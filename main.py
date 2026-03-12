@@ -1,46 +1,3 @@
-# API Metadata
-tags_metadata = [
-    {
-        "name": "Verification",
-        "description": "Human verification endpoints for challenge generation and validation",
-    },
-    {
-        "name": "Admin",
-        "description": "Administrative endpoints for monitoring and management",
-    },
-    {
-        "name": "Device",
-        "description": "Device tracking and statistics",
-    },
-]
-
-app = FastAPI(
-    title="Certivo - Human Verification System",
-    description="""
-    Advanced human verification system using adaptive video challenges and liveness detection.
-    
-    ## Features
-    * Adaptive challenge difficulty based on device trust
-    * Real-time liveness detection
-    * Bot detection and prevention
-    * Device trust scoring
-    * Rate limiting and security controls
-    
-    ## Authentication
-    Admin endpoints require session authentication via `/admin/login`
-    """,
-    version="1.0.0",
-    openapi_tags=tags_metadata,
-    docs_url="/docs",
-    redoc_url="/redoc"
-)
-
-
-
-
-
-
-
 from fastapi import FastAPI, Query, Request, UploadFile, File, Form, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -102,7 +59,64 @@ else:
 # ============================================================================
 # CREATE FASTAPI APP
 # ============================================================================
-app = FastAPI()
+# API Metadata for documentation
+tags_metadata = [
+    {
+        "name": "Verification",
+        "description": "Human verification endpoints for challenge generation, validation, and session finalization",
+    },
+    {
+        "name": "Admin",
+        "description": "Administrative endpoints for monitoring, device management, and system health",
+    },
+    {
+        "name": "Device",
+        "description": "Device tracking, statistics, and trust management",
+    },
+]
+
+app = FastAPI(
+    title="Certivo - Human Verification System",
+    description="""
+    Advanced human verification system using adaptive video challenges and liveness detection.
+    
+    ## 🎯 Features
+    
+    * **Adaptive Challenges:** Difficulty adjusts based on device trust level
+    * **Liveness Detection:** Real-time face detection and motion analysis
+    * **Bot Prevention:** Multi-layer bot detection and blocking
+    * **Device Trust:** Smart trust scoring for returning users
+    * **Rate Limiting:** Protection against abuse and attacks
+    * **Security:** Video integrity checks, token validation, device flagging
+    
+    ## 🔐 Authentication
+    
+    Admin endpoints require session authentication via `/admin/login`
+    
+    ## 📊 Monitoring
+    
+    - Prometheus metrics: `/metrics`
+    - Admin dashboard: `/admin/dashboard`
+    - System health: `/admin/system-health`
+    
+    ## 📖 Documentation
+    
+    - Error codes: See ERROR_CODES.md
+    - Admin guide: See ADMIN_GUIDE.md
+    - Deployment: See DEPLOYMENT.md
+    """,
+    version="1.0.0",
+    openapi_tags=tags_metadata,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    contact={
+        "name": "Certivo Support",
+        "email": "support@certivo.com",
+    },
+    license_info={
+        "name": "Proprietary",
+    },
+)
 
 # ============================================================================
 # CORS MIDDLEWARE
@@ -739,14 +753,69 @@ async def report_bot_detection(request: Request, db: Session = Depends(get_db)):
 
 @app.get(
     "/v1/challenge",
-    summary="Generate verification challenge",
-    description="Creates adaptive challenges for device verification based on trust level",
-    response_description="Challenge data including ID, instruction, and token",
-    tags=["Verification"]
+    summary="Generate Verification Challenge",
+    description="""
+    Creates adaptive challenges for device verification based on trust level.
+    
+    **Challenge Selection:**
+    - Trusted devices: 1 easy challenge
+    - New devices: 2 standard challenges
+    - Suspicious devices: 2-3 harder challenges
+    
+    **Challenge Types:**
+    - Turn head left/right
+    - Blink eyes
+    - Nod head
+    - Open mouth
+    - Raise eyebrows
+    
+    **Returns:**
+    - Challenge ID and token for verification
+    - Instruction text for user
+    - Difficulty level
+    - Expiration time (5 minutes)
+    """,
+    response_description="Challenge data with ID, instruction, token, and difficulty",
+    tags=["Verification"],
+    responses={
+        200: {
+            "description": "Challenge generated successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "challenges": [
+                            {
+                                "challenge_id": "ch_abc123",
+                                "token_id": "tok_xyz789",
+                                "instruction": "Turn your head to the left",
+                                "expected_movement": "left",
+                                "difficulty": "medium",
+                                "expires_at": "2026-03-12T10:05:00Z"
+                            }
+                        ],
+                        "device_id": "device_12345",
+                        "is_trusted": False,
+                        "challenge_count": 2
+                    }
+                }
+            }
+        },
+        429: {
+            "description": "Rate limit exceeded",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "Too many requests. Please wait 60 seconds.",
+                        "retry_after": 60
+                    }
+                }
+            }
+        }
+    }
 )
-async def get_challenge(
+async def get_challenge_endpoint(
     request: Request,
-    device_id: str = Query(...),
+    device_id: str = Query(..., description="Unique device identifier (fingerprint)"),
     db: Session = Depends(get_db)
 ):
     """
@@ -949,26 +1018,110 @@ async def process_verification_async(
 
 @app.post(
     "/v1/verify",
-    summary="Verify challenge submission",
+    summary="Verify Challenge Submission",
     description="""
     Validates user video submission against challenge requirements.
     
-    Security features:
+    **Security Features:**
     - Rate limiting (5 attempts per 5 minutes)
-    - Video integrity checks
-    - Bot detection
+    - Video format validation (WebM, MP4)
+    - Video integrity checks (blank/static detection)
+    - Bot detection via video metrics
     - Automatic device flagging
+    - Liveness detection (0-1 score)
     
-    Returns liveness score and challenge pass/fail status.
+    **Processing:**
+    1. Validates video format and size (<10MB)
+    2. Checks video integrity (motion, brightness)
+    3. Runs challenge-specific detection
+    4. Calculates liveness score
+    5. Flags suspicious patterns
+    
+    **Returns:**
+    - Pass/fail status
+    - Liveness score (0.0 - 1.0)
+    - Action detected
+    - Error details if failed
     """,
     response_description="Verification result with liveness score and pass/fail status",
-    tags=["Verification"]
+    tags=["Verification"],
+    responses={
+        200: {
+            "description": "Verification completed (pass or fail)",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "success": {
+                            "summary": "Successful verification",
+                            "value": {
+                                "challenge_passed": True,
+                                "liveness_score": 0.96,
+                                "action_detected": "left",
+                                "action_matched": True,
+                                "direction_detected": "left",
+                                "direction_matched": True,
+                                "error": None,
+                                "error_code": None,
+                                "processing_time_ms": 1234.56
+                            }
+                        },
+                        "failure": {
+                            "summary": "Failed verification",
+                            "value": {
+                                "challenge_passed": False,
+                                "liveness_score": 0.45,
+                                "action_detected": "none",
+                                "error": "We didn't detect the requested action. Please try again.",
+                                "error_code": "ACTION_NOT_DETECTED"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "Invalid video format or integrity check failed",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "challenge_passed": False,
+                        "error": "Video appears blank or static",
+                        "error_code": "VIDEO_INTEGRITY_FAILED"
+                    }
+                }
+            }
+        },
+        403: {
+            "description": "Device blocked or invalid token",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "challenge_passed": False,
+                        "error": "Device blocked due to suspicious activity",
+                        "error_code": "DEVICE_BLOCKED"
+                    }
+                }
+            }
+        },
+        429: {
+            "description": "Rate limit exceeded",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "challenge_passed": False,
+                        "error": "Too many verification attempts. Please wait 5 minutes.",
+                        "error_code": "RATE_LIMIT_EXCEEDED"
+                    }
+                }
+            }
+        }
+    }
 )
 async def verify_challenge(
-    device_id:    str        = Form(...),
-    challenge_id: str        = Form(...),
-    token_id:     str        = Form(...),
-    video:        UploadFile = File(...),
+    device_id:    str        = Form(..., description="Device ID from challenge request"),
+    challenge_id: str        = Form(..., description="Challenge ID to verify"),
+    token_id:     str        = Form(..., description="Verification token from challenge"),
+    video:        UploadFile = File(..., description="Video recording (WebM/MP4, max 10MB)"),
     db:           Session    = Depends(get_db)
 ):
     """
@@ -1259,12 +1412,62 @@ async def verify_challenge(
 
 @app.post(
     "/v1/finalize",
-    summary="Finalize verification session",
-    description="Calculates trust score and determines if device should be trusted",
+    summary="Finalize Verification Session",
+    description="""
+    Calculates final trust score and determines if device should be trusted.
+    
+    **Trust Score Calculation:**
+    - Base score: 50
+    - Each passed challenge: +15 points
+    - Each failed challenge: -10 points
+    - High liveness scores: +5 bonus
+    - Fast track bonus: +10 points
+    
+    **Trust Levels:**
+    - **High (85-100):** Device is trusted, future verifications easier
+    - **Medium (60-84):** Standard verification required
+    - **Low (0-59):** Additional challenges or stricter verification
+    
+    **Effects:**
+    - High trust → 1 easy challenge next time
+    - Medium/Low → 2 standard challenges next time
+    - Trust stored for 30 days
+    
+    **Request Body:**
+```json
+    {
+        "device_id": "device_12345",
+        "results": [
+            {"challenge_passed": true, "liveness_score": 0.95},
+            {"challenge_passed": true, "liveness_score": 0.92}
+        ]
+    }
+```
+    """,
     response_description="Trust level, score, and session summary",
-    tags=["Verification"]
+    tags=["Verification"],
+    responses={
+        200: {
+            "description": "Session finalized successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "trust_score": 85.0,
+                        "trust_level": "high",
+                        "verification_passed": True,
+                        "device_id": "device_12345",
+                        "challenges_completed": 2,
+                        "challenges_passed": 2,
+                        "average_liveness": 0.935,
+                        "trusted_device": True,
+                        "session_id": "session_abc123"
+                    }
+                }
+            }
+        }
+    }
 )
-async def finalize_session(request: Request, db: Session = Depends(get_db)):
+async def finalize_verification(request: Request, db: Session = Depends(get_db)):
     """Calculate final trust score."""
     data      = await request.json()
     results   = data.get("results", [])
