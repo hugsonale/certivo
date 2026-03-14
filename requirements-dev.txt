@@ -1,0 +1,40 @@
+#############################################################################
+# Certivo - Development Dependencies
+# Install: pip install -r requirements-dev.txt
+#############################################################################
+
+# Include all production requirements
+-r requirements.txt
+
+# ===== CODE FORMATTING =====
+black==23.12.0
+isort==5.13.2
+
+# ===== CODE LINTING =====
+flake8==6.1.0
+pylint==3.0.3
+mypy==1.7.1
+
+# ===== TESTING TOOLS =====
+pytest-xdist==3.5.0          # Parallel testing
+pytest-timeout==2.2.0         # Test timeouts
+pytest-mock==3.12.0           # Mocking
+coverage==7.3.4               # Coverage reports
+
+# ===== DEBUGGING =====
+ipython==8.18.1
+ipdb==0.13.13
+
+# ===== DOCUMENTATION =====
+mkdocs==1.5.3
+mkdocs-material==9.5.3
+
+# ===== DATABASE TOOLS =====
+sqlalchemy-utils==0.41.1
+
+# ===== JUPYTER (Optional) =====
+jupyter==1.0.0
+notebook==7.0.6
+
+# ===== PRE-COMMIT HOOKS =====
+pre-commit==3.6.0
