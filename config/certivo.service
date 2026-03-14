@@ -1,0 +1,208 @@
+#############################################################################
+# Certivo Systemd Service Unit File
+#
+# Installation:
+#   sudo cp config/certivo.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable certivo
+#   sudo systemctl start certivo
+#
+# Management:
+#   sudo systemctl status certivo     # Check status
+#   sudo systemctl start certivo      # Start service
+#   sudo systemctl stop certivo       # Stop service
+#   sudo systemctl restart certivo    # Restart service
+#   sudo journalctl -u certivo -f     # View logs
+#############################################################################
+
+[Unit]
+Description=Certivo Human Verification System
+Documentation=https://github.com/your-repo/certivo
+Documentation=file:///opt/certivo/docs/DEPLOYMENT.md
+After=network-online.target
+Wants=network-online.target
+
+# If using PostgreSQL, uncomment:
+# After=postgresql.service
+# Requires=postgresql.service
+
+[Service]
+#############################################################################
+# SERVICE TYPE
+#############################################################################
+
+# Type=notify tells systemd that the service will notify when it's ready
+# Uvicorn supports this with the --workers flag
+Type=notify
+
+# Use Type=exec if you're running without workers:
+# Type=exec
+
+#############################################################################
+# USER AND GROUP
+#############################################################################
+
+# Run as dedicated certivo user (create this user during deployment)
+User=certivo
+Group=certivo
+
+# If certivo user doesn't exist yet, you can use:
+# User=www-data
+# Group=www-data
+
+#############################################################################
+# WORKING DIRECTORY
+#############################################################################
+
+WorkingDirectory=/opt/certivo
+
+#############################################################################
+# ENVIRONMENT
+#############################################################################
+
+# Path to virtual environment
+Environment="PATH=/opt/certivo/venv/bin:/usr/local/bin:/usr/bin:/bin"
+
+# Load environment variables from .env file
+EnvironmentFile=/opt/certivo/.env
+
+# Python-specific settings
+Environment="PYTHONUNBUFFERED=1"
+Environment="PYTHONDONTWRITEBYTECODE=1"
+
+#############################################################################
+# EXECUTION COMMAND
+#############################################################################
+
+# Production configuration (4 workers)
+ExecStart=/opt/certivo/venv/bin/uvicorn main:app \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --workers 4 \
+    --log-level info \
+    --access-log \
+    --no-use-colors
+
+# Alternative: Single worker (for debugging)
+# ExecStart=/opt/certivo/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
+
+# Alternative: With Gunicorn (if you prefer)
+# ExecStart=/opt/certivo/venv/bin/gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000
+
+#############################################################################
+# PRE-START CHECKS (Optional)
+#############################################################################
+
+# Run database migrations before starting (optional)
+# ExecStartPre=/opt/certivo/venv/bin/python migrations/add_trust_revocation.py
+
+# Check if .env file exists
+ExecStartPre=/bin/bash -c 'test -f /opt/certivo/.env || (echo ".env file not found!" && exit 1)'
+
+#############################################################################
+# RESTART POLICY
+#############################################################################
+
+# Always restart the service if it stops (crash, error, etc.)
+Restart=always
+
+# Wait 10 seconds before restarting
+RestartSec=10
+
+# Rate limiting: If service fails 5 times in 400 seconds, stop trying
+StartLimitInterval=400
+StartLimitBurst=5
+
+#############################################################################
+# GRACEFUL SHUTDOWN
+#############################################################################
+
+# Send SIGTERM for graceful shutdown
+KillMode=mixed
+KillSignal=SIGTERM
+
+# Wait 30 seconds for graceful shutdown before killing
+TimeoutStopSec=30
+
+#############################################################################
+# SECURITY HARDENING
+#############################################################################
+
+# Prevent privilege escalation
+NoNewPrivileges=true
+
+# Use private /tmp directory
+PrivateTmp=true
+
+# Protect system directories
+ProtectSystem=strict
+ProtectHome=true
+
+# Allow writing to specific directories
+ReadWritePaths=/opt/certivo/logs
+ReadWritePaths=/opt/certivo/certivo_v2.db
+ReadWritePaths=/opt/certivo/backups
+
+# Prevent access to kernel modules
+ProtectKernelModules=true
+
+# Prevent access to kernel tunables
+ProtectKernelTunables=true
+
+# Restrict network access (comment out if you need external connections)
+# RestrictAddressFamilies=AF_INET AF_INET6
+
+#############################################################################
+# RESOURCE LIMITS
+#############################################################################
+
+# File descriptor limits (handles many concurrent connections)
+LimitNOFILE=65536
+
+# Process limits
+LimitNPROC=4096
+
+# Memory limit (4GB - adjust based on your server)
+# MemoryMax=4G
+
+# CPU quota (100% of 2 cores)
+# CPUQuota=200%
+
+#############################################################################
+# LOGGING
+#############################################################################
+
+# Send stdout/stderr to systemd journal
+StandardOutput=journal
+StandardError=journal
+
+# Add identifier for easier log filtering
+SyslogIdentifier=certivo
+
+# Log level
+# SyslogLevel=info
+
+#############################################################################
+# NOTIFICATIONS (Optional)
+#############################################################################
+
+# Notify systemd when ready (works with Type=notify)
+# NotifyAccess=main
+
+#############################################################################
+# WATCHDOG (Optional - Auto-restart if service hangs)
+#############################################################################
+
+# Enable watchdog (service must send keep-alive signals)
+# WatchdogSec=30
+
+[Install]
+#############################################################################
+# INSTALLATION TARGET
+#############################################################################
+
+# Start service when system reaches multi-user mode (normal boot)
+WantedBy=multi-user.target
+
+# Alternative: Start when graphical interface is available
+# WantedBy=graphical.target
