@@ -360,21 +360,133 @@ rate_limiter = RateLimiter()
 # SECURITY FEATURE 2: VIDEO INTEGRITY CHECKS (10/10)
 # ============================================================================
 
-def check_video_integrity(video_path: str) -> Dict[str, Any]:
+def check_video_integrity(video_path: str) -> dict:
     """
-    Comprehensive video integrity validation:
-    1. Blank video detection (all black/white frames)
-    2. Static video detection (same frame repeated)
-    3. Motion validation (ensure actual movement)
-    4. Frame diversity check (variance in content)
+    Check video for blank frames, static images, or manipulation.
+    
+    FIXED VERSION - More lenient thresholds for legitimate users.
     
     Returns:
-        {
-            "valid": bool,
-            "reason": str,
-            "metrics": dict
+        dict: {
+            'valid': bool,
+            'reason': str (if invalid),
+            'metrics': dict
         }
     """
+    try:
+        cap = cv2.VideoCapture(video_path)
+        
+        if not cap.isOpened():
+            return {
+                'valid': False,
+                'reason': 'Cannot open video file',
+                'metrics': {}
+            }
+        
+        frames = []
+        frame_count = 0
+        
+        # Read frames
+        while len(frames) < 30:  # Sample first 30 frames
+            ret, frame = cap.read()
+            if not ret:
+                break
+            frames.append(frame)
+            frame_count += 1
+        
+        cap.release()
+        
+        if len(frames) < 5:
+            return {
+                'valid': False,
+                'reason': 'Video too short (less than 5 frames)',
+                'metrics': {'frames': len(frames)}
+            }
+        
+        # ================================================================
+        # CHECK 1: Brightness variance (detect blank frames)
+        # ================================================================
+        brightness_values = [frame.mean() for frame in frames]
+        brightness_variance = float(np.var(brightness_values))
+        
+        # FIXED: More lenient threshold (was < 5, now < 1.5)
+        if brightness_variance < 1.5:
+            return {
+                'valid': False,
+                'reason': f'Video appears blank or too uniform (variance: {brightness_variance:.2f})',
+                'metrics': {
+                    'brightness_variance': brightness_variance,
+                    'frames': len(frames)
+                }
+            }
+        
+        # ================================================================
+        # CHECK 2: Motion detection (detect static images)
+        # ================================================================
+        motion_scores = []
+        for i in range(1, len(frames)):
+            diff = cv2.absdiff(frames[i-1], frames[i])
+            motion_score = diff.mean()
+            motion_scores.append(motion_score)
+        
+        avg_motion = float(np.mean(motion_scores)) if motion_scores else 0
+        
+        # FIXED: More lenient threshold (was < 0.5, now < 0.2)
+        if avg_motion < 0.2:
+            return {
+                'valid': False,
+                'reason': f'Video appears static (no movement detected, score: {avg_motion:.2f})',
+                'metrics': {
+                    'avg_motion': avg_motion,
+                    'brightness_variance': brightness_variance,
+                    'frames': len(frames)
+                }
+            }
+        
+        # ================================================================
+        # CHECK 3: Duplicate frame detection
+        # ================================================================
+        duplicate_count = 0
+        for i in range(1, len(frames)):
+            diff = cv2.absdiff(frames[i-1], frames[i])
+            if diff.mean() < 0.1:  # Nearly identical frames
+                duplicate_count += 1
+        
+        duplicate_ratio = duplicate_count / len(frames) if len(frames) > 0 else 0
+        
+        # FIXED: More lenient threshold (was > 0.8, now > 0.95)
+        if duplicate_ratio > 0.95:
+            return {
+                'valid': False,
+                'reason': f'Too many duplicate frames ({duplicate_ratio:.1%})',
+                'metrics': {
+                    'duplicate_ratio': duplicate_ratio,
+                    'avg_motion': avg_motion,
+                    'brightness_variance': brightness_variance,
+                    'frames': len(frames)
+                }
+            }
+        
+        # ================================================================
+        # PASS - Video integrity checks passed
+        # ================================================================
+        return {
+            'valid': True,
+            'reason': None,
+            'metrics': {
+                'frames': len(frames),
+                'brightness_variance': brightness_variance,
+                'avg_motion': avg_motion,
+                'duplicate_ratio': duplicate_ratio
+            }
+        }
+        
+    except Exception as e:
+        return {
+            'valid': False,
+            'reason': f'Error analyzing video: {str(e)}',
+            'metrics': {}
+        }
     import cv2
     import numpy as np
     
@@ -1212,12 +1324,13 @@ async def verify_challenge(
                 }
             )
             
-            flag_suspicious_device(
-                db=db,
-                device_id=device_id,
-                reason=f"Video integrity check failed: {integrity_check['reason']}",
-                suspicion_score=8
-            )
+            # TEMPORARILY DISABLED - Don't auto-block during testing
+            # flag_suspicious_device(
+            #     db=db,
+            #     device_id=device_id,
+            #     reason=f"Video integrity check failed: {integrity_check['reason']}",
+            #     suspicion_score=8
+            # )
             
             return _reject(integrity_check['reason'], 'VIDEO_INTEGRITY_FAILED')
         

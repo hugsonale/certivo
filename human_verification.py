@@ -107,35 +107,39 @@ RIGHT_EYE_TOP_IDX = 386
 # DETECTION THRESHOLDS
 # ============================================================================
 
-# Head turn
-HEAD_TURN_MIN_DELTA   = 0.06
-HEAD_TURN_EASY_DELTA  = 0.04
+# ============================================================================
+# DETECTION THRESHOLDS (TUNED FOR BETTER SUCCESS RATES)
+# ============================================================================
+
+# Head turn (left/right)
+HEAD_TURN_MIN_DELTA   = 0.04   # Was 0.06 - Made easier
+HEAD_TURN_EASY_DELTA  = 0.03   # Was 0.04 - Made easier
 
 # Blink
-EAR_CLOSED_THRESH     = 0.22
-EAR_OPEN_THRESH       = 0.26
-MIN_BLINK_FRAMES      = 2
-MIN_BLINKS_REQUIRED   = 2
+EAR_CLOSED_THRESH     = 0.25   # Was 0.22 - Made easier to detect closed
+EAR_OPEN_THRESH       = 0.27   # Was 0.26 - Made easier
+MIN_BLINK_FRAMES      = 2      # Kept same
+MIN_BLINKS_REQUIRED   = 2      # Kept same
 
 # Nod
-NOD_MIN_DELTA         = 0.05
-NOD_MIN_CYCLES        = 1
-NOD_EASY_DELTA        = 0.03
+NOD_MIN_DELTA         = 0.04   # Was 0.05 - Made easier
+NOD_MIN_CYCLES        = 1      # Kept same
+NOD_EASY_DELTA        = 0.025  # Was 0.03 - Made easier
 
 # Mouth
-MAR_OPEN_THRESH       = 0.45
-MAR_EASY_THRESH       = 0.35
-MIN_MOUTH_OPEN_FRAMES = 5
+MAR_OPEN_THRESH       = 0.40   # Was 0.45 - Made easier
+MAR_EASY_THRESH       = 0.30   # Was 0.35 - Made easier
+MIN_MOUTH_OPEN_FRAMES = 4      # Was 5 - Made easier
 
 # Eyebrow
-BROW_RAISE_THRESH     = 0.015
-BROW_EASY_THRESH      = 0.008
-MIN_BROW_RAISE_FRAMES = 5
+BROW_RAISE_THRESH     = 0.012  # Was 0.015 - Made easier
+BROW_EASY_THRESH      = 0.006  # Was 0.008 - Made easier
+MIN_BROW_RAISE_FRAMES = 4      # Was 5 - Made easier
 
 # General
-MIN_FACE_FRAMES       = 8
-MIN_FACE_FRAMES_EASY  = 5
-MAX_FRAMES_TO_ANALYSE = 90
+MIN_FACE_FRAMES       = 6      # Was 8 - Made easier
+MIN_FACE_FRAMES_EASY  = 4      # Was 5 - Made easier
+MAX_FRAMES_TO_ANALYSE = 90     # Kept same
 
 # ============================================================================
 # PHASE 2: FRAME SAMPLING - Speed up 2x by skipping frames

@@ -224,27 +224,80 @@ def _pick_varied_challenges(pool: list, num: int, prev_results: list) -> list:
 # MAIN PUBLIC FUNCTION
 # ============================================================================
 
-def generate_adaptive_challenges(prev_results=None, num=2, trusted=False, device_id=None):
+def generate_adaptive_challenges(
+    device_id: str = None,
+    trusted: bool = False,
+    prev_results: list = None,
+    num: int = None
+) -> list:
     """
-    Generate adaptive challenges based on device trust and performance history.
-
+    Generate adaptive challenges based on device trust level.
+    
     Args:
-        prev_results : list  - Previous challenge result dicts from this session.
-        num          : int   - Number of challenges to generate.
-        trusted      : bool  - Whether this is a trusted (fast-track) device.
-        device_id    : str   - Optional device identifier for logging.
-
+        device_id: Device identifier
+        trusted: Whether device is trusted
+        prev_results: Previous challenge results
+        num: Number of challenges (overrides default)
+    
     Returns:
-        list of challenge dicts, each containing:
-            challenge_id      : str  - Unique UUID
-            challenge_value   : str  - Human-readable instruction
-            difficulty        : str  - "easy" | "medium" | "hard"
-            expected_movement : str  - "left"|"right"|"nod"|"blink"|"mouth"|"eyebrows"
-            fast_track        : bool - Whether this is a fast-track challenge
+        List of challenge dictionaries
     """
-
-    if prev_results is None:
-        prev_results = []
+    
+    # All 6 challenge types
+    VALID_MOVEMENTS = ["left", "right", "blink", "nod", "mouth", "eyebrows"]
+    
+    # Determine number of challenges
+    if num is not None:
+        num_challenges = num
+    else:
+        num_challenges = 1 if trusted else 2
+    
+    # Determine difficulty
+    if prev_results:
+        recent_failures = sum(1 for r in prev_results[-3:] if not r.get("challenge_passed", True))
+        if recent_failures >= 2:
+            difficulty = "hard"
+        elif recent_failures == 1:
+            difficulty = "medium"
+        else:
+            difficulty = "easy"
+    else:
+        difficulty = "easy" if trusted else "medium"
+    
+    # Generate challenges
+    challenges = []
+    
+    # Randomly select movements (ensure no duplicates)
+    import random
+    selected_movements = random.sample(VALID_MOVEMENTS, min(num_challenges, len(VALID_MOVEMENTS)))
+    
+    for movement in selected_movements:
+        challenge_id = f"chal_{device_id}_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
+        token_id = secrets.token_urlsafe(32)
+        
+        # Create instruction based on movement
+        instructions = {
+            "left": "Turn your head to the LEFT",
+            "right": "Turn your head to the RIGHT",
+            "blink": "BLINK your eyes twice",
+            "nod": "NOD your head up and down",
+            "mouth": "OPEN your mouth wide",
+            "eyebrows": "RAISE your eyebrows"
+        }
+        
+        challenge = {
+            "challenge_id": challenge_id,
+            "challenge_value": challenge_id,
+            "token_id": token_id,
+            "instruction": instructions.get(movement, f"Perform {movement}"),
+            "expected_movement": movement,
+            "difficulty": difficulty,
+            "fast_track": trusted
+        }
+        
+        challenges.append(challenge)
+    
+    return challenges
 
     # ------------------------------------------------------------------ #
     # TRUSTED DEVICES: Always easy, always 1 challenge, always fast-track #
