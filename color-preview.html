@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Certivo Color Palette Preview</title>
+    <title>Certivo Landing Page Colors - Choose Your Palette</title>
     <style>
         * {
             margin: 0;
@@ -13,405 +13,361 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #0f0f0f;
-            color: #ffffff;
+            background: #0a0a0a;
+            color: #fff;
             padding: 40px 20px;
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
         }
 
         h1 {
             text-align: center;
-            margin-bottom: 50px;
-            font-size: 2.5rem;
+            font-size: 3rem;
+            margin-bottom: 20px;
         }
 
-        .palette-section {
+        .subtitle {
+            text-align: center;
+            color: #888;
+            font-size: 1.2rem;
+            margin-bottom: 60px;
+        }
+
+        .palette-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 40px;
             margin-bottom: 80px;
         }
 
-        .palette-header {
-            margin-bottom: 30px;
-        }
-
-        .palette-header h2 {
-            font-size: 1.8rem;
-            margin-bottom: 10px;
-        }
-
-        .palette-header p {
-            color: #888;
-            font-size: 1.1rem;
-        }
-
-        .colors-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .color-card {
-            border-radius: 12px;
+        .palette-card {
+            background: #1a1a1a;
+            border-radius: 24px;
             overflow: hidden;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            transition: transform 0.2s;
+            border: 2px solid #333;
+            transition: all 0.3s;
         }
 
-        .color-card:hover {
-            transform: translateY(-5px);
+        .palette-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 60px rgba(255,255,255,0.1);
         }
 
-        .color-swatch {
-            height: 150px;
+        .palette-header {
+            padding: 32px;
+            text-align: center;
+        }
+
+        .palette-name {
+            font-size: 1.8rem;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }
+
+        .palette-description {
+            color: #888;
+            font-size: 1rem;
+        }
+
+        .recommended-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #0ea5e9, #8b5cf6);
+            color: white;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .colors-row {
+            display: flex;
+            height: 120px;
+        }
+
+        .color-block {
+            flex: 1;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: bold;
-            font-size: 1.2rem;
-            color: white;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        }
-
-        .color-info {
-            background: #1a1a1a;
-            padding: 15px;
-        }
-
-        .color-name {
-            font-weight: 600;
-            margin-bottom: 5px;
-        }
-
-        .color-hex {
-            font-family: 'Courier New', monospace;
-            color: #888;
+            font-weight: 700;
             font-size: 0.9rem;
+            color: white;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.3);
         }
 
-        .button-demo {
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-            margin-top: 30px;
-            padding: 30px;
-            background: #1a1a1a;
+        .preview-section {
+            padding: 32px;
+            text-align: center;
+        }
+
+        .preview-button {
+            padding: 16px 32px;
             border-radius: 12px;
-        }
-
-        .demo-button {
-            padding: 12px 24px;
             border: none;
-            border-radius: 8px;
-            font-weight: 600;
+            font-weight: 700;
             font-size: 1rem;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.3s;
+            margin: 8px;
         }
 
-        .demo-button:hover {
+        .preview-button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
 
-        /* Option 1: Trust Blue */
-        .option-1 {
-            background: #0f172a;
-        }
+        /* OPTION 1: Cyber Shield */
+        .cyber-shield .color-block:nth-child(1) { background: #0ea5e9; }
+        .cyber-shield .color-block:nth-child(2) { background: #8b5cf6; }
+        .cyber-shield .color-block:nth-child(3) { background: #06b6d4; }
 
-        .option-1 .btn-primary {
-            background: #2563eb;
+        .cyber-shield .btn-primary {
+            background: linear-gradient(135deg, #0ea5e9, #8b5cf6);
             color: white;
         }
 
-        .option-1 .btn-primary:hover {
-            background: #1e40af;
+        .cyber-shield .btn-secondary {
+            background: white;
+            color: #0ea5e9;
         }
 
-        .option-1 .btn-secondary {
-            background: #10b981;
+        /* OPTION 2: Neural Gradient */
+        .neural-gradient .color-block:nth-child(1) { background: #3b82f6; }
+        .neural-gradient .color-block:nth-child(2) { background: #a855f7; }
+        .neural-gradient .color-block:nth-child(3) { background: #10b981; }
+
+        .neural-gradient .btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #a855f7);
             color: white;
         }
 
-        .option-1 .btn-tertiary {
-            background: #f59e0b;
+        .neural-gradient .btn-secondary {
+            background: white;
+            color: #3b82f6;
+        }
+
+        /* OPTION 3: Security Fortress */
+        .security-fortress .color-block:nth-child(1) { background: #1e40af; }
+        .security-fortress .color-block:nth-child(2) { background: #059669; }
+        .security-fortress .color-block:nth-child(3) { background: #f59e0b; }
+
+        .security-fortress .btn-primary {
+            background: linear-gradient(135deg, #1e40af, #059669);
             color: white;
         }
 
-        /* Option 2: Cyber Purple */
-        .option-2 {
-            background: #0a0a0f;
+        .security-fortress .btn-secondary {
+            background: white;
+            color: #1e40af;
         }
 
-        .option-2 .btn-primary {
-            background: #8b5cf6;
-            color: white;
+        .fullscreen-demo {
+            margin-top: 80px;
+            text-align: center;
         }
 
-        .option-2 .btn-primary:hover {
-            background: #7c3aed;
+        .demo-selector {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-bottom: 40px;
         }
 
-        .option-2 .btn-secondary {
-            background: #06b6d4;
-            color: white;
-        }
-
-        .option-2 .btn-tertiary {
-            background: #ec4899;
-            color: white;
-        }
-
-        /* Option 3: Secure Green */
-        .option-3 {
-            background: #0f172a;
-        }
-
-        .option-3 .btn-primary {
-            background: #059669;
-            color: white;
-        }
-
-        .option-3 .btn-primary:hover {
-            background: #047857;
-        }
-
-        .option-3 .btn-secondary {
-            background: #1e40af;
-            color: white;
-        }
-
-        .option-3 .btn-tertiary {
-            background: #ea580c;
-            color: white;
-        }
-
-        .mockup {
-            margin-top: 30px;
-            padding: 40px;
-            border-radius: 12px;
+        .demo-selector button {
+            padding: 12px 24px;
+            border: 2px solid #333;
             background: #1a1a1a;
-        }
-
-        .mockup-card {
-            background: #2a2a2a;
-            padding: 30px;
+            color: white;
             border-radius: 12px;
-            max-width: 400px;
-            margin: 0 auto;
-        }
-
-        .mockup-title {
-            font-size: 1.5rem;
-            margin-bottom: 20px;
-        }
-
-        .status-badge {
-            display: inline-block;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 0.9rem;
+            cursor: pointer;
             font-weight: 600;
-            margin-bottom: 20px;
+            transition: all 0.3s;
         }
 
-        .progress-bar {
-            height: 8px;
-            background: #3a3a3a;
-            border-radius: 4px;
-            overflow: hidden;
-            margin-bottom: 20px;
+        .demo-selector button:hover,
+        .demo-selector button.active {
+            border-color: #0ea5e9;
+            background: #0ea5e9;
         }
 
-        .progress-fill {
-            height: 100%;
-            transition: width 0.3s;
+        .hero-preview {
+            background: white;
+            padding: 80px 40px;
+            border-radius: 24px;
+            transition: all 0.5s;
+        }
+
+        .hero-headline {
+            font-size: 3.5rem;
+            font-weight: 900;
+            margin-bottom: 24px;
+            line-height: 1.1;
+        }
+
+        .hero-subtext {
+            font-size: 1.3rem;
+            color: #64748b;
+            margin-bottom: 32px;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+        }
+
+        .hero-button {
+            padding: 18px 36px;
+            border-radius: 12px;
+            border: none;
+            font-weight: 700;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .hero-button:hover {
+            transform: translateY(-3px);
+        }
+
+        /* Dynamic themes */
+        .hero-preview.cyber-shield .hero-headline {
+            background: linear-gradient(135deg, #0ea5e9, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-preview.cyber-shield .hero-button.primary {
+            background: linear-gradient(135deg, #0ea5e9, #8b5cf6);
+            color: white;
+        }
+
+        .hero-preview.neural-gradient .hero-headline {
+            background: linear-gradient(135deg, #3b82f6, #a855f7, #10b981);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-preview.neural-gradient .hero-button.primary {
+            background: linear-gradient(135deg, #3b82f6, #a855f7);
+            color: white;
+        }
+
+        .hero-preview.security-fortress .hero-headline {
+            background: linear-gradient(135deg, #1e40af, #059669);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-preview.security-fortress .hero-button.primary {
+            background: linear-gradient(135deg, #1e40af, #059669);
+            color: white;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🎨 Certivo Color Palette Options</h1>
+        <h1>🎨 Choose Your Certivo Colors</h1>
+        <p class="subtitle">Pick the palette that best represents your brand</p>
 
-        <!-- OPTION 1: TRUST BLUE -->
-        <div class="palette-section">
-            <div class="palette-header">
-                <h2>Option 1: Trust Blue (Recommended)</h2>
-                <p>Professional, Banking, Security-focused</p>
-            </div>
-
-            <div class="colors-grid">
-                <div class="color-card">
-                    <div class="color-swatch" style="background: #2563eb;">Primary</div>
-                    <div class="color-info">
-                        <div class="color-name">Primary Blue</div>
-                        <div class="color-hex">#2563eb</div>
-                    </div>
+        <div class="palette-grid">
+            <!-- OPTION 1: CYBER SHIELD -->
+            <div class="palette-card cyber-shield">
+                <div class="palette-header">
+                    <div class="recommended-badge">⭐ Recommended</div>
+                    <h2 class="palette-name">Cyber Shield</h2>
+                    <p class="palette-description">Modern Security + Innovation</p>
                 </div>
-
-                <div class="color-card">
-                    <div class="color-swatch" style="background: #10b981;">Secondary</div>
-                    <div class="color-info">
-                        <div class="color-name">Success Green</div>
-                        <div class="color-hex">#10b981</div>
-                    </div>
+                <div class="colors-row">
+                    <div class="color-block">Sky Blue<br>#0ea5e9</div>
+                    <div class="color-block">Purple<br>#8b5cf6</div>
+                    <div class="color-block">Cyan<br>#06b6d4</div>
                 </div>
-
-                <div class="color-card">
-                    <div class="color-swatch" style="background: #f59e0b;">Tertiary</div>
-                    <div class="color-info">
-                        <div class="color-name">Warning Amber</div>
-                        <div class="color-hex">#f59e0b</div>
-                    </div>
-                </div>
-
-                <div class="color-card">
-                    <div class="color-swatch" style="background: #0f172a;">Background</div>
-                    <div class="color-info">
-                        <div class="color-name">Deep Navy</div>
-                        <div class="color-hex">#0f172a</div>
-                    </div>
+                <div class="preview-section">
+                    <button class="preview-button btn-primary">Start Verification</button>
+                    <button class="preview-button btn-secondary">Learn More</button>
                 </div>
             </div>
 
-            <div class="button-demo option-1">
-                <button class="demo-button btn-primary">Start Verification</button>
-                <button class="demo-button btn-secondary">✓ Verified</button>
-                <button class="demo-button btn-tertiary">⚠ Attention</button>
+            <!-- OPTION 2: NEURAL GRADIENT -->
+            <div class="palette-card neural-gradient">
+                <div class="palette-header">
+                    <h2 class="palette-name">Neural Gradient</h2>
+                    <p class="palette-description">AI-Powered Future</p>
+                </div>
+                <div class="colors-row">
+                    <div class="color-block">Electric Blue<br>#3b82f6</div>
+                    <div class="color-block">Violet<br>#a855f7</div>
+                    <div class="color-block">Emerald<br>#10b981</div>
+                </div>
+                <div class="preview-section">
+                    <button class="preview-button btn-primary">Start Verification</button>
+                    <button class="preview-button btn-secondary">Learn More</button>
+                </div>
             </div>
 
-            <div class="mockup option-1">
-                <div class="mockup-card">
-                    <div class="mockup-title">Human Verification</div>
-                    <span class="status-badge" style="background: #10b981; color: white;">✓ Face Detected</span>
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="background: #2563eb; width: 75%;"></div>
-                    </div>
-                    <button class="demo-button btn-primary" style="width: 100%;">Continue</button>
+            <!-- OPTION 3: SECURITY FORTRESS -->
+            <div class="palette-card security-fortress">
+                <div class="palette-header">
+                    <h2 class="palette-name">Security Fortress</h2>
+                    <p class="palette-description">Enterprise Trust</p>
+                </div>
+                <div class="colors-row">
+                    <div class="color-block">Navy<br>#1e40af</div>
+                    <div class="color-block">Green<br>#059669</div>
+                    <div class="color-block">Amber<br>#f59e0b</div>
+                </div>
+                <div class="preview-section">
+                    <button class="preview-button btn-primary">Start Verification</button>
+                    <button class="preview-button btn-secondary">Learn More</button>
                 </div>
             </div>
         </div>
 
-        <!-- OPTION 2: CYBER PURPLE -->
-        <div class="palette-section">
-            <div class="palette-header">
-                <h2>Option 2: Cyber Purple</h2>
-                <p>Modern, Tech-savvy, Innovative</p>
+        <!-- LIVE HERO PREVIEW -->
+        <div class="fullscreen-demo">
+            <h2 style="font-size: 2rem; margin-bottom: 32px;">👀 See It On Your Hero Section</h2>
+            
+            <div class="demo-selector">
+                <button class="active" onclick="changeTheme('cyber-shield')">Cyber Shield</button>
+                <button onclick="changeTheme('neural-gradient')">Neural Gradient</button>
+                <button onclick="changeTheme('security-fortress')">Security Fortress</button>
             </div>
 
-            <div class="colors-grid">
-                <div class="color-card">
-                    <div class="color-swatch" style="background: #8b5cf6;">Primary</div>
-                    <div class="color-info">
-                        <div class="color-name">Cyber Purple</div>
-                        <div class="color-hex">#8b5cf6</div>
-                    </div>
-                </div>
-
-                <div class="color-card">
-                    <div class="color-swatch" style="background: #06b6d4;">Secondary</div>
-                    <div class="color-info">
-                        <div class="color-name">Electric Cyan</div>
-                        <div class="color-hex">#06b6d4</div>
-                    </div>
-                </div>
-
-                <div class="color-card">
-                    <div class="color-swatch" style="background: #ec4899;">Tertiary</div>
-                    <div class="color-info">
-                        <div class="color-name">Vibrant Pink</div>
-                        <div class="color-hex">#ec4899</div>
-                    </div>
-                </div>
-
-                <div class="color-card">
-                    <div class="color-swatch" style="background: #0a0a0f;">Background</div>
-                    <div class="color-info">
-                        <div class="color-name">Deep Space</div>
-                        <div class="color-hex">#0a0a0f</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="button-demo option-2">
-                <button class="demo-button btn-primary">Start Verification</button>
-                <button class="demo-button btn-secondary">✓ Verified</button>
-                <button class="demo-button btn-tertiary">⚠ Attention</button>
-            </div>
-
-            <div class="mockup option-2">
-                <div class="mockup-card">
-                    <div class="mockup-title">Human Verification</div>
-                    <span class="status-badge" style="background: #06b6d4; color: white;">✓ Face Detected</span>
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="background: #8b5cf6; width: 75%;"></div>
-                    </div>
-                    <button class="demo-button btn-primary" style="width: 100%;">Continue</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- OPTION 3: SECURE GREEN -->
-        <div class="palette-section">
-            <div class="palette-header">
-                <h2>Option 3: Secure Green</h2>
-                <p>Safety-focused, Trustworthy, Reliable</p>
-            </div>
-
-            <div class="colors-grid">
-                <div class="color-card">
-                    <div class="color-swatch" style="background: #059669;">Primary</div>
-                    <div class="color-info">
-                        <div class="color-name">Secure Emerald</div>
-                        <div class="color-hex">#059669</div>
-                    </div>
-                </div>
-
-                <div class="color-card">
-                    <div class="color-swatch" style="background: #1e40af;">Secondary</div>
-                    <div class="color-info">
-                        <div class="color-name">Navy Trust</div>
-                        <div class="color-hex">#1e40af</div>
-                    </div>
-                </div>
-
-                <div class="color-card">
-                    <div class="color-swatch" style="background: #ea580c;">Tertiary</div>
-                    <div class="color-info">
-                        <div class="color-name">Alert Orange</div>
-                        <div class="color-hex">#ea580c</div>
-                    </div>
-                </div>
-
-                <div class="color-card">
-                    <div class="color-swatch" style="background: #0f172a;">Background</div>
-                    <div class="color-info">
-                        <div class="color-name">Professional Navy</div>
-                        <div class="color-hex">#0f172a</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="button-demo option-3">
-                <button class="demo-button btn-primary">Start Verification</button>
-                <button class="demo-button btn-secondary">✓ Verified</button>
-                <button class="demo-button btn-tertiary">⚠ Attention</button>
-            </div>
-
-            <div class="mockup option-3">
-                <div class="mockup-card">
-                    <div class="mockup-title">Human Verification</div>
-                    <span class="status-badge" style="background: #059669; color: white;">✓ Face Detected</span>
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="background: #1e40af; width: 75%;"></div>
-                    </div>
-                    <button class="demo-button btn-primary" style="width: 100%;">Continue</button>
+            <div class="hero-preview cyber-shield" id="heroPreview">
+                <h1 class="hero-headline">Stop Bots Before They Exploit Your Platform</h1>
+                <p class="hero-subtext">Certivo uses real-time motion verification to block automated attacks on crypto airdrops, DAO voting, and high-value signups.</p>
+                <div class="hero-buttons">
+                    <button class="hero-button primary">Start Free Trial</button>
+                    <button class="hero-button secondary" style="background: #f1f5f9; color: #1e293b;">View Documentation</button>
                 </div>
             </div>
         </div>
     </div>
+
+    <script>
+        function changeTheme(theme) {
+            const hero = document.getElementById('heroPreview');
+            const buttons = document.querySelectorAll('.demo-selector button');
+            
+            // Update hero class
+            hero.className = 'hero-preview ' + theme;
+            
+            // Update active button
+            buttons.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+    </script>
 </body>
 </html>
