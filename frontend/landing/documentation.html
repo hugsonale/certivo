@@ -1,0 +1,1896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentation - Certivo API</title>
+    <meta name="description" content="Complete API documentation for Certivo motion-based human verification. Integrate in minutes with our RESTful API.">
+    
+    <style>
+        /* ================================================================
+           CYBER SHIELD COLOR SYSTEM
+           ================================================================ */
+        
+        :root {
+            /* Primary: Sky Blue */
+            --primary: #0ea5e9;
+            --primary-dark: #0284c7;
+            --primary-light: #38bdf8;
+            
+            /* Secondary: Modern Purple */
+            --secondary: #8b5cf6;
+            --secondary-dark: #7c3aed;
+            --secondary-light: #a78bfa;
+            
+            /* Tertiary: Success Cyan */
+            --tertiary: #06b6d4;
+            --tertiary-dark: #0891b2;
+            --tertiary-light: #22d3ee;
+            
+            /* Neutrals - Light Mode */
+            --white: #ffffff;
+            --surface: #f8fafc;
+            --dark-bg: #0f172a;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border: #e2e8f0;
+            
+            /* Code Colors */
+            --code-bg: #1e293b;
+            --code-text: #e2e8f0;
+            
+            /* Gradients */
+            --gradient-primary: linear-gradient(135deg, #0ea5e9 0%, #8b5cf6 100%);
+        }
+        
+        /* Dark Mode */
+        [data-theme="dark"] {
+            --white: #0f172a;
+            --surface: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --border: #334155;
+            --code-bg: #0f172a;
+        }
+        
+        /* ================================================================
+           GLOBAL RESET
+           ================================================================ */
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--white);
+            color: var(--text-primary);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            transition: background 0.3s, color 0.3s;
+        }
+        
+        /* ================================================================
+           LAYOUT
+           ================================================================ */
+        
+        .docs-container {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        /* ================================================================
+           SIDEBAR
+           ================================================================ */
+        
+        .sidebar {
+            width: 280px;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            position: fixed;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            overflow-y: auto;
+            transition: all 0.3s;
+            z-index: 100;
+        }
+        
+        .sidebar-header {
+            padding: 24px 24px 16px 24px;
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            background: var(--surface);
+            z-index: 10;
+        }
+        
+        .sidebar-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            margin-bottom: 16px;
+        }
+        
+        .sidebar-logo-icon {
+            width: 32px;
+            height: 32px;
+            background: var(--gradient-primary);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 800;
+            font-size: 18px;
+        }
+        
+        .sidebar-logo-text {
+            font-size: 18px;
+            font-weight: 700;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .search-box {
+            position: relative;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 10px 36px 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--white);
+            color: var(--text-primary);
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+        }
+        
+        .search-icon {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+            font-size: 16px;
+        }
+        
+        .sidebar-nav {
+            padding: 16px 0;
+        }
+        
+        .nav-section {
+            margin-bottom: 24px;
+        }
+        
+        .nav-section-title {
+            padding: 8px 24px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+        
+        .nav-item {
+            display: block;
+            padding: 8px 24px 8px 40px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.2s;
+            position: relative;
+        }
+        
+        .nav-item:hover {
+            background: rgba(14, 165, 233, 0.05);
+            color: var(--primary);
+        }
+        
+        .nav-item.active {
+            color: var(--primary);
+            font-weight: 600;
+            background: rgba(14, 165, 233, 0.1);
+        }
+        
+        .nav-item.active::before {
+            content: '';
+            position: absolute;
+            left: 24px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 4px;
+            height: 4px;
+            background: var(--primary);
+            border-radius: 50%;
+        }
+        
+        .theme-toggle {
+            padding: 16px 24px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .theme-toggle:hover {
+            background: rgba(14, 165, 233, 0.05);
+        }
+        
+        .theme-toggle-icon {
+            font-size: 18px;
+        }
+        
+        .theme-toggle-text {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+        
+        /* ================================================================
+           MAIN CONTENT
+           ================================================================ */
+        
+        .main-content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 40px 60px;
+            max-width: 900px;
+        }
+        
+        .breadcrumb {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 32px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+        
+        .breadcrumb a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+        
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+        
+        .content-header {
+            margin-bottom: 48px;
+        }
+        
+        .page-title {
+            font-size: 48px;
+            font-weight: 800;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            line-height: 1.2;
+        }
+        
+        .page-description {
+            font-size: 20px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+        
+        .content-section {
+            margin-bottom: 56px;
+        }
+        
+        h2 {
+            font-size: 32px;
+            font-weight: 800;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+        }
+        
+        h3 {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin: 32px 0 16px 0;
+        }
+        
+        h4 {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 24px 0 12px 0;
+        }
+        
+        p {
+            font-size: 16px;
+            color: var(--text-secondary);
+            line-height: 1.7;
+            margin-bottom: 16px;
+        }
+        
+        ul, ol {
+            margin: 16px 0 16px 24px;
+            color: var(--text-secondary);
+            line-height: 1.8;
+        }
+        
+        li {
+            margin-bottom: 8px;
+            padding-left: 8px;
+        }
+        
+        /* ================================================================
+           CODE BLOCKS
+           ================================================================ */
+        
+        .code-block-container {
+            margin: 24px 0;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+        
+        .code-header {
+            background: var(--surface);
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .code-language {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            letter-spacing: 0.5px;
+        }
+        
+        .code-copy {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .code-copy:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+        
+        .code-block {
+            background: var(--code-bg);
+            padding: 20px;
+            overflow-x: auto;
+            font-family: 'Courier New', Consolas, Monaco, monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--code-text);
+        }
+        
+        .code-comment {
+            color: #8b949e;
+            font-style: italic;
+        }
+        
+        .code-keyword {
+            color: #ff7b72;
+            font-weight: 600;
+        }
+        
+        .code-string {
+            color: #a5d6ff;
+        }
+        
+        .code-function {
+            color: #d2a8ff;
+        }
+        
+        .code-number {
+            color: #79c0ff;
+        }
+        
+        .code-property {
+            color: #7ee787;
+        }
+        
+        code {
+            background: rgba(14, 165, 233, 0.1);
+            color: var(--primary);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            font-family: 'Courier New', monospace;
+        }
+        
+        /* ================================================================
+           TABS
+           ================================================================ */
+        
+        .tabs {
+            margin: 24px 0;
+        }
+        
+        .tab-buttons {
+            display: flex;
+            gap: 8px;
+            border-bottom: 2px solid var(--border);
+            margin-bottom: 20px;
+        }
+        
+        .tab-button {
+            padding: 10px 20px;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: -2px;
+        }
+        
+        .tab-button:hover {
+            color: var(--primary);
+        }
+        
+        .tab-button.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* ================================================================
+           CARDS & CALLOUTS
+           ================================================================ */
+        
+        .info-card {
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);
+            border: 1px solid var(--primary);
+            border-left: 4px solid var(--primary);
+            padding: 20px;
+            border-radius: 8px;
+            margin: 24px 0;
+        }
+        
+        .info-card-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .info-card-content {
+            font-size: 15px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+        
+        .warning-card {
+            background: rgba(245, 158, 11, 0.05);
+            border: 1px solid #f59e0b;
+            border-left: 4px solid #f59e0b;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 24px 0;
+        }
+        
+        .warning-card-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #f59e0b;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .success-card {
+            background: rgba(6, 182, 212, 0.05);
+            border: 1px solid var(--tertiary);
+            border-left: 4px solid var(--tertiary);
+            padding: 20px;
+            border-radius: 8px;
+            margin: 24px 0;
+        }
+        
+        .success-card-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--tertiary);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* ================================================================
+           PARAMETER TABLE
+           ================================================================ */
+        
+        .param-table {
+            width: 100%;
+            margin: 24px 0;
+            border-collapse: collapse;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .param-table th {
+            background: var(--surface);
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .param-table td {
+            padding: 12px 16px;
+            font-size: 14px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .param-table tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .param-name {
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            color: var(--primary);
+        }
+        
+        .param-type {
+            display: inline-block;
+            background: rgba(139, 92, 246, 0.1);
+            color: var(--secondary);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .param-required {
+            display: inline-block;
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        /* ================================================================
+           ENDPOINT DISPLAY
+           ================================================================ */
+        
+        .endpoint {
+            background: var(--code-bg);
+            color: white;
+            padding: 16px 20px;
+            border-radius: 8px;
+            margin: 24px 0;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .endpoint-method {
+            background: var(--primary);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        
+        .endpoint-method.post {
+            background: #10b981;
+        }
+        
+        .endpoint-method.get {
+            background: var(--primary);
+        }
+        
+        .endpoint-method.delete {
+            background: #ef4444;
+        }
+        
+        .endpoint-path {
+            font-size: 15px;
+            font-weight: 600;
+        }
+        
+        /* ================================================================
+           QUICK LINKS
+           ================================================================ */
+        
+        .quick-links {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin: 32px 0;
+        }
+        
+        .quick-link {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 20px;
+            border-radius: 12px;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+        
+        .quick-link:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(14, 165, 233, 0.15);
+        }
+        
+        .quick-link-icon {
+            font-size: 32px;
+            margin-bottom: 12px;
+            display: block;
+        }
+        
+        .quick-link-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+        
+        .quick-link-description {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+        
+        /* ================================================================
+           FOOTER NAVIGATION
+           ================================================================ */
+        
+        .doc-footer {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 64px;
+            padding-top: 32px;
+            border-top: 1px solid var(--border);
+        }
+        
+        .footer-nav-link {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            padding: 16px 20px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        
+        .footer-nav-link:hover {
+            border-color: var(--primary);
+            background: rgba(14, 165, 233, 0.05);
+        }
+        
+        .footer-nav-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .footer-nav-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        /* ================================================================
+           RESPONSIVE
+           ================================================================ */
+        
+        .mobile-menu-toggle {
+            display: none;
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 56px;
+            height: 56px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 16px rgba(14, 165, 233, 0.4);
+            z-index: 200;
+        }
+        
+        @media (max-width: 968px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            
+            .sidebar.mobile-open {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+                padding: 24px 20px;
+            }
+            
+            .mobile-menu-toggle {
+                display: block;
+            }
+            
+            .page-title {
+                font-size: 36px;
+            }
+            
+            .quick-links {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <a href="landing.html" class="sidebar-logo">
+                <div class="sidebar-logo-icon">C</div>
+                <div class="sidebar-logo-text">Certivo Docs</div>
+            </a>
+            
+            <div class="search-box">
+                <input type="text" class="search-input" placeholder="Search docs..." id="searchInput">
+                <span class="search-icon">🔍</span>
+            </div>
+        </div>
+        
+        <nav class="sidebar-nav">
+            <div class="nav-section">
+                <div class="nav-section-title">Getting Started</div>
+                <a href="#introduction" class="nav-item active" onclick="navigateTo('introduction')">Introduction</a>
+                <a href="#quick-start" class="nav-item" onclick="navigateTo('quick-start')">Quick Start</a>
+                <a href="#authentication" class="nav-item" onclick="navigateTo('authentication')">Authentication</a>
+            </div>
+            
+            <div class="nav-section">
+                <div class="nav-section-title">API Reference</div>
+                <a href="#create-challenge" class="nav-item" onclick="navigateTo('create-challenge')">Create Challenge</a>
+                <a href="#verify-video" class="nav-item" onclick="navigateTo('verify-video')">Verify Video</a>
+                <a href="#get-session" class="nav-item" onclick="navigateTo('get-session')">Get Session</a>
+                <a href="#webhooks" class="nav-item" onclick="navigateTo('webhooks')">Webhooks</a>
+            </div>
+            
+            <div class="nav-section">
+                <div class="nav-section-title">Guides</div>
+                <a href="#error-handling" class="nav-item" onclick="navigateTo('error-handling')">Error Handling</a>
+                <a href="#best-practices" class="nav-item" onclick="navigateTo('best-practices')">Best Practices</a>
+                <a href="#rate-limits" class="nav-item" onclick="navigateTo('rate-limits')">Rate Limits</a>
+                <a href="#testing" class="nav-item" onclick="navigateTo('testing')">Testing</a>
+            </div>
+            
+            <div class="nav-section">
+                <div class="nav-section-title">SDKs & Tools</div>
+                <a href="#sdks" class="nav-item" onclick="navigateTo('sdks')">Client SDKs</a>
+                <a href="#postman" class="nav-item" onclick="navigateTo('postman')">Postman Collection</a>
+            </div>
+        </nav>
+        
+        <div class="theme-toggle" onclick="toggleTheme()">
+            <span class="theme-toggle-icon" id="themeIcon">🌙</span>
+            <span class="theme-toggle-text" id="themeText">Dark Mode</span>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+        <!-- BREADCRUMB -->
+        <div class="breadcrumb">
+            <a href="landing.html">Home</a>
+            <span>→</span>
+            <span>Documentation</span>
+        </div>
+
+        <!-- INTRODUCTION -->
+        <section id="introduction" class="content-section">
+            <div class="content-header">
+                <h1 class="page-title">API Documentation</h1>
+                <p class="page-description">
+                    Complete guide to integrating Certivo's motion-based human verification into your application. Get started in minutes.
+                </p>
+            </div>
+
+            <div class="quick-links">
+                <a href="#quick-start" class="quick-link">
+                    <span class="quick-link-icon">⚡</span>
+                    <div class="quick-link-title">Quick Start</div>
+                    <p class="quick-link-description">Integrate in 5 minutes</p>
+                </a>
+                
+                <a href="#create-challenge" class="quick-link">
+                    <span class="quick-link-icon">📘</span>
+                    <div class="quick-link-title">API Reference</div>
+                    <p class="quick-link-description">Complete endpoint docs</p>
+                </a>
+                
+                <a href="#sdks" class="quick-link">
+                    <span class="quick-link-icon">🔧</span>
+                    <div class="quick-link-title">SDKs</div>
+                    <p class="quick-link-description">Client libraries</p>
+                </a>
+                
+                <a href="http://127.0.0.1:8000" class="quick-link" target="_blank">
+                    <span class="quick-link-icon">🎮</span>
+                    <div class="quick-link-title">Live Demo</div>
+                    <p class="quick-link-description">Try it yourself</p>
+                </a>
+            </div>
+
+            <h2>What is Certivo?</h2>
+            <p>
+                Certivo is a motion-based human verification API that stops bots through physics-based challenges. Unlike traditional CAPTCHAs, our system uses real-time facial motion analysis to verify genuine human presence.
+            </p>
+
+            <h3>Key Features</h3>
+            <ul>
+                <li><strong>99.7% bot detection rate</strong> - Physics-based verification that can't be faked</li>
+                <li><strong>10-second verification</strong> - Faster than typing a CAPTCHA</li>
+                <li><strong>RESTful API</strong> - Simple integration, works with any backend</li>
+                <li><strong>No ML bypasses</strong> - Randomized challenges prevent precomputation</li>
+                <li><strong>Privacy-first</strong> - Videos analyzed in real-time, not stored</li>
+            </ul>
+
+            <div class="info-card">
+                <div class="info-card-title">💡 Use Cases</div>
+                <div class="info-card-content">
+                    Certivo is perfect for high-stakes verification: crypto airdrops, DAO voting, reward programs, account creation, limited releases, and any scenario where fake users cost you money or credibility.
+                </div>
+            </div>
+        </section>
+
+        <!-- QUICK START -->
+        <section id="quick-start" class="content-section">
+            <h2>Quick Start</h2>
+            <p>
+                Get up and running in 5 minutes. This guide walks you through your first verification request.
+            </p>
+
+            <h3>Step 1: Get Your API Key</h3>
+            <p>
+                Sign up for a Certivo account and generate your API key from the dashboard. You'll need this for all API requests.
+            </p>
+
+            <div class="success-card">
+                <div class="success-card-title">✓ Test API Key</div>
+                <div class="info-card-content">
+                    Use <code>test_sk_1234567890</code> for development and testing. This key works with our test environment.
+                </div>
+            </div>
+
+            <h3>Step 2: Request a Challenge</h3>
+            <p>
+                Call the challenge endpoint to generate a unique verification challenge for your user.
+            </p>
+
+            <div class="tabs">
+                <div class="tab-buttons">
+                    <button class="tab-button active" onclick="switchTab('curl-tab-1', this)">cURL</button>
+                    <button class="tab-button" onclick="switchTab('javascript-tab-1', this)">JavaScript</button>
+                    <button class="tab-button" onclick="switchTab('python-tab-1', this)">Python</button>
+                    <button class="tab-button" onclick="switchTab('php-tab-1', this)">PHP</button>
+                </div>
+
+                <div id="curl-tab-1" class="tab-content active">
+                    <div class="code-block-container">
+                        <div class="code-header">
+                            <span class="code-language">CURL</span>
+                            <button class="code-copy" onclick="copyCode(this)">Copy</button>
+                        </div>
+                        <pre class="code-block">curl -X POST https://api.certivo.com/v1/challenge \
+  -H <span class="code-string">"Authorization: Bearer YOUR_API_KEY"</span> \
+  -H <span class="code-string">"Content-Type: application/json"</span> \
+  -d <span class="code-string">'{
+    "device_id": "device_abc123"
+  }'</span></pre>
+                    </div>
+                </div>
+
+                <div id="javascript-tab-1" class="tab-content">
+                    <div class="code-block-container">
+                        <div class="code-header">
+                            <span class="code-language">JavaScript</span>
+                            <button class="code-copy" onclick="copyCode(this)">Copy</button>
+                        </div>
+                        <pre class="code-block"><span class="code-keyword">const</span> response = <span class="code-keyword">await</span> <span class="code-function">fetch</span>(<span class="code-string">'https://api.certivo.com/v1/challenge'</span>, {
+  <span class="code-property">method</span>: <span class="code-string">'POST'</span>,
+  <span class="code-property">headers</span>: {
+    <span class="code-string">'Authorization'</span>: <span class="code-string">'Bearer YOUR_API_KEY'</span>,
+    <span class="code-string">'Content-Type'</span>: <span class="code-string">'application/json'</span>
+  },
+  <span class="code-property">body</span>: JSON.<span class="code-function">stringify</span>({
+    <span class="code-property">device_id</span>: <span class="code-string">'device_abc123'</span>
+  })
+});
+
+<span class="code-keyword">const</span> data = <span class="code-keyword">await</span> response.<span class="code-function">json</span>();
+console.<span class="code-function">log</span>(data);</pre>
+                    </div>
+                </div>
+
+                <div id="python-tab-1" class="tab-content">
+                    <div class="code-block-container">
+                        <div class="code-header">
+                            <span class="code-language">Python</span>
+                            <button class="code-copy" onclick="copyCode(this)">Copy</button>
+                        </div>
+                        <pre class="code-block"><span class="code-keyword">import</span> requests
+
+response = requests.<span class="code-function">post</span>(
+    <span class="code-string">'https://api.certivo.com/v1/challenge'</span>,
+    headers={
+        <span class="code-string">'Authorization'</span>: <span class="code-string">'Bearer YOUR_API_KEY'</span>,
+        <span class="code-string">'Content-Type'</span>: <span class="code-string">'application/json'</span>
+    },
+    json={
+        <span class="code-string">'device_id'</span>: <span class="code-string">'device_abc123'</span>
+    }
+)
+
+data = response.<span class="code-function">json</span>()
+<span class="code-function">print</span>(data)</pre>
+                    </div>
+                </div>
+
+                <div id="php-tab-1" class="tab-content">
+                    <div class="code-block-container">
+                        <div class="code-header">
+                            <span class="code-language">PHP</span>
+                            <button class="code-copy" onclick="copyCode(this)">Copy</button>
+                        </div>
+                        <pre class="code-block"><span class="code-keyword">$ch</span> = <span class="code-function">curl_init</span>(<span class="code-string">'https://api.certivo.com/v1/challenge'</span>);
+
+<span class="code-function">curl_setopt</span>(<span class="code-keyword">$ch</span>, CURLOPT_RETURNTRANSFER, <span class="code-keyword">true</span>);
+<span class="code-function">curl_setopt</span>(<span class="code-keyword">$ch</span>, CURLOPT_POST, <span class="code-keyword">true</span>);
+<span class="code-function">curl_setopt</span>(<span class="code-keyword">$ch</span>, CURLOPT_HTTPHEADER, [
+    <span class="code-string">'Authorization: Bearer YOUR_API_KEY'</span>,
+    <span class="code-string">'Content-Type: application/json'</span>
+]);
+<span class="code-function">curl_setopt</span>(<span class="code-keyword">$ch</span>, CURLOPT_POSTFIELDS, <span class="code-function">json_encode</span>([
+    <span class="code-string">'device_id'</span> => <span class="code-string">'device_abc123'</span>
+]));
+
+<span class="code-keyword">$response</span> = <span class="code-function">curl_exec</span>(<span class="code-keyword">$ch</span>);
+<span class="code-keyword">$data</span> = <span class="code-function">json_decode</span>(<span class="code-keyword">$response</span>, <span class="code-keyword">true</span>);</pre>
+                    </div>
+                </div>
+            </div>
+
+            <h4>Response</h4>
+            <div class="code-block-container">
+                <div class="code-header">
+                    <span class="code-language">JSON Response</span>
+                    <button class="code-copy" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre class="code-block">{
+  <span class="code-property">"challenge_id"</span>: <span class="code-string">"ch_xyz789"</span>,
+  <span class="code-property">"token_id"</span>: <span class="code-string">"tok_def456"</span>,
+  <span class="code-property">"instruction"</span>: <span class="code-string">"Turn your head LEFT"</span>,
+  <span class="code-property">"expected_movement"</span>: <span class="code-string">"left"</span>,
+  <span class="code-property">"difficulty"</span>: <span class="code-string">"medium"</span>,
+  <span class="code-property">"expires_at"</span>: <span class="code-string">"2026-03-20T20:30:00Z"</span>
+}</pre>
+            </div>
+
+            <h3>Step 3: Display Challenge to User</h3>
+            <p>
+                Show the challenge instruction to your user and capture their video response using the browser's camera API.
+            </p>
+
+            <h3>Step 4: Verify the Response</h3>
+            <p>
+                Send the recorded video to Certivo for verification.
+            </p>
+
+            <div class="code-block-container">
+                <div class="code-header">
+                    <span class="code-language">JavaScript</span>
+                    <button class="code-copy" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre class="code-block"><span class="code-keyword">const</span> formData = <span class="code-keyword">new</span> <span class="code-function">FormData</span>();
+formData.<span class="code-function">append</span>(<span class="code-string">'challenge_id'</span>, <span class="code-string">'ch_xyz789'</span>);
+formData.<span class="code-function">append</span>(<span class="code-string">'token_id'</span>, <span class="code-string">'tok_def456'</span>);
+formData.<span class="code-function">append</span>(<span class="code-string">'device_id'</span>, <span class="code-string">'device_abc123'</span>);
+formData.<span class="code-function">append</span>(<span class="code-string">'video'</span>, videoBlob);
+
+<span class="code-keyword">const</span> response = <span class="code-keyword">await</span> <span class="code-function">fetch</span>(<span class="code-string">'https://api.certivo.com/v1/verify'</span>, {
+  <span class="code-property">method</span>: <span class="code-string">'POST'</span>,
+  <span class="code-property">headers</span>: {
+    <span class="code-string">'Authorization'</span>: <span class="code-string">'Bearer YOUR_API_KEY'</span>
+  },
+  <span class="code-property">body</span>: formData
+});
+
+<span class="code-keyword">const</span> result = <span class="code-keyword">await</span> response.<span class="code-function">json</span>();
+
+<span class="code-keyword">if</span> (result.challenge_passed) {
+  console.<span class="code-function">log</span>(<span class="code-string">'✓ Human verified!'</span>);
+  console.<span class="code-function">log</span>(<span class="code-string">'Trust score:'</span>, result.trust_score);
+} <span class="code-keyword">else</span> {
+  console.<span class="code-function">log</span>(<span class="code-string">'✗ Verification failed'</span>, result.error);
+}</pre>
+            </div>
+
+            <h4>Success Response</h4>
+            <div class="code-block-container">
+                <div class="code-header">
+                    <span class="code-language">JSON Response</span>
+                </div>
+                <pre class="code-block">{
+  <span class="code-property">"challenge_passed"</span>: <span class="code-keyword">true</span>,
+  <span class="code-property">"trust_score"</span>: <span class="code-number">97</span>,
+  <span class="code-property">"trust_level"</span>: <span class="code-string">"high"</span>,
+  <span class="code-property">"liveness_score"</span>: <span class="code-number">0.96</span>,
+  <span class="code-property">"session_id"</span>: <span class="code-string">"sess_ghi789"</span>,
+  <span class="code-property">"verified_at"</span>: <span class="code-string">"2026-03-20T20:15:30Z"</span>
+}</pre>
+            </div>
+
+            <div class="success-card">
+                <div class="success-card-title">✓ Success!</div>
+                <div class="info-card-content">
+                    You've successfully verified a human user! The <code>session_id</code> can be used to track this verification in your system.
+                </div>
+            </div>
+        </section>
+
+        <!-- AUTHENTICATION -->
+        <section id="authentication" class="content-section">
+            <h2>Authentication</h2>
+            <p>
+                Certivo uses API keys to authenticate requests. Include your API key in the <code>Authorization</code> header of every request.
+            </p>
+
+            <div class="endpoint">
+                <span class="endpoint-method">HEADER</span>
+                <span class="endpoint-path">Authorization: Bearer YOUR_API_KEY</span>
+            </div>
+
+            <h3>API Key Types</h3>
+            <table class="param-table">
+                <thead>
+                    <tr>
+                        <th>Key Type</th>
+                        <th>Prefix</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="param-name">Test Key</span></td>
+                        <td><code>test_sk_</code></td>
+                        <td>For development and testing. No charges.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="param-name">Live Key</span></td>
+                        <td><code>live_sk_</code></td>
+                        <td>For production use. Real verifications.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="warning-card">
+                <div class="warning-card-title">⚠️ Keep Your Keys Secret</div>
+                <div class="info-card-content">
+                    Never expose your API keys in client-side code, public repositories, or anywhere users can access them. Always make API calls from your backend server.
+                </div>
+            </div>
+
+            <h3>Getting Your API Key</h3>
+            <ol>
+                <li>Sign up for a Certivo account</li>
+                <li>Navigate to Settings → API Keys</li>
+                <li>Click "Create New Key"</li>
+                <li>Copy and securely store your key</li>
+            </ol>
+        </section>
+
+        <!-- CREATE CHALLENGE ENDPOINT -->
+        <section id="create-challenge" class="content-section">
+            <h2>Create Challenge</h2>
+            <p>
+                Generate a new verification challenge for a user. Returns a unique challenge with randomized movement instruction.
+            </p>
+
+            <div class="endpoint">
+                <span class="endpoint-method post">POST</span>
+                <span class="endpoint-path">/v1/challenge</span>
+            </div>
+
+            <h3>Request Parameters</h3>
+            <table class="param-table">
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Type</th>
+                        <th>Required</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="param-name">device_id</span></td>
+                        <td><span class="param-type">string</span></td>
+                        <td><span class="param-required">Required</span></td>
+                        <td>Unique identifier for the device/browser</td>
+                    </tr>
+                    <tr>
+                        <td><span class="param-name">user_id</span></td>
+                        <td><span class="param-type">string</span></td>
+                        <td>Optional</td>
+                        <td>Your internal user ID for tracking</td>
+                    </tr>
+                    <tr>
+                        <td><span class="param-name">metadata</span></td>
+                        <td><span class="param-type">object</span></td>
+                        <td>Optional</td>
+                        <td>Custom metadata to attach to this challenge</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Response Fields</h3>
+            <table class="param-table">
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="param-name">challenge_id</span></td>
+                        <td><span class="param-type">string</span></td>
+                        <td>Unique identifier for this challenge</td>
+                    </tr>
+                    <tr>
+                        <td><span class="param-name">token_id</span></td>
+                        <td><span class="param-type">string</span></td>
+                        <td>Security token for verification</td>
+                    </tr>
+                    <tr>
+                        <td><span class="param-name">instruction</span></td>
+                        <td><span class="param-type">string</span></td>
+                        <td>Human-readable instruction (e.g., "Turn your head LEFT")</td>
+                    </tr>
+                    <tr>
+                        <td><span class="param-name">expected_movement</span></td>
+                        <td><span class="param-type">string</span></td>
+                        <td>Movement type: left, right, blink, nod, mouth, eyebrows</td>
+                    </tr>
+                    <tr>
+                        <td><span class="param-name">difficulty</span></td>
+                        <td><span class="param-type">string</span></td>
+                        <td>Challenge difficulty: easy, medium, hard</td>
+                    </tr>
+                    <tr>
+                        <td><span class="param-name">expires_at</span></td>
+                        <td><span class="param-type">timestamp</span></td>
+                        <td>When this challenge expires (5 minutes from creation)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Example Request</h3>
+            <div class="code-block-container">
+                <div class="code-header">
+                    <span class="code-language">cURL</span>
+                    <button class="code-copy" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre class="code-block">curl -X POST https://api.certivo.com/v1/challenge \
+  -H <span class="code-string">"Authorization: Bearer YOUR_API_KEY"</span> \
+  -H <span class="code-string">"Content-Type: application/json"</span> \
+  -d <span class="code-string">'{
+    "device_id": "device_abc123",
+    "user_id": "user_456",
+    "metadata": {
+      "campaign": "airdrop_q1_2026",
+      "source": "twitter"
+    }
+  }'</span></pre>
+            </div>
+
+            <h3>Example Response</h3>
+            <div class="code-block-container">
+                <div class="code-header">
+                    <span class="code-language">JSON</span>
+                </div>
+                <pre class="code-block">{
+  <span class="code-property">"challenge_id"</span>: <span class="code-string">"ch_xyz789"</span>,
+  <span class="code-property">"token_id"</span>: <span class="code-string">"tok_def456"</span>,
+  <span class="code-property">"instruction"</span>: <span class="code-string">"BLINK your eyes twice"</span>,
+  <span class="code-property">"expected_movement"</span>: <span class="code-string">"blink"</span>,
+  <span class="code-property">"difficulty"</span>: <span class="code-string">"medium"</span>,
+  <span class="code-property">"expires_at"</span>: <span class="code-string">"2026-03-20T20:30:00Z"</span>
+}</pre>
+            </div>
+        </section>
+
+        <!-- VERIFY VIDEO ENDPOINT -->
+        <section id="verify-video" class="content-section">
+            <h2>Verify Video</h2>
+            <p>
+                Submit a video recording for verification. Certivo analyzes the video in real-time and returns a trust score.
+            </p>
+
+            <div class="endpoint">
+                <span class="endpoint-method post">POST</span>
+                <span class="endpoint-path">/v1/verify</span>
+            </div>
+
+            <h3>Request Parameters</h3>
+            <table class="param-table">
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Type</th>
+                        <th>Required</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="param-name">challenge_id</span></td>
+                        <td><span class="param-type">string</span></td>
+                        <td><span class="param-required">Required</span></td>
+                        <td>The challenge ID from /v1/challenge</td>
+                    </tr>
+                    <tr>
+                        <td><span class="param-name">token_id</span></td>
+                        <td><span class="param-type">string</span></td>
+                        <td><span class="param-required">Required</span></td>
+                        <td>The token ID from /v1/challenge</td>
+                    </tr>
+                    <tr>
+                        <td><span class="param-name">device_id</span></td>
+                        <td><span class="param-type">string</span></td>
+                        <td><span class="param-required">Required</span></td>
+                        <td>Same device_id used in challenge creation</td>
+                    </tr>
+                    <tr>
+                        <td><span class="param-name">video</span></td>
+                        <td><span class="param-type">file</span></td>
+                        <td><span class="param-required">Required</span></td>
+                        <td>Video file (webm or mp4, max 10MB)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Response Fields</h3>
+            <table class="param-table">
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="param-name">challenge_passed</span></td>
+                        <td><span class="param-type">boolean</span></td>
+                        <td>Whether the challenge was successfully completed</td>
+                    </tr>
+                    <tr>
+                        <td><span class="param-name">trust_score</span></td>
+                        <td><span class="param-type">integer</span></td>
+                        <td>Confidence score 0-100 (higher = more trustworthy)</td>
+                    </tr>
+                    <tr>
+                        <td><span class="param-name">trust_level</span></td>
+                        <td><span class="param-type">string</span></td>
+                        <td>low, medium, or high</td>
+                    </tr>
+                    <tr>
+                        <td><span class="param-name">liveness_score</span></td>
+                        <td><span class="param-type">float</span></td>
+                        <td>Liveness detection score 0.0-1.0</td>
+                    </tr>
+                    <tr>
+                        <td><span class="param-name">session_id</span></td>
+                        <td><span class="param-type">string</span></td>
+                        <td>Unique session identifier for tracking</td>
+                    </tr>
+                    <tr>
+                        <td><span class="param-name">verified_at</span></td>
+                        <td><span class="param-type">timestamp</span></td>
+                        <td>When verification was completed</td>
+                    </tr>
+                    <tr>
+                        <td><span class="param-name">error</span></td>
+                        <td><span class="param-type">string</span></td>
+                        <td>Error message if verification failed</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Success Response</h3>
+            <div class="code-block-container">
+                <div class="code-header">
+                    <span class="code-language">JSON - 200 OK</span>
+                </div>
+                <pre class="code-block">{
+  <span class="code-property">"challenge_passed"</span>: <span class="code-keyword">true</span>,
+  <span class="code-property">"trust_score"</span>: <span class="code-number">97</span>,
+  <span class="code-property">"trust_level"</span>: <span class="code-string">"high"</span>,
+  <span class="code-property">"liveness_score"</span>: <span class="code-number">0.96</span>,
+  <span class="code-property">"session_id"</span>: <span class="code-string">"sess_ghi789"</span>,
+  <span class="code-property">"verified_at"</span>: <span class="code-string">"2026-03-20T20:15:30Z"</span>,
+  <span class="code-property">"movement_detected"</span>: <span class="code-string">"left"</span>,
+  <span class="code-property">"processing_time_ms"</span>: <span class="code-number">1847</span>
+}</pre>
+            </div>
+
+            <h3>Failure Response</h3>
+            <div class="code-block-container">
+                <div class="code-header">
+                    <span class="code-language">JSON - 200 OK</span>
+                </div>
+                <pre class="code-block">{
+  <span class="code-property">"challenge_passed"</span>: <span class="code-keyword">false</span>,
+  <span class="code-property">"trust_score"</span>: <span class="code-number">12</span>,
+  <span class="code-property">"trust_level"</span>: <span class="code-string">"low"</span>,
+  <span class="code-property">"liveness_score"</span>: <span class="code-number">0.23</span>,
+  <span class="code-property">"error"</span>: <span class="code-string">"Movement not detected. Expected: left, Detected: none"</span>,
+  <span class="code-property">"error_code"</span>: <span class="code-string">"MOVEMENT_NOT_DETECTED"</span>,
+  <span class="code-property">"session_id"</span>: <span class="code-string">"sess_fail123"</span>
+}</pre>
+            </div>
+
+            <div class="info-card">
+                <div class="info-card-title">💡 Trust Score Interpretation</div>
+                <div class="info-card-content">
+                    <strong>90-100:</strong> Very high confidence - Definitely human<br>
+                    <strong>70-89:</strong> High confidence - Likely human<br>
+                    <strong>50-69:</strong> Medium confidence - Review recommended<br>
+                    <strong>0-49:</strong> Low confidence - Likely bot or suspicious
+                </div>
+            </div>
+        </section>
+
+        <!-- ERROR HANDLING -->
+        <section id="error-handling" class="content-section">
+            <h2>Error Handling</h2>
+            <p>
+                Certivo uses conventional HTTP status codes and detailed error messages to indicate success or failure.
+            </p>
+
+            <h3>HTTP Status Codes</h3>
+            <table class="param-table">
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Meaning</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>200</strong></td>
+                        <td>OK</td>
+                        <td>Request succeeded</td>
+                    </tr>
+                    <tr>
+                        <td><strong>400</strong></td>
+                        <td>Bad Request</td>
+                        <td>Invalid parameters or malformed request</td>
+                    </tr>
+                    <tr>
+                        <td><strong>401</strong></td>
+                        <td>Unauthorized</td>
+                        <td>Invalid or missing API key</td>
+                    </tr>
+                    <tr>
+                        <td><strong>404</strong></td>
+                        <td>Not Found</td>
+                        <td>Challenge or session not found</td>
+                    </tr>
+                    <tr>
+                        <td><strong>429</strong></td>
+                        <td>Too Many Requests</td>
+                        <td>Rate limit exceeded</td>
+                    </tr>
+                    <tr>
+                        <td><strong>500</strong></td>
+                        <td>Internal Server Error</td>
+                        <td>Something went wrong on our end</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Error Response Format</h3>
+            <div class="code-block-container">
+                <div class="code-header">
+                    <span class="code-language">JSON</span>
+                </div>
+                <pre class="code-block">{
+  <span class="code-property">"error"</span>: {
+    <span class="code-property">"code"</span>: <span class="code-string">"INVALID_CHALLENGE"</span>,
+    <span class="code-property">"message"</span>: <span class="code-string">"Challenge has expired or does not exist"</span>,
+    <span class="code-property">"details"</span>: {
+      <span class="code-property">"challenge_id"</span>: <span class="code-string">"ch_xyz789"</span>,
+      <span class="code-property">"expired_at"</span>: <span class="code-string">"2026-03-20T20:00:00Z"</span>
+    }
+  }
+}</pre>
+            </div>
+
+            <h3>Common Error Codes</h3>
+            <table class="param-table">
+                <thead>
+                    <tr>
+                        <th>Error Code</th>
+                        <th>Description</th>
+                        <th>Solution</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>INVALID_API_KEY</code></td>
+                        <td>API key is invalid or missing</td>
+                        <td>Check your Authorization header</td>
+                    </tr>
+                    <tr>
+                        <td><code>INVALID_CHALLENGE</code></td>
+                        <td>Challenge expired or not found</td>
+                        <td>Generate a new challenge</td>
+                    </tr>
+                    <tr>
+                        <td><code>VIDEO_TOO_LARGE</code></td>
+                        <td>Video exceeds 10MB limit</td>
+                        <td>Reduce video quality or duration</td>
+                    </tr>
+                    <tr>
+                        <td><code>NO_FACE_DETECTED</code></td>
+                        <td>No face found in video</td>
+                        <td>Ensure good lighting and face visibility</td>
+                    </tr>
+                    <tr>
+                        <td><code>MOVEMENT_NOT_DETECTED</code></td>
+                        <td>Expected movement not performed</td>
+                        <td>User should retry with correct movement</td>
+                    </tr>
+                    <tr>
+                        <td><code>VIDEO_INTEGRITY_FAILED</code></td>
+                        <td>Video appears fake or manipulated</td>
+                        <td>Video may be pre-recorded or deepfake</td>
+                    </tr>
+                    <tr>
+                        <td><code>RATE_LIMIT_EXCEEDED</code></td>
+                        <td>Too many requests</td>
+                        <td>Wait before retrying</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- BEST PRACTICES -->
+        <section id="best-practices" class="content-section">
+            <h2>Best Practices</h2>
+            <p>
+                Follow these guidelines to get the best results from Certivo.
+            </p>
+
+            <h3>1. Device Fingerprinting</h3>
+            <p>
+                Generate a stable <code>device_id</code> using browser fingerprinting. This helps Certivo build trust over time.
+            </p>
+
+            <div class="code-block-container">
+                <div class="code-header">
+                    <span class="code-language">JavaScript</span>
+                    <button class="code-copy" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre class="code-block"><span class="code-comment">// Generate stable device ID</span>
+<span class="code-keyword">function</span> <span class="code-function">getDeviceId</span>() {
+  <span class="code-keyword">let</span> deviceId = localStorage.<span class="code-function">getItem</span>(<span class="code-string">'certivo_device_id'</span>);
+  
+  <span class="code-keyword">if</span> (!deviceId) {
+    <span class="code-comment">// Generate new ID from browser fingerprint</span>
+    deviceId = <span class="code-function">btoa</span>(
+      navigator.userAgent + 
+      screen.width + 
+      screen.height + 
+      <span class="code-function">Date.now</span>()
+    );
+    localStorage.<span class="code-function">setItem</span>(<span class="code-string">'certivo_device_id'</span>, deviceId);
+  }
+  
+  <span class="code-keyword">return</span> deviceId;
+}</pre>
+            </div>
+
+            <h3>2. Handle Failures Gracefully</h3>
+            <p>
+                Allow users to retry failed verifications. Show clear, helpful error messages.
+            </p>
+
+            <div class="success-card">
+                <div class="success-card-title">✓ Good UX</div>
+                <div class="info-card-content">
+                    "We couldn't detect your face. Please ensure you're in good lighting and try again."
+                </div>
+            </div>
+
+            <div class="warning-card">
+                <div class="warning-card-title">✗ Bad UX</div>
+                <div class="info-card-content">
+                    "ERROR: NO_FACE_DETECTED"
+                </div>
+            </div>
+
+            <h3>3. Set Appropriate Thresholds</h3>
+            <p>
+                Decide what trust_score to accept based on your risk tolerance:
+            </p>
+
+            <ul>
+                <li><strong>High Stakes (Airdrops, Voting):</strong> Require 80+ trust score</li>
+                <li><strong>Medium Stakes (Account Creation):</strong> Require 60+ trust score</li>
+                <li><strong>Low Stakes (Newsletter Signup):</strong> Require 40+ trust score</li>
+            </ul>
+
+            <h3>4. Implement Rate Limiting</h3>
+            <p>
+                Limit verification attempts per user to prevent abuse:
+            </p>
+
+            <ul>
+                <li>3 attempts per hour per device</li>
+                <li>10 attempts per day per IP</li>
+                <li>Block devices with repeated failures</li>
+            </ul>
+
+            <h3>5. Monitor and Alert</h3>
+            <p>
+                Track key metrics and set up alerts:
+            </p>
+
+            <ul>
+                <li>Overall pass/fail rate</li>
+                <li>Average trust score</li>
+                <li>Verification completion time</li>
+                <li>Spike in failed attempts (potential attack)</li>
+            </ul>
+        </section>
+
+        <!-- RATE LIMITS -->
+        <section id="rate-limits" class="content-section">
+            <h2>Rate Limits</h2>
+            <p>
+                Certivo enforces rate limits to ensure fair usage and system stability.
+            </p>
+
+            <h3>Default Limits</h3>
+            <table class="param-table">
+                <thead>
+                    <tr>
+                        <th>Plan</th>
+                        <th>Requests/Minute</th>
+                        <th>Requests/Hour</th>
+                        <th>Requests/Day</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Free</strong></td>
+                        <td>10</td>
+                        <td>100</td>
+                        <td>1,000</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Starter</strong></td>
+                        <td>60</td>
+                        <td>1,000</td>
+                        <td>10,000</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Pro</strong></td>
+                        <td>300</td>
+                        <td>10,000</td>
+                        <td>100,000</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Enterprise</strong></td>
+                        <td>Custom</td>
+                        <td>Custom</td>
+                        <td>Custom</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Rate Limit Headers</h3>
+            <p>
+                Every API response includes rate limit information in the headers:
+            </p>
+
+            <div class="code-block-container">
+                <div class="code-header">
+                    <span class="code-language">HTTP Headers</span>
+                </div>
+                <pre class="code-block">X-RateLimit-Limit: <span class="code-number">60</span>
+X-RateLimit-Remaining: <span class="code-number">42</span>
+X-RateLimit-Reset: <span class="code-number">1711304400</span></pre>
+            </div>
+
+            <h3>Handling Rate Limits</h3>
+            <div class="code-block-container">
+                <div class="code-header">
+                    <span class="code-language">JavaScript</span>
+                    <button class="code-copy" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre class="code-block"><span class="code-keyword">const</span> response = <span class="code-keyword">await</span> <span class="code-function">fetch</span>(<span class="code-string">'https://api.certivo.com/v1/challenge'</span>, options);
+
+<span class="code-keyword">if</span> (response.status === <span class="code-number">429</span>) {
+  <span class="code-keyword">const</span> resetTime = response.headers.<span class="code-function">get</span>(<span class="code-string">'X-RateLimit-Reset'</span>);
+  <span class="code-keyword">const</span> waitSeconds = resetTime - <span class="code-function">Math.floor</span>(<span class="code-function">Date.now</span>() / <span class="code-number">1000</span>);
+  
+  console.<span class="code-function">log</span>(<span class="code-string">`Rate limit exceeded. Retry in </span><span class="code-keyword">${waitSeconds}</span><span class="code-string"> seconds.`</span>);
+}</pre>
+            </div>
+        </section>
+
+        <!-- SDKs -->
+        <section id="sdks" class="content-section">
+            <h2>SDKs & Client Libraries</h2>
+            <p>
+                Official SDKs make integration even easier. Choose your language:
+            </p>
+
+            <div class="quick-links">
+                <a href="#" class="quick-link">
+                    <span class="quick-link-icon">📘</span>
+                    <div class="quick-link-title">JavaScript SDK</div>
+                    <p class="quick-link-description">npm install @certivo/js</p>
+                </a>
+                
+                <a href="#" class="quick-link">
+                    <span class="quick-link-icon">🐍</span>
+                    <div class="quick-link-title">Python SDK</div>
+                    <p class="quick-link-description">pip install certivo</p>
+                </a>
+                
+                <a href="#" class="quick-link">
+                    <span class="quick-link-icon">🐘</span>
+                    <div class="quick-link-title">PHP SDK</div>
+                    <p class="quick-link-description">composer require certivo/certivo-php</p>
+                </a>
+                
+                <a href="#" class="quick-link">
+                    <span class="quick-link-icon">💎</span>
+                    <div class="quick-link-title">Ruby SDK</div>
+                    <p class="quick-link-description">gem install certivo</p>
+                </a>
+            </div>
+
+            <h3>JavaScript SDK Example</h3>
+            <div class="code-block-container">
+                <div class="code-header">
+                    <span class="code-language">JavaScript</span>
+                    <button class="code-copy" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre class="code-block"><span class="code-keyword">import</span> { Certivo } <span class="code-keyword">from</span> <span class="code-string">'@certivo/js'</span>;
+
+<span class="code-keyword">const</span> certivo = <span class="code-keyword">new</span> <span class="code-function">Certivo</span>(<span class="code-string">'YOUR_API_KEY'</span>);
+
+<span class="code-comment">// Create challenge</span>
+<span class="code-keyword">const</span> challenge = <span class="code-keyword">await</span> certivo.<span class="code-function">createChallenge</span>({
+  deviceId: <span class="code-string">'device_abc123'</span>
+});
+
+<span class="code-comment">// Verify video</span>
+<span class="code-keyword">const</span> result = <span class="code-keyword">await</span> certivo.<span class="code-function">verify</span>({
+  challengeId: challenge.challenge_id,
+  tokenId: challenge.token_id,
+  deviceId: <span class="code-string">'device_abc123'</span>,
+  video: videoBlob
+});
+
+<span class="code-keyword">if</span> (result.challenge_passed) {
+  console.<span class="code-function">log</span>(<span class="code-string">'✓ Human verified!'</span>);
+}</pre>
+            </div>
+        </section>
+
+        <!-- FOOTER NAVIGATION -->
+        <div class="doc-footer">
+            <a href="landing.html" class="footer-nav-link">
+                <div>
+                    <div class="footer-nav-label">← Back</div>
+                    <div class="footer-nav-title">Home</div>
+                </div>
+            </a>
+            
+            <a href="http://127.0.0.1:8000" class="footer-nav-link" target="_blank">
+                <div style="text-align: right;">
+                    <div class="footer-nav-label">Try Demo →</div>
+                    <div class="footer-nav-title">Live Demo</div>
+                </div>
+            </a>
+        </div>
+    </main>
+
+    <!-- MOBILE MENU TOGGLE -->
+    <button class="mobile-menu-toggle" onclick="toggleMobileMenu()">☰</button>
+
+    <!-- JAVASCRIPT -->
+    <script>
+        // Theme Toggle
+        function toggleTheme() {
+            const html = document.documentElement;
+            const currentTheme = html.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            
+            html.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            
+            const icon = document.getElementById('themeIcon');
+            const text = document.getElementById('themeText');
+            
+            if (newTheme === 'dark') {
+                icon.textContent = '☀️';
+                text.textContent = 'Light Mode';
+            } else {
+                icon.textContent = '🌙';
+                text.textContent = 'Dark Mode';
+            }
+        }
+        
+        // Load saved theme
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        
+        if (savedTheme === 'dark') {
+            document.getElementById('themeIcon').textContent = '☀️';
+            document.getElementById('themeText').textContent = 'Light Mode';
+        }
+        
+        // Navigation
+        function navigateTo(sectionId) {
+            const section = document.getElementById(sectionId);
+            if (section) {
+                section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                
+                // Update active state
+                document.querySelectorAll('.nav-item').forEach(item => {
+                    item.classList.remove('active');
+                });
+                event.target.classList.add('active');
+                
+                // Close mobile menu
+                document.getElementById('sidebar').classList.remove('mobile-open');
+            }
+        }
+        
+        // Mobile Menu
+        function toggleMobileMenu() {
+            document.getElementById('sidebar').classList.toggle('mobile-open');
+        }
+        
+        // Tab Switching
+        function switchTab(tabId, button) {
+            const parent = button.closest('.tabs');
+            
+            // Hide all tabs
+            parent.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Deactivate all buttons
+            parent.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabId).classList.add('active');
+            button.classList.add('active');
+        }
+        
+        // Copy Code
+        function copyCode(button) {
+            const codeBlock = button.closest('.code-block-container').querySelector('.code-block');
+            const text = codeBlock.textContent;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                button.textContent = '✓ Copied!';
+                setTimeout(() => {
+                    button.textContent = 'Copy';
+                }, 2000);
+            });
+        }
+        
+        // Search
+        document.getElementById('searchInput')?.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            const navItems = document.querySelectorAll('.nav-item');
+            
+            navItems.forEach(item => {
+                const text = item.textContent.toLowerCase();
+                item.style.display = text.includes(query) ? 'block' : 'none';
+            });
+        });
+        
+        // Highlight active section on scroll
+        window.addEventListener('scroll', () => {
+            const sections = document.querySelectorAll('.content-section');
+            const navItems = document.querySelectorAll('.nav-item');
+            
+            let current = '';
+            
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                const sectionHeight = section.clientHeight;
+                
+                if (window.pageYOffset >= (sectionTop - 100)) {
+                    current = section.getAttribute('id');
+                }
+            });
+            
+            navItems.forEach(item => {
+                item.classList.remove('active');
+                if (item.getAttribute('href') === `#${current}`) {
+                    item.classList.add('active');
+                }
+            });
+        });
+    </script>
+
+</body>
+</html>
