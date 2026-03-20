@@ -1,0 +1,1731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terms of Service - Certivo</title>
+    <meta name="description" content="Certivo's Terms of Service. Legal agreement governing the use of our motion-based human verification service.">
+    
+    <style>
+        /* ================================================================
+           CYBER SHIELD COLOR SYSTEM
+           ================================================================ */
+        
+        :root {
+            --primary: #0ea5e9;
+            --primary-dark: #0284c7;
+            --primary-light: #38bdf8;
+            
+            --secondary: #8b5cf6;
+            --secondary-dark: #7c3aed;
+            --secondary-light: #a78bfa;
+            
+            --tertiary: #06b6d4;
+            --tertiary-dark: #0891b2;
+            --tertiary-light: #22d3ee;
+            
+            --white: #ffffff;
+            --surface: #f8fafc;
+            --dark-bg: #0f172a;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border: #e2e8f0;
+            
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            
+            --gradient-primary: linear-gradient(135deg, #0ea5e9 0%, #8b5cf6 100%);
+        }
+        
+        [data-theme="dark"] {
+            --white: #0f172a;
+            --surface: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --border: #334155;
+        }
+        
+        /* ================================================================
+           GLOBAL RESET
+           ================================================================ */
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--white);
+            color: var(--text-primary);
+            line-height: 1.7;
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        /* ================================================================
+           NAVIGATION
+           ================================================================ */
+        
+        .nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            z-index: 1000;
+            box-shadow: 0 1px 3px rgba(14, 165, 233, 0.05);
+        }
+        
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+        
+        .nav-logo-icon {
+            width: 36px;
+            height: 36px;
+            background: var(--gradient-primary);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 800;
+            font-size: 20px;
+            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+        }
+        
+        .nav-logo-text {
+            font-size: 22px;
+            font-weight: 700;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 32px;
+            align-items: center;
+        }
+        
+        .nav-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+        
+        .nav-link:hover {
+            color: var(--primary);
+        }
+        
+        /* ================================================================
+           LAYOUT
+           ================================================================ */
+        
+        .container {
+            display: flex;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding-top: 80px;
+        }
+        
+        /* ================================================================
+           SIDEBAR TABLE OF CONTENTS
+           ================================================================ */
+        
+        .sidebar-toc {
+            width: 300px;
+            position: sticky;
+            top: 100px;
+            height: fit-content;
+            padding: 40px 20px 40px 40px;
+            max-height: calc(100vh - 120px);
+            overflow-y: auto;
+        }
+        
+        .toc-header {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+        }
+        
+        .toc-list {
+            list-style: none;
+        }
+        
+        .toc-item {
+            margin-bottom: 8px;
+        }
+        
+        .toc-link {
+            display: block;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            padding: 8px 12px;
+            border-left: 2px solid transparent;
+            transition: all 0.2s;
+            line-height: 1.4;
+        }
+        
+        .toc-link:hover {
+            color: var(--primary);
+            border-left-color: var(--primary);
+            background: rgba(14, 165, 233, 0.05);
+        }
+        
+        .toc-link.active {
+            color: var(--primary);
+            font-weight: 600;
+            border-left-color: var(--primary);
+            background: rgba(14, 165, 233, 0.1);
+        }
+        
+        /* ================================================================
+           MAIN CONTENT
+           ================================================================ */
+        
+        .main-content {
+            flex: 1;
+            max-width: 800px;
+            padding: 40px 60px 100px 60px;
+        }
+        
+        .breadcrumb {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 32px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+        
+        .breadcrumb a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+        
+        .page-header {
+            margin-bottom: 48px;
+        }
+        
+        .page-title {
+            font-size: 48px;
+            font-weight: 800;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            line-height: 1.2;
+        }
+        
+        .last-updated {
+            display: inline-block;
+            background: rgba(14, 165, 233, 0.1);
+            color: var(--primary);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 24px;
+        }
+        
+        .effective-date {
+            display: inline-block;
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+        
+        .page-intro {
+            font-size: 18px;
+            color: var(--text-secondary);
+            line-height: 1.8;
+            margin-bottom: 32px;
+        }
+        
+        .quick-links {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin: 32px 0;
+        }
+        
+        .quick-link {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 16px;
+            border-radius: 12px;
+            text-decoration: none;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .quick-link:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(14, 165, 233, 0.15);
+        }
+        
+        .quick-link-icon {
+            font-size: 24px;
+        }
+        
+        .quick-link-text {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        /* ================================================================
+           SECTIONS
+           ================================================================ */
+        
+        .terms-section {
+            margin-bottom: 56px;
+            scroll-margin-top: 100px;
+        }
+        
+        .section-number {
+            display: inline-block;
+            background: var(--gradient-primary);
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 16px;
+            margin-right: 12px;
+        }
+        
+        h2 {
+            font-size: 32px;
+            font-weight: 800;
+            color: var(--text-primary);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+        }
+        
+        h3 {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin: 32px 0 16px 0;
+        }
+        
+        h4 {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 24px 0 12px 0;
+        }
+        
+        p {
+            font-size: 16px;
+            color: var(--text-secondary);
+            line-height: 1.8;
+            margin-bottom: 16px;
+        }
+        
+        ul, ol {
+            margin: 16px 0 16px 24px;
+            color: var(--text-secondary);
+        }
+        
+        li {
+            margin-bottom: 12px;
+            padding-left: 8px;
+            line-height: 1.7;
+        }
+        
+        strong {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+        
+        code {
+            background: rgba(14, 165, 233, 0.1);
+            color: var(--primary);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            font-family: 'Courier New', monospace;
+        }
+        
+        /* ================================================================
+           CALLOUT BOXES
+           ================================================================ */
+        
+        .info-box {
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);
+            border: 1px solid var(--primary);
+            border-left: 4px solid var(--primary);
+            padding: 24px;
+            border-radius: 8px;
+            margin: 32px 0;
+        }
+        
+        .info-box-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .info-box-content {
+            font-size: 15px;
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+        
+        .highlight-box {
+            background: rgba(6, 182, 212, 0.05);
+            border: 1px solid var(--tertiary);
+            border-left: 4px solid var(--tertiary);
+            padding: 24px;
+            border-radius: 8px;
+            margin: 32px 0;
+        }
+        
+        .highlight-box-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--tertiary);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .warning-box {
+            background: rgba(245, 158, 11, 0.05);
+            border: 1px solid var(--warning);
+            border-left: 4px solid var(--warning);
+            padding: 24px;
+            border-radius: 8px;
+            margin: 32px 0;
+        }
+        
+        .warning-box-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--warning);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .error-box {
+            background: rgba(239, 68, 68, 0.05);
+            border: 1px solid var(--error);
+            border-left: 4px solid var(--error);
+            padding: 24px;
+            border-radius: 8px;
+            margin: 32px 0;
+        }
+        
+        .error-box-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--error);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* ================================================================
+           TABLE
+           ================================================================ */
+        
+        .data-table {
+            width: 100%;
+            margin: 24px 0;
+            border-collapse: collapse;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        .data-table thead {
+            background: var(--surface);
+        }
+        
+        .data-table th {
+            padding: 16px;
+            text-align: left;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .data-table td {
+            padding: 16px;
+            font-size: 14px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border);
+            line-height: 1.6;
+        }
+        
+        .data-table tr:last-child td {
+            border-bottom: none;
+        }
+        
+        /* ================================================================
+           ACCEPTANCE BOX
+           ================================================================ */
+        
+        .acceptance-box {
+            background: var(--surface);
+            border: 2px solid var(--primary);
+            border-radius: 16px;
+            padding: 32px;
+            margin: 40px 0;
+        }
+        
+        .acceptance-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .acceptance-content {
+            font-size: 15px;
+            color: var(--text-secondary);
+            line-height: 1.7;
+            margin-bottom: 20px;
+        }
+        
+        .acceptance-list {
+            list-style: none;
+            margin: 16px 0;
+        }
+        
+        .acceptance-list li {
+            padding-left: 28px;
+            position: relative;
+            margin-bottom: 12px;
+        }
+        
+        .acceptance-list li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: var(--success);
+            font-weight: 700;
+            font-size: 18px;
+        }
+        
+        /* ================================================================
+           FOOTER
+           ================================================================ */
+        
+        .footer {
+            background: #0d1117;
+            color: #8b949e;
+            padding: 64px 40px;
+            text-align: center;
+            margin-top: 80px;
+        }
+        
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .footer-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            justify-content: center;
+            margin-bottom: 28px;
+        }
+        
+        .footer-logo-icon {
+            width: 32px;
+            height: 32px;
+            background: var(--gradient-primary);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 800;
+            font-size: 18px;
+        }
+        
+        .footer-logo-text {
+            font-size: 20px;
+            font-weight: 700;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .footer-links {
+            display: flex;
+            gap: 32px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 24px;
+        }
+        
+        .footer-link {
+            color: #8b949e;
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+        
+        .footer-link:hover {
+            color: var(--primary);
+        }
+        
+        /* ================================================================
+           RESPONSIVE
+           ================================================================ */
+        
+        @media (max-width: 968px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .sidebar-toc {
+                position: relative;
+                top: 0;
+                width: 100%;
+                padding: 20px;
+                background: var(--surface);
+                border-bottom: 1px solid var(--border);
+                max-height: none;
+            }
+            
+            .main-content {
+                padding: 40px 20px;
+            }
+            
+            .page-title {
+                font-size: 36px;
+            }
+            
+            .nav-links {
+                display: none;
+            }
+        }
+        
+        @media print {
+            .nav, .sidebar-toc, .quick-links, .footer {
+                display: none;
+            }
+            
+            .main-content {
+                max-width: 100%;
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- NAVIGATION -->
+    <nav class="nav">
+        <div class="nav-container">
+            <a href="landing.html" class="nav-logo">
+                <div class="nav-logo-icon">C</div>
+                <div class="nav-logo-text">Certivo</div>
+            </a>
+            
+            <div class="nav-links">
+                <a href="landing.html" class="nav-link">Home</a>
+                <a href="documentation.html" class="nav-link">Docs</a>
+                <a href="privacy-policy.html" class="nav-link">Privacy</a>
+                <a href="terms-of-service.html" class="nav-link">Terms</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- MAIN CONTAINER -->
+    <div class="container">
+        <!-- SIDEBAR TABLE OF CONTENTS -->
+        <aside class="sidebar-toc">
+            <div class="toc-header">Table of Contents</div>
+            <ul class="toc-list">
+                <li class="toc-item"><a href="#acceptance" class="toc-link" onclick="scrollToSection('acceptance', event)">Acceptance of Terms</a></li>
+                <li class="toc-item"><a href="#definitions" class="toc-link" onclick="scrollToSection('definitions', event)">Definitions</a></li>
+                <li class="toc-item"><a href="#accounts" class="toc-link" onclick="scrollToSection('accounts', event)">Account Registration</a></li>
+                <li class="toc-item"><a href="#services" class="toc-link" onclick="scrollToSection('services', event)">Services Description</a></li>
+                <li class="toc-item"><a href="#acceptable-use" class="toc-link" onclick="scrollToSection('acceptable-use', event)">Acceptable Use Policy</a></li>
+                <li class="toc-item"><a href="#api-usage" class="toc-link" onclick="scrollToSection('api-usage', event)">API Usage</a></li>
+                <li class="toc-item"><a href="#billing" class="toc-link" onclick="scrollToSection('billing', event)">Billing & Payment</a></li>
+                <li class="toc-item"><a href="#intellectual-property" class="toc-link" onclick="scrollToSection('intellectual-property', event)">Intellectual Property</a></li>
+                <li class="toc-item"><a href="#data-processing" class="toc-link" onclick="scrollToSection('data-processing', event)">Data Processing</a></li>
+                <li class="toc-item"><a href="#warranties" class="toc-link" onclick="scrollToSection('warranties', event)">Warranties & SLA</a></li>
+                <li class="toc-item"><a href="#liability" class="toc-link" onclick="scrollToSection('liability', event)">Limitation of Liability</a></li>
+                <li class="toc-item"><a href="#indemnification" class="toc-link" onclick="scrollToSection('indemnification', event)">Indemnification</a></li>
+                <li class="toc-item"><a href="#termination" class="toc-link" onclick="scrollToSection('termination', event)">Termination</a></li>
+                <li class="toc-item"><a href="#disputes" class="toc-link" onclick="scrollToSection('disputes', event)">Dispute Resolution</a></li>
+                <li class="toc-item"><a href="#general" class="toc-link" onclick="scrollToSection('general', event)">General Provisions</a></li>
+                <li class="toc-item"><a href="#contact" class="toc-link" onclick="scrollToSection('contact', event)">Contact Information</a></li>
+            </ul>
+        </aside>
+
+        <!-- MAIN CONTENT -->
+        <main class="main-content">
+            <!-- BREADCRUMB -->
+            <div class="breadcrumb">
+                <a href="landing.html">Home</a>
+                <span>→</span>
+                <span>Terms of Service</span>
+            </div>
+
+            <!-- PAGE HEADER -->
+            <div class="page-header">
+                <h1 class="page-title">Terms of Service</h1>
+                <div class="last-updated">Last Updated: March 20, 2026</div>
+                <span class="effective-date">Effective: March 20, 2026</span>
+                <p class="page-intro">
+                    These Terms of Service ("Terms") govern your access to and use of Certivo's motion-based human verification services. By using our Services, you agree to be bound by these Terms.
+                </p>
+            </div>
+
+            <!-- QUICK LINKS -->
+            <div class="quick-links">
+                <a href="#acceptable-use" class="quick-link">
+                    <span class="quick-link-icon">📋</span>
+                    <span class="quick-link-text">Usage Policy</span>
+                </a>
+                <a href="#billing" class="quick-link">
+                    <span class="quick-link-icon">💳</span>
+                    <span class="quick-link-text">Billing Terms</span>
+                </a>
+                <a href="#warranties" class="quick-link">
+                    <span class="quick-link-icon">✅</span>
+                    <span class="quick-link-text">SLA & Uptime</span>
+                </a>
+                <a href="javascript:window.print()" class="quick-link">
+                    <span class="quick-link-icon">🖨️</span>
+                    <span class="quick-link-text">Print Terms</span>
+                </a>
+            </div>
+
+            <!-- SECTION 1: ACCEPTANCE -->
+            <section id="acceptance" class="terms-section">
+                <h2>
+                    <span class="section-number">1</span>
+                    Acceptance of Terms
+                </h2>
+                <p>
+                    By accessing or using Certivo's services (the "Services"), including our website, API, SDKs, and related services, you agree to be bound by these Terms of Service and all applicable laws and regulations.
+                </p>
+                
+                <div class="acceptance-box">
+                    <div class="acceptance-title">
+                        <span style="font-size: 32px;">📝</span>
+                        Agreement Acknowledgment
+                    </div>
+                    <p class="acceptance-content">
+                        By using Certivo, you acknowledge that you have read, understood, and agree to be bound by:
+                    </p>
+                    <ul class="acceptance-list">
+                        <li>These Terms of Service</li>
+                        <li>Our Privacy Policy</li>
+                        <li>Our Acceptable Use Policy</li>
+                        <li>Any additional terms presented to you when using specific features</li>
+                    </ul>
+                </div>
+
+                <h3>1.1 Eligibility</h3>
+                <p>
+                    To use our Services, you must:
+                </p>
+                <ul>
+                    <li>Be at least 18 years old (or the age of majority in your jurisdiction)</li>
+                    <li>Have the legal capacity to enter into binding contracts</li>
+                    <li>Not be prohibited from using our Services under applicable laws</li>
+                    <li>Represent an organization with authority to bind that organization to these Terms</li>
+                </ul>
+
+                <h3>1.2 Modifications to Terms</h3>
+                <p>
+                    We reserve the right to modify these Terms at any time. Material changes will be notified via:
+                </p>
+                <ul>
+                    <li>Email to your registered account email address</li>
+                    <li>Prominent notice on our website or dashboard</li>
+                    <li>In-app notifications</li>
+                </ul>
+                <p>
+                    Continued use of the Services after changes take effect constitutes acceptance of the modified Terms. If you do not agree with the changes, you must stop using our Services and may terminate your account.
+                </p>
+            </section>
+
+            <!-- SECTION 2: DEFINITIONS -->
+            <section id="definitions" class="terms-section">
+                <h2>
+                    <span class="section-number">2</span>
+                    Definitions
+                </h2>
+                <p>
+                    For purposes of these Terms:
+                </p>
+                <ul>
+                    <li><strong>"Certivo," "we," "us," or "our"</strong> means Certivo, Inc., a Delaware corporation.</li>
+                    <li><strong>"Services"</strong> means Certivo's motion-based human verification platform, including our API, SDKs, website, dashboard, and documentation.</li>
+                    <li><strong>"Customer" or "you"</strong> means the individual or entity that has registered for an account and agreed to these Terms.</li>
+                    <li><strong>"End User"</strong> means individuals who complete verification challenges through our Services at your request.</li>
+                    <li><strong>"API"</strong> means Certivo's application programming interface and associated documentation.</li>
+                    <li><strong>"Verification"</strong> means the process of determining whether an End User is a genuine human using motion-based challenges.</li>
+                    <li><strong>"Trust Score"</strong> means the confidence score (0-100) returned by our Services indicating the likelihood an End User is human.</li>
+                    <li><strong>"Account"</strong> means your Certivo account used to access and manage the Services.</li>
+                </ul>
+            </section>
+
+            <!-- SECTION 3: ACCOUNTS -->
+            <section id="accounts" class="terms-section">
+                <h2>
+                    <span class="section-number">3</span>
+                    Account Registration and Security
+                </h2>
+                
+                <h3>3.1 Account Creation</h3>
+                <p>
+                    To use the Services, you must create an account by providing:
+                </p>
+                <ul>
+                    <li>Accurate and complete registration information</li>
+                    <li>A valid email address</li>
+                    <li>Payment information (for paid plans)</li>
+                    <li>Company information (for business accounts)</li>
+                </ul>
+
+                <h3>3.2 Account Security</h3>
+                <p>
+                    You are responsible for:
+                </p>
+                <ul>
+                    <li>Maintaining the confidentiality of your account credentials and API keys</li>
+                    <li>All activities that occur under your account</li>
+                    <li>Notifying us immediately of any unauthorized access or security breach</li>
+                    <li>Ensuring your account information remains accurate and up-to-date</li>
+                </ul>
+
+                <div class="warning-box">
+                    <div class="warning-box-title">
+                        <span>⚠️</span>
+                        API Key Security
+                    </div>
+                    <div class="info-box-content">
+                        <strong>Never share your API keys publicly.</strong> API keys provide access to your account and usage will be billed to you. Store keys securely and rotate them regularly. If you suspect a key has been compromised, revoke it immediately from your dashboard.
+                    </div>
+                </div>
+
+                <h3>3.3 Account Types</h3>
+                <p>
+                    We offer the following account types:
+                </p>
+                <ul>
+                    <li><strong>Free Tier:</strong> Limited usage for testing and development</li>
+                    <li><strong>Starter:</strong> For small businesses and startups</li>
+                    <li><strong>Pro:</strong> For growing businesses with higher volume needs</li>
+                    <li><strong>Enterprise:</strong> Custom solutions with dedicated support and SLAs</li>
+                </ul>
+            </section>
+
+            <!-- SECTION 4: SERVICES -->
+            <section id="services" class="terms-section">
+                <h2>
+                    <span class="section-number">4</span>
+                    Services Description
+                </h2>
+
+                <h3>4.1 What We Provide</h3>
+                <p>
+                    Certivo provides motion-based human verification services that:
+                </p>
+                <ul>
+                    <li>Generate randomized verification challenges for End Users</li>
+                    <li>Analyze video responses using computer vision and AI</li>
+                    <li>Return trust scores and verification results via API</li>
+                    <li>Detect fraudulent activity and bot attacks</li>
+                    <li>Provide analytics and reporting dashboards</li>
+                    <li>Offer webhook notifications for verification events</li>
+                </ul>
+
+                <h3>4.2 How It Works</h3>
+                <ol>
+                    <li><strong>Challenge Generation:</strong> Your application requests a verification challenge via our API</li>
+                    <li><strong>End User Response:</strong> The End User completes the motion-based challenge (e.g., "Turn left")</li>
+                    <li><strong>Video Analysis:</strong> Our AI analyzes the video in real-time for liveness and motion</li>
+                    <li><strong>Result Delivery:</strong> We return a trust score and pass/fail result to your application</li>
+                    <li><strong>Decision Making:</strong> Your application decides how to proceed based on the result</li>
+                </ol>
+
+                <h3>4.3 Service Availability</h3>
+                <p>
+                    We strive to maintain high availability, but the Services are provided "as is" and we do not guarantee:
+                </p>
+                <ul>
+                    <li>Uninterrupted or error-free operation</li>
+                    <li>That all defects will be corrected</li>
+                    <li>That the Services will meet your specific requirements</li>
+                </ul>
+                <p>
+                    Planned maintenance will be announced in advance when possible. See Section 10 for our SLA commitments.
+                </p>
+            </section>
+
+            <!-- SECTION 5: ACCEPTABLE USE -->
+            <section id="acceptable-use" class="terms-section">
+                <h2>
+                    <span class="section-number">5</span>
+                    Acceptable Use Policy
+                </h2>
+
+                <h3>5.1 Permitted Uses</h3>
+                <p>
+                    You may use the Services to:
+                </p>
+                <ul>
+                    <li>Verify that users are genuine humans before granting access to resources</li>
+                    <li>Prevent bot attacks, fraud, and abuse on your platform</li>
+                    <li>Protect limited resources (airdrops, ticket sales, giveaways)</li>
+                    <li>Ensure one-human-one-vote in polls and elections</li>
+                    <li>Prevent account creation spam and fake signups</li>
+                </ul>
+
+                <h3>5.2 Prohibited Uses</h3>
+                <p>
+                    You may NOT use the Services to:
+                </p>
+
+                <div class="error-box">
+                    <div class="error-box-title">
+                        <span>🚫</span>
+                        Strictly Prohibited Activities
+                    </div>
+                    <div class="info-box-content">
+                        <ul style="margin: 0;">
+                            <li>Violate any applicable laws, regulations, or third-party rights</li>
+                            <li>Discriminate against protected classes (race, religion, disability, etc.)</li>
+                            <li>Collect biometric data for surveillance or tracking purposes</li>
+                            <li>Use the Services for age verification of minors</li>
+                            <li>Reverse engineer, decompile, or attempt to extract our algorithms</li>
+                            <li>Circumvent rate limits or usage restrictions</li>
+                            <li>Share, resell, or sublicense access to the Services</li>
+                            <li>Use the Services to create competing verification products</li>
+                            <li>Store or use End User video data beyond verification purposes</li>
+                            <li>Interfere with or disrupt the Services or servers</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <h3>5.3 End User Privacy</h3>
+                <p>
+                    You must:
+                </p>
+                <ul>
+                    <li>Obtain necessary consents from End Users before using our Services</li>
+                    <li>Provide a clear privacy policy explaining how you use verification services</li>
+                    <li>Inform End Users that video is analyzed in real-time and not stored</li>
+                    <li>Comply with all applicable data protection laws (GDPR, CCPA, etc.)</li>
+                    <li>Not use verification results to make decisions about protected characteristics</li>
+                </ul>
+
+                <h3>5.4 Enforcement</h3>
+                <p>
+                    We reserve the right to:
+                </p>
+                <ul>
+                    <li>Investigate suspected violations of this policy</li>
+                    <li>Suspend or terminate accounts that violate these Terms</li>
+                    <li>Remove or disable access to violating content</li>
+                    <li>Report illegal activity to law enforcement</li>
+                    <li>Cooperate with legal investigations</li>
+                </ul>
+            </section>
+
+            <!-- SECTION 6: API USAGE -->
+            <section id="api-usage" class="terms-section">
+                <h2>
+                    <span class="section-number">6</span>
+                    API Usage and Restrictions
+                </h2>
+
+                <h3>6.1 API Access</h3>
+                <p>
+                    We grant you a limited, non-exclusive, non-transferable license to access and use our API in accordance with these Terms and our API documentation.
+                </p>
+
+                <h3>6.2 Rate Limits</h3>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Plan</th>
+                            <th>Requests/Minute</th>
+                            <th>Requests/Hour</th>
+                            <th>Monthly Verifications</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Free</strong></td>
+                            <td>10</td>
+                            <td>100</td>
+                            <td>1,000</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Starter</strong></td>
+                            <td>60</td>
+                            <td>1,000</td>
+                            <td>10,000</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Pro</strong></td>
+                            <td>300</td>
+                            <td>10,000</td>
+                            <td>100,000</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Enterprise</strong></td>
+                            <td>Custom</td>
+                            <td>Custom</td>
+                            <td>Custom</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>6.3 API Restrictions</h3>
+                <p>
+                    You must NOT:
+                </p>
+                <ul>
+                    <li>Exceed your plan's rate limits or monthly quotas</li>
+                    <li>Make excessive or abusive API calls</li>
+                    <li>Cache verification results for longer than 24 hours</li>
+                    <li>Share API keys between different applications or organizations</li>
+                    <li>Use API keys in client-side code or public repositories</li>
+                    <li>Attempt to circumvent usage tracking or billing</li>
+                </ul>
+
+                <h3>6.4 API Changes</h3>
+                <p>
+                    We may modify the API with reasonable notice:
+                </p>
+                <ul>
+                    <li><strong>Breaking Changes:</strong> 90 days notice via email and changelog</li>
+                    <li><strong>New Features:</strong> Announced in release notes</li>
+                    <li><strong>Deprecations:</strong> 180 days notice before removal</li>
+                    <li><strong>Security Fixes:</strong> May be deployed immediately</li>
+                </ul>
+            </section>
+
+            <!-- SECTION 7: BILLING -->
+            <section id="billing" class="terms-section">
+                <h2>
+                    <span class="section-number">7</span>
+                    Billing and Payment
+                </h2>
+
+                <h3>7.1 Fees</h3>
+                <p>
+                    Pricing is based on your selected plan and usage:
+                </p>
+                <ul>
+                    <li><strong>Subscription Fees:</strong> Billed monthly or annually in advance</li>
+                    <li><strong>Usage Fees:</strong> Billed monthly for verifications exceeding plan limits</li>
+                    <li><strong>Overage Charges:</strong> $0.05 per verification beyond included quota</li>
+                </ul>
+
+                <h3>7.2 Payment Terms</h3>
+                <ul>
+                    <li>All fees are in U.S. Dollars (USD)</li>
+                    <li>Payment is due immediately upon invoice</li>
+                    <li>We accept major credit cards and ACH transfers (Enterprise only)</li>
+                    <li>Subscription fees are non-refundable</li>
+                    <li>Prices are subject to change with 30 days notice</li>
+                </ul>
+
+                <h3>7.3 Taxes</h3>
+                <p>
+                    Fees do not include taxes. You are responsible for all applicable sales, use, value-added, and other taxes. We will add applicable taxes to invoices unless you provide a valid tax exemption certificate.
+                </p>
+
+                <h3>7.4 Late Payment</h3>
+                <p>
+                    If payment is not received within 15 days of the due date:
+                </p>
+                <ul>
+                    <li>We may charge interest at 1.5% per month (or the maximum allowed by law)</li>
+                    <li>Your account may be suspended until payment is received</li>
+                    <li>We may terminate your account after 30 days of non-payment</li>
+                </ul>
+
+                <h3>7.5 Refunds</h3>
+                <p>
+                    We offer refunds in limited circumstances:
+                </p>
+                <ul>
+                    <li><strong>Service Outages:</strong> Prorated credit for downtime exceeding SLA (see Section 10)</li>
+                    <li><strong>Billing Errors:</strong> Full refund of incorrect charges</li>
+                    <li><strong>Disputed Charges:</strong> Review on case-by-case basis</li>
+                </ul>
+
+                <div class="info-box">
+                    <div class="info-box-title">
+                        <span>💳</span>
+                        Payment Processing
+                    </div>
+                    <div class="info-box-content">
+                        Payments are processed securely through Stripe. We do not store your full credit card details on our servers. See Stripe's Terms of Service for more information about payment processing.
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 8: INTELLECTUAL PROPERTY -->
+            <section id="intellectual-property" class="terms-section">
+                <h2>
+                    <span class="section-number">8</span>
+                    Intellectual Property Rights
+                </h2>
+
+                <h3>8.1 Our Rights</h3>
+                <p>
+                    Certivo retains all rights, title, and interest in:
+                </p>
+                <ul>
+                    <li>The Services, including all software, algorithms, and technology</li>
+                    <li>Our trademarks, logos, and brand assets</li>
+                    <li>Documentation, guides, and educational materials</li>
+                    <li>Anonymized, aggregated data and analytics</li>
+                    <li>Any improvements or modifications to the Services</li>
+                </ul>
+
+                <h3>8.2 Your Rights</h3>
+                <p>
+                    You retain all rights to:
+                </p>
+                <ul>
+                    <li>Your application and content</li>
+                    <li>Your branding and intellectual property</li>
+                    <li>Customer data you provide to the Services</li>
+                </ul>
+
+                <h3>8.3 License to Use</h3>
+                <p>
+                    Subject to these Terms, we grant you a limited, non-exclusive, non-transferable, non-sublicensable license to:
+                </p>
+                <ul>
+                    <li>Access and use the Services for your internal business purposes</li>
+                    <li>Use our SDKs and libraries in your applications</li>
+                    <li>Display Certivo branding as required by our integration (e.g., "Verified by Certivo")</li>
+                </ul>
+
+                <h3>8.4 Feedback</h3>
+                <p>
+                    If you provide feedback, suggestions, or ideas about the Services, we may use them without obligation or compensation to you. You grant us a perpetual, worldwide, royalty-free license to use, modify, and incorporate such feedback.
+                </p>
+
+                <h3>8.5 Copyright Infringement</h3>
+                <p>
+                    If you believe content on our Services infringes your copyright, contact us at:
+                </p>
+                <p>
+                    <strong>Email:</strong> dmca@certivo.com<br>
+                    <strong>Subject:</strong> DMCA Takedown Notice
+                </p>
+            </section>
+
+            <!-- SECTION 9: DATA PROCESSING -->
+            <section id="data-processing" class="terms-section">
+                <h2>
+                    <span class="section-number">9</span>
+                    Data Processing Agreement
+                </h2>
+
+                <h3>9.1 Roles and Responsibilities</h3>
+                <p>
+                    For End User data collected during verification:
+                </p>
+                <ul>
+                    <li><strong>You are the Data Controller:</strong> You determine the purposes and means of processing</li>
+                    <li><strong>We are the Data Processor:</strong> We process data on your behalf per your instructions</li>
+                </ul>
+
+                <h3>9.2 Data Processing Instructions</h3>
+                <p>
+                    We will process End User data only:
+                </p>
+                <ul>
+                    <li>As necessary to provide the Services</li>
+                    <li>In accordance with your API requests</li>
+                    <li>As required by applicable law</li>
+                    <li>As otherwise instructed by you in writing</li>
+                </ul>
+
+                <h3>9.3 Your Obligations</h3>
+                <p>
+                    You must:
+                </p>
+                <ul>
+                    <li>Obtain necessary consents from End Users</li>
+                    <li>Provide adequate privacy notices</li>
+                    <li>Ensure lawful processing of personal data</li>
+                    <li>Respond to End User data subject requests (access, deletion, etc.)</li>
+                    <li>Comply with GDPR, CCPA, and other applicable data protection laws</li>
+                </ul>
+
+                <h3>9.4 Data Security</h3>
+                <p>
+                    We implement appropriate technical and organizational measures to protect data, including:
+                </p>
+                <ul>
+                    <li>Encryption in transit (TLS 1.3+) and at rest (AES-256)</li>
+                    <li>Access controls and authentication</li>
+                    <li>Regular security audits and penetration testing</li>
+                    <li>Employee training and confidentiality agreements</li>
+                    <li>Incident response and breach notification procedures</li>
+                </ul>
+
+                <h3>9.5 Data Retention</h3>
+                <p>
+                    We retain data according to our Privacy Policy:
+                </p>
+                <ul>
+                    <li><strong>Video recordings:</strong> Never stored (analyzed in real-time only)</li>
+                    <li><strong>Verification metadata:</strong> 90 days</li>
+                    <li><strong>Device fingerprints:</strong> 1 year</li>
+                    <li><strong>API logs:</strong> 30 days</li>
+                </ul>
+
+                <h3>9.6 Sub-processors</h3>
+                <p>
+                    We use the following sub-processors:
+                </p>
+                <ul>
+                    <li><strong>Amazon Web Services (AWS):</strong> Cloud hosting and infrastructure</li>
+                    <li><strong>Stripe:</strong> Payment processing</li>
+                    <li><strong>SendGrid:</strong> Email delivery</li>
+                </ul>
+                <p>
+                    We will notify you of changes to sub-processors with 30 days notice.
+                </p>
+            </section>
+
+            <!-- SECTION 10: WARRANTIES & SLA -->
+            <section id="warranties" class="terms-section">
+                <h2>
+                    <span class="section-number">10</span>
+                    Warranties and Service Level Agreement
+                </h2>
+
+                <h3>10.1 Service Level Agreement (SLA)</h3>
+                <p>
+                    We commit to the following uptime guarantees:
+                </p>
+
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Plan</th>
+                            <th>Uptime Guarantee</th>
+                            <th>Monthly Credit</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Free & Starter</strong></td>
+                            <td>99.0%</td>
+                            <td>None</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Pro</strong></td>
+                            <td>99.5%</td>
+                            <td>10% if below 99.5%</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Enterprise</strong></td>
+                            <td>99.9%</td>
+                            <td>25% if below 99.9%, 50% if below 99.0%</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <p>
+                    <strong>Uptime</strong> is measured as the percentage of minutes in a calendar month that the Services are available. Scheduled maintenance (announced 48 hours in advance) does not count against uptime.
+                </p>
+
+                <h3>10.2 Performance Targets</h3>
+                <ul>
+                    <li><strong>API Response Time:</strong> &lt;500ms for 95% of requests (Pro and Enterprise only)</li>
+                    <li><strong>Verification Processing:</strong> &lt;3 seconds average (all plans)</li>
+                    <li><strong>Support Response Time:</strong> See Section 10.4</li>
+                </ul>
+
+                <h3>10.3 SLA Credits</h3>
+                <p>
+                    To request an SLA credit:
+                </p>
+                <ul>
+                    <li>Submit a request within 30 days of the incident</li>
+                    <li>Provide evidence of downtime (error logs, screenshots)</li>
+                    <li>Credits are applied to future invoices, not refunded in cash</li>
+                    <li>Credits are your sole remedy for SLA breaches</li>
+                </ul>
+
+                <h3>10.4 Support</h3>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Plan</th>
+                            <th>Support Channel</th>
+                            <th>Response Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Free</strong></td>
+                            <td>Community forum</td>
+                            <td>Best effort</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Starter</strong></td>
+                            <td>Email support</td>
+                            <td>2 business days</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Pro</strong></td>
+                            <td>Email + chat</td>
+                            <td>4 hours (business hours)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Enterprise</strong></td>
+                            <td>Dedicated account manager + 24/7 support</td>
+                            <td>1 hour (critical), 4 hours (standard)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>10.5 Disclaimer of Warranties</h3>
+                <div class="warning-box">
+                    <div class="warning-box-title">
+                        <span>⚠️</span>
+                        Important Legal Disclaimer
+                    </div>
+                    <div class="info-box-content">
+                        EXCEPT AS EXPRESSLY PROVIDED IN THE SLA, THE SERVICES ARE PROVIDED "AS IS" WITHOUT WARRANTIES OF ANY KIND, WHETHER EXPRESS, IMPLIED, STATUTORY, OR OTHERWISE. WE DISCLAIM ALL WARRANTIES, INCLUDING IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+                        <br><br>
+                        WE DO NOT WARRANT THAT THE SERVICES WILL BE UNINTERRUPTED, ERROR-FREE, OR 100% ACCURATE IN DETECTING BOTS OR HUMANS.
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 11: LIABILITY -->
+            <section id="liability" class="terms-section">
+                <h2>
+                    <span class="section-number">11</span>
+                    Limitation of Liability
+                </h2>
+
+                <h3>11.1 Damages Cap</h3>
+                <p>
+                    TO THE MAXIMUM EXTENT PERMITTED BY LAW, OUR TOTAL LIABILITY TO YOU FOR ANY CLAIMS ARISING FROM OR RELATED TO THE SERVICES SHALL NOT EXCEED:
+                </p>
+                <ul>
+                    <li><strong>Free Tier:</strong> $100</li>
+                    <li><strong>Paid Plans:</strong> The amount you paid us in the 12 months preceding the claim</li>
+                </ul>
+
+                <h3>11.2 Exclusion of Consequential Damages</h3>
+                <div class="error-box">
+                    <div class="error-box-title">
+                        <span>🚫</span>
+                        Excluded Damages
+                    </div>
+                    <div class="info-box-content">
+                        IN NO EVENT SHALL CERTIVO BE LIABLE FOR ANY:
+                        <br><br>
+                        • Indirect, incidental, special, or consequential damages<br>
+                        • Loss of profits, revenue, or business opportunities<br>
+                        • Loss of data or information<br>
+                        • Business interruption<br>
+                        • Reputational harm<br>
+                        • Cost of substitute services
+                        <br><br>
+                        EVEN IF WE HAVE BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+                    </div>
+                </div>
+
+                <h3>11.3 Exceptions</h3>
+                <p>
+                    These limitations do not apply to:
+                </p>
+                <ul>
+                    <li>Your breach of intellectual property rights</li>
+                    <li>Your violation of the Acceptable Use Policy</li>
+                    <li>Your indemnification obligations (Section 12)</li>
+                    <li>Gross negligence or willful misconduct</li>
+                    <li>Death or personal injury caused by our negligence</li>
+                </ul>
+            </section>
+
+            <!-- SECTION 12: INDEMNIFICATION -->
+            <section id="indemnification" class="terms-section">
+                <h2>
+                    <span class="section-number">12</span>
+                    Indemnification
+                </h2>
+
+                <h3>12.1 Your Indemnification</h3>
+                <p>
+                    You agree to indemnify, defend, and hold harmless Certivo and its officers, directors, employees, and agents from any claims, damages, losses, liabilities, and expenses (including attorneys' fees) arising from:
+                </p>
+                <ul>
+                    <li>Your use of the Services</li>
+                    <li>Your violation of these Terms</li>
+                    <li>Your violation of any laws or third-party rights</li>
+                    <li>Your application or content</li>
+                    <li>End User claims related to your use of our Services</li>
+                    <li>Your data processing activities</li>
+                </ul>
+
+                <h3>12.2 Our Indemnification</h3>
+                <p>
+                    We will indemnify you against third-party claims that the Services infringe any U.S. patent, copyright, or trademark, provided that:
+                </p>
+                <ul>
+                    <li>You notify us promptly in writing of the claim</li>
+                    <li>You give us sole control of the defense and settlement</li>
+                    <li>You provide reasonable cooperation in the defense</li>
+                </ul>
+                <p>
+                    This indemnification does not apply if the claim arises from:
+                </p>
+                <ul>
+                    <li>Your modification of the Services</li>
+                    <li>Your combination of the Services with other products</li>
+                    <li>Your use of the Services after we notify you to stop</li>
+                </ul>
+            </section>
+
+            <!-- SECTION 13: TERMINATION -->
+            <section id="termination" class="terms-section">
+                <h2>
+                    <span class="section-number">13</span>
+                    Termination
+                </h2>
+
+                <h3>13.1 Termination by You</h3>
+                <p>
+                    You may terminate your account at any time by:
+                </p>
+                <ul>
+                    <li>Canceling your subscription in the dashboard</li>
+                    <li>Emailing support@certivo.com</li>
+                </ul>
+                <p>
+                    Termination is effective at the end of your current billing period. No refunds will be provided for the remaining subscription term.
+                </p>
+
+                <h3>13.2 Termination by Us</h3>
+                <p>
+                    We may suspend or terminate your account immediately if:
+                </p>
+                <ul>
+                    <li>You breach these Terms</li>
+                    <li>You violate the Acceptable Use Policy</li>
+                    <li>Your payment is more than 30 days overdue</li>
+                    <li>You engage in fraudulent or illegal activity</li>
+                    <li>We are required to do so by law</li>
+                    <li>Continuing to provide Services poses a security or legal risk</li>
+                </ul>
+
+                <h3>13.3 Effect of Termination</h3>
+                <p>
+                    Upon termination:
+                </p>
+                <ul>
+                    <li>Your access to the Services will be revoked immediately</li>
+                    <li>All API keys will be deactivated</li>
+                    <li>We will delete your data according to our retention policy (30-90 days)</li>
+                    <li>You must cease all use of the Services and our intellectual property</li>
+                    <li>You remain liable for all fees incurred before termination</li>
+                    <li>Sections that by their nature should survive will survive (liability, indemnification, disputes)</li>
+                </ul>
+
+                <h3>13.4 Data Export</h3>
+                <p>
+                    Before termination, you may export your data via:
+                </p>
+                <ul>
+                    <li>Dashboard export functionality</li>
+                    <li>API data retrieval</li>
+                    <li>Requesting a data package from support@certivo.com</li>
+                </ul>
+                <p>
+                    After termination, we are not obligated to provide access to your data.
+                </p>
+            </section>
+
+            <!-- SECTION 14: DISPUTES -->
+            <section id="disputes" class="terms-section">
+                <h2>
+                    <span class="section-number">14</span>
+                    Dispute Resolution
+                </h2>
+
+                <h3>14.1 Informal Resolution</h3>
+                <p>
+                    Before filing a claim, you agree to contact us at legal@certivo.com to attempt to resolve the dispute informally. We will attempt to resolve the dispute within 60 days.
+                </p>
+
+                <h3>14.2 Binding Arbitration</h3>
+                <p>
+                    If informal resolution fails, disputes will be resolved by binding arbitration rather than in court, except:
+                </p>
+                <ul>
+                    <li>Small claims court disputes (under $10,000)</li>
+                    <li>Intellectual property disputes</li>
+                    <li>Injunctive relief necessary to prevent irreparable harm</li>
+                </ul>
+
+                <h3>14.3 Arbitration Rules</h3>
+                <ul>
+                    <li><strong>Administrator:</strong> American Arbitration Association (AAA)</li>
+                    <li><strong>Rules:</strong> AAA Commercial Arbitration Rules</li>
+                    <li><strong>Location:</strong> San Francisco, California or your location (at your option)</li>
+                    <li><strong>Language:</strong> English</li>
+                    <li><strong>Costs:</strong> Each party bears its own costs; we pay arbitration fees for claims under $75,000</li>
+                </ul>
+
+                <h3>14.4 Class Action Waiver</h3>
+                <div class="warning-box">
+                    <div class="warning-box-title">
+                        <span>⚖️</span>
+                        Class Action Waiver
+                    </div>
+                    <div class="info-box-content">
+                        YOU AND CERTIVO AGREE THAT DISPUTES MUST BE BROUGHT IN THE PARTIES' INDIVIDUAL CAPACITY AND NOT AS A PLAINTIFF OR CLASS MEMBER IN ANY PURPORTED CLASS, COLLECTIVE, OR REPRESENTATIVE PROCEEDING.
+                        <br><br>
+                        You may opt out of this arbitration agreement by emailing legal@certivo.com within 30 days of account creation.
+                    </div>
+                </div>
+
+                <h3>14.5 Governing Law</h3>
+                <p>
+                    These Terms are governed by the laws of the State of Delaware, without regard to conflict of law principles. Any disputes not subject to arbitration shall be brought in the state or federal courts located in San Francisco, California.
+                </p>
+            </section>
+
+            <!-- SECTION 15: GENERAL -->
+            <section id="general" class="terms-section">
+                <h2>
+                    <span class="section-number">15</span>
+                    General Provisions
+                </h2>
+
+                <h3>15.1 Entire Agreement</h3>
+                <p>
+                    These Terms, together with our Privacy Policy and any additional terms you agree to, constitute the entire agreement between you and Certivo and supersede all prior agreements.
+                </p>
+
+                <h3>15.2 Amendments</h3>
+                <p>
+                    We may modify these Terms at any time. Material changes will be notified 30 days in advance. Continued use after changes take effect constitutes acceptance.
+                </p>
+
+                <h3>15.3 Assignment</h3>
+                <p>
+                    You may not assign or transfer these Terms without our prior written consent. We may assign these Terms without restriction. Any attempted assignment in violation of this section is void.
+                </p>
+
+                <h3>15.4 No Waiver</h3>
+                <p>
+                    Our failure to enforce any provision of these Terms does not constitute a waiver of that provision or our right to enforce it later.
+                </p>
+
+                <h3>15.5 Severability</h3>
+                <p>
+                    If any provision of these Terms is found unenforceable, the remaining provisions will continue in full effect, and the unenforceable provision will be modified to reflect our intent as closely as possible.
+                </p>
+
+                <h3>15.6 Force Majeure</h3>
+                <p>
+                    We are not liable for delays or failures in performance resulting from causes beyond our reasonable control, including natural disasters, war, terrorism, labor disputes, or internet service provider failures.
+                </p>
+
+                <h3>15.7 Export Compliance</h3>
+                <p>
+                    You agree to comply with all export and import laws and regulations. You represent that you are not located in, or a national of, any country subject to U.S. embargo or on any U.S. government prohibited party list.
+                </p>
+
+                <h3>15.8 U.S. Government Users</h3>
+                <p>
+                    The Services are "commercial computer software" as defined in FAR 12.212. U.S. Government users acquire the Services with only those rights set forth in these Terms.
+                </p>
+
+                <h3>15.9 Notices</h3>
+                <p>
+                    Notices to you may be sent to your registered email address. Notices to us must be sent to:
+                </p>
+                <p>
+                    Certivo, Inc.<br>
+                    Attn: Legal Department<br>
+                    123 Innovation Drive<br>
+                    San Francisco, CA 94105<br>
+                    legal@certivo.com
+                </p>
+            </section>
+
+            <!-- SECTION 16: CONTACT -->
+            <section id="contact" class="terms-section">
+                <h2>
+                    <span class="section-number">16</span>
+                    Contact Information
+                </h2>
+                <p>
+                    If you have questions about these Terms, please contact us:
+                </p>
+
+                <div class="highlight-box">
+                    <div class="highlight-box-title">
+                        <span>📧</span>
+                        Get in Touch
+                    </div>
+                    <div class="info-box-content">
+                        <strong>General Inquiries:</strong> support@certivo.com<br>
+                        <strong>Legal Questions:</strong> legal@certivo.com<br>
+                        <strong>Privacy Matters:</strong> privacy@certivo.com<br>
+                        <strong>Security Issues:</strong> security@certivo.com<br>
+                        <strong>Billing Support:</strong> billing@certivo.com
+                        <br><br>
+                        <strong>Mailing Address:</strong><br>
+                        Certivo, Inc.<br>
+                        123 Innovation Drive<br>
+                        San Francisco, CA 94105<br>
+                        United States
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-logo">
+                <div class="footer-logo-icon">C</div>
+                <div class="footer-logo-text">Certivo</div>
+            </div>
+            
+            <div class="footer-links">
+                <a href="landing.html" class="footer-link">Home</a>
+                <a href="how-it-works.html" class="footer-link">How It Works</a>
+                <a href="documentation.html" class="footer-link">Documentation</a>
+                <a href="api-reference.html" class="footer-link">API Reference</a>
+                <a href="privacy-policy.html" class="footer-link">Privacy Policy</a>
+                <a href="terms-of-service.html" class="footer-link">Terms of Service</a>
+                <a href="mailto:support@certivo.com" class="footer-link">Contact</a>
+            </div>
+            
+            <p style="margin-top: 32px; font-size: 14px; color: #6e7681;">
+                © 2026 Certivo, Inc. All rights reserved.
+            </p>
+        </div>
+    </footer>
+
+    <!-- JAVASCRIPT -->
+    <script>
+        // Smooth scroll to section
+        function scrollToSection(sectionId, event) {
+            event.preventDefault();
+            const section = document.getElementById(sectionId);
+            if (section) {
+                const offset = 100;
+                const elementPosition = section.getBoundingClientRect().top;
+                const offsetPosition = elementPosition + window.pageYOffset - offset;
+                
+                window.scrollTo({
+                    top: offsetPosition,
+                    behavior: 'smooth'
+                });
+                
+                // Update active state
+                updateActiveLink(sectionId);
+            }
+        }
+        
+        // Update active link in TOC
+        function updateActiveLink(sectionId) {
+            document.querySelectorAll('.toc-link').forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === `#${sectionId}`) {
+                    link.classList.add('active');
+                }
+            });
+        }
+        
+        // Highlight active section on scroll
+        window.addEventListener('scroll', () => {
+            const sections = document.querySelectorAll('.terms-section');
+            let current = '';
+            
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                const sectionHeight = section.clientHeight;
+                
+                if (window.pageYOffset >= (sectionTop - 150)) {
+                    current = section.getAttribute('id');
+                }
+            });
+            
+            if (current) {
+                updateActiveLink(current);
+            }
+        });
+    </script>
+
+</body>
+</html>
