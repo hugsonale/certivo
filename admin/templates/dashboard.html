@@ -66,15 +66,19 @@
 {% endif %}
 
 <!-- Charts -->
-<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
+<div class="charts-grid">
     <div class="chart-container">
         <h3>Verifications (Last 7 Days)</h3>
-        <canvas id="activityChart" height="250"></canvas>
+        <div class="chart-wrapper">
+            <canvas id="activityChart"></canvas>
+        </div>
     </div>
     
     <div class="chart-container">
         <h3>Success vs Failure</h3>
-        <canvas id="breakdownChart" height="250"></canvas>
+        <div class="chart-wrapper">
+            <canvas id="breakdownChart"></canvas>
+        </div>
     </div>
 </div>
 
@@ -88,7 +92,7 @@
     const breakdownLabels = {{ breakdown_data.labels|tojson|safe }};
     const breakdownData = {{ breakdown_data.data|tojson|safe }};
     
-    // Create charts
+    // Create charts with proper configuration
     createLineChart('activityChart', activityLabels, activityData);
     createBarChart('breakdownChart', breakdownLabels, breakdownData);
 </script>
