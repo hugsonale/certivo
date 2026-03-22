@@ -215,7 +215,53 @@ body {
     color: #1e40af;
 }
 
-/* Tables */
+/* ============ CHARTS - FIXED HEIGHT ============ */
+
+/* Charts Grid Layout */
+.charts-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 24px;
+    margin-top: 32px;
+}
+
+/* Chart Container */
+.chart-container {
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+}
+
+.chart-container:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.chart-container h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1a202c;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #f1f5f9;
+}
+
+/* Chart Wrapper - CRITICAL FIX! */
+.chart-wrapper {
+    position: relative;
+    height: 300px; /* FIXED HEIGHT - prevents infinite expansion */
+    width: 100%;
+    overflow: hidden; /* Prevent overflow */
+}
+
+.chart-wrapper canvas {
+    max-height: 300px !important; /* Force maximum height */
+    width: 100% !important;
+}
+
+/* ============ TABLES ============ */
+
 .table-container {
     background: #fff;
     border-radius: 12px;
@@ -321,22 +367,6 @@ tbody tr:hover {
 
 .btn-secondary:hover {
     background: #cbd5e0;
-}
-
-/* Charts */
-.chart-container {
-    background: #fff;
-    border-radius: 12px;
-    padding: 24px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    margin-bottom: 24px;
-}
-
-.chart-container h3 {
-    font-size: 16px;
-    font-weight: 700;
-    color: #1a202c;
-    margin-bottom: 20px;
 }
 
 /* Login page */
@@ -457,16 +487,62 @@ tbody tr:hover {
 .progress-fill.warning { background: #f59e0b; }
 .progress-fill.danger { background: #ef4444; }
 
-/* Responsive */
+/* ============ RESPONSIVE ============ */
+
+@media (max-width: 1200px) {
+    .charts-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 @media (max-width: 768px) {
     .sidebar {
         width: 200px;
     }
+    
     .main-content {
         margin-left: 200px;
         padding: 20px;
     }
+    
     .metrics-grid {
         grid-template-columns: 1fr;
+    }
+    
+    .charts-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .chart-wrapper {
+        height: 250px;
+    }
+    
+    .chart-wrapper canvas {
+        max-height: 250px !important;
+    }
+    
+    .chart-container {
+        padding: 16px;
+    }
+    
+    .chart-container h3 {
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    .sidebar {
+        width: 100%;
+        position: relative;
+        height: auto;
+    }
+    
+    .main-content {
+        margin-left: 0;
+        padding: 16px;
+    }
+    
+    .metric-card .value {
+        font-size: 24px;
     }
 }
