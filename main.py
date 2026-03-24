@@ -9,6 +9,9 @@ from typing import Dict, Any, List, Optional
 import asyncio
 from collections import defaultdict
 import hashlib
+import cv2
+import numpy as np
+
 
 # ============================================================================
 # ENVIRONMENT SETUP (Must be first)
@@ -357,37 +360,22 @@ rate_limiter = RateLimiter()
 
 
 # ============================================================================
-# SECURITY FEATURE 2: VIDEO INTEGRITY CHECKS (10/10)
+# SECURITY FEATURE 2: VIDEO INTEGRITY CHECKS
 # ============================================================================
 
+
+
 def check_video_integrity(video_path: str) -> dict:
-    """
-    Check video for blank frames, static images, or manipulation.
-    
-    FIXED VERSION - More lenient thresholds for legitimate users.
-    
-    Returns:
-        dict: {
-            'valid': bool,
-            'reason': str (if invalid),
-            'metrics': dict
-        }
-    """
     try:
         cap = cv2.VideoCapture(video_path)
         
         if not cap.isOpened():
-            return {
-                'valid': False,
-                'reason': 'Cannot open video file',
-                'metrics': {}
-            }
+            return {'valid': False, 'reason': 'Cannot open video file', 'metrics': {}}
         
         frames = []
         frame_count = 0
         
-        # Read frames
-        while len(frames) < 30:  # Sample first 30 frames
+        while len(frames) < 30:
             ret, frame = cap.read()
             if not ret:
                 break
@@ -397,32 +385,18 @@ def check_video_integrity(video_path: str) -> dict:
         cap.release()
         
         if len(frames) < 5:
-            return {
-                'valid': False,
-                'reason': 'Video too short (less than 5 frames)',
-                'metrics': {'frames': len(frames)}
-            }
+            return {'valid': False, 'reason': 'Video too short (less than 5 frames)', 'metrics': {'frames': len(frames)}}
         
-        # ================================================================
-        # CHECK 1: Brightness variance (detect blank frames)
-        # ================================================================
         brightness_values = [frame.mean() for frame in frames]
         brightness_variance = float(np.var(brightness_values))
         
-        # FIXED: More lenient threshold (was < 5, now < 1.5)
         if brightness_variance < 1.5:
             return {
                 'valid': False,
                 'reason': f'Video appears blank or too uniform (variance: {brightness_variance:.2f})',
-                'metrics': {
-                    'brightness_variance': brightness_variance,
-                    'frames': len(frames)
-                }
+                'metrics': {'brightness_variance': brightness_variance, 'frames': len(frames)}
             }
         
-        # ================================================================
-        # CHECK 2: Motion detection (detect static images)
-        # ================================================================
         motion_scores = []
         for i in range(1, len(frames)):
             diff = cv2.absdiff(frames[i-1], frames[i])
@@ -431,30 +405,21 @@ def check_video_integrity(video_path: str) -> dict:
         
         avg_motion = float(np.mean(motion_scores)) if motion_scores else 0
         
-        # FIXED: More lenient threshold (was < 0.5, now < 0.2)
         if avg_motion < 0.2:
             return {
                 'valid': False,
                 'reason': f'Video appears static (no movement detected, score: {avg_motion:.2f})',
-                'metrics': {
-                    'avg_motion': avg_motion,
-                    'brightness_variance': brightness_variance,
-                    'frames': len(frames)
-                }
+                'metrics': {'avg_motion': avg_motion, 'brightness_variance': brightness_variance, 'frames': len(frames)}
             }
         
-        # ================================================================
-        # CHECK 3: Duplicate frame detection
-        # ================================================================
         duplicate_count = 0
         for i in range(1, len(frames)):
             diff = cv2.absdiff(frames[i-1], frames[i])
-            if diff.mean() < 0.1:  # Nearly identical frames
+            if diff.mean() < 0.1:
                 duplicate_count += 1
         
         duplicate_ratio = duplicate_count / len(frames) if len(frames) > 0 else 0
         
-        # FIXED: More lenient threshold (was > 0.8, now > 0.95)
         if duplicate_ratio > 0.95:
             return {
                 'valid': False,
@@ -467,9 +432,6 @@ def check_video_integrity(video_path: str) -> dict:
                 }
             }
         
-        # ================================================================
-        # PASS - Video integrity checks passed
-        # ================================================================
         return {
             'valid': True,
             'reason': None,
@@ -482,157 +444,7 @@ def check_video_integrity(video_path: str) -> dict:
         }
         
     except Exception as e:
-        return {
-            'valid': False,
-            'reason': f'Error analyzing video: {str(e)}',
-            'metrics': {}
-        }
-    import cv2
-    import numpy as np
-    
-    try:
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
-            return {
-                "valid": False,
-                "reason": "Cannot open video file",
-                "metrics": {}
-            }
-        
-        frames = []
-        frame_hashes = []
-        brightness_values = []
-        
-        # Read up to 60 frames (2 seconds at 30fps)
-        for _ in range(60):
-            ret, frame = cap.read()
-            if not ret:
-                break
-            
-            frames.append(frame)
-            
-            # Calculate frame hash for duplicate detection
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            frame_hash = hashlib.md5(gray.tobytes()).hexdigest()
-            frame_hashes.append(frame_hash)
-            
-            # Calculate brightness
-            brightness = gray.mean()
-            brightness_values.append(brightness)
-        
-        cap.release()
-        
-        if len(frames) < 10:
-            return {
-                "valid": False,
-                "reason": "Video too short (less than 10 frames)",
-                "metrics": {"frames": len(frames)}
-            }
-        
-        # ================================================================
-        # CHECK 1: Blank video detection (all black or all white)
-        # ================================================================
-        avg_brightness = np.mean(brightness_values)
-        
-        if avg_brightness < 10:
-            return {
-                "valid": False,
-                "reason": "Video appears to be blank (all black frames)",
-                "metrics": {
-                    "avg_brightness": avg_brightness,
-                    "frames": len(frames)
-                }
-            }
-        
-        if avg_brightness > 245:
-            return {
-                "valid": False,
-                "reason": "Video appears to be blank (all white frames)",
-                "metrics": {
-                    "avg_brightness": avg_brightness,
-                    "frames": len(frames)
-                }
-            }
-        
-        # ================================================================
-        # CHECK 2: Static video detection (identical frames)
-        # ================================================================
-        unique_hashes = len(set(frame_hashes))
-        duplicate_ratio = 1 - (unique_hashes / len(frame_hashes))
-        
-        if duplicate_ratio > 0.95:  # More than 80% duplicate frames
-            return {
-                "valid": False,
-                "reason": "Video appears to be static (repeated frames detected)",
-                "metrics": {
-                    "unique_frames": unique_hashes,
-                    "total_frames": len(frames),
-                    "duplicate_ratio": duplicate_ratio
-                }
-            }
-        
-        # ================================================================
-        # CHECK 3: Motion detection (frame differences)
-        # ================================================================
-        motion_scores = []
-        
-        for i in range(1, len(frames)):
-            gray1 = cv2.cvtColor(frames[i-1], cv2.COLOR_BGR2GRAY)
-            gray2 = cv2.cvtColor(frames[i], cv2.COLOR_BGR2GRAY)
-            
-            diff = cv2.absdiff(gray1, gray2)
-            motion_score = diff.mean()
-            motion_scores.append(motion_score)
-        
-        avg_motion = np.mean(motion_scores) if motion_scores else 0
-        
-        if avg_motion < 0.2:  # Very little motion
-            return {
-                "valid": False,
-                "reason": "No significant motion detected in video",
-                "metrics": {
-                    "avg_motion": avg_motion,
-                    "frames": len(frames)
-                }
-            }
-        
-        # ================================================================
-        # CHECK 4: Frame diversity (content variance)
-        # ================================================================
-        brightness_variance = np.var(brightness_values)
-        
-        if brightness_variance < 1.5:  # Very little variance
-            return {
-                "valid": False,
-                "reason": "Video content lacks diversity (possible pre-recorded or static)",
-                "metrics": {
-                    "brightness_variance": brightness_variance
-                }
-            }
-        
-        # ================================================================
-        # All checks passed
-        # ================================================================
-        return {
-            "valid": True,
-            "reason": None,
-            "metrics": {
-                "frames": len(frames),
-                "unique_frames": unique_hashes,
-                "avg_brightness": avg_brightness,
-                "avg_motion": avg_motion,
-                "brightness_variance": brightness_variance,
-                "duplicate_ratio": duplicate_ratio
-            }
-        }
-        
-    except Exception as e:
-        return {
-            "valid": False,
-            "reason": f"Error analyzing video: {str(e)}",
-            "metrics": {}
-        }
-
+        return {'valid': False, 'reason': f'Error analyzing video: {str(e)}', 'metrics': {}}
 
 # ============================================================================
 # SUPPORTED VIDEO FORMATS
