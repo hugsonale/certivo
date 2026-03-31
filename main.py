@@ -364,7 +364,6 @@ rate_limiter = RateLimiter()
 # ============================================================================
 
 
-
 def check_video_integrity(video_path: str) -> dict:
     try:
         cap = cv2.VideoCapture(video_path)
