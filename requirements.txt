@@ -20,7 +20,7 @@ sqlalchemy==2.0.23
 alembic==1.13.0
 
 # ===== COMPUTER VISION & ML =====
-opencv-python==4.8.1.78
+opencv-python==4.13.0.92
 mediapipe==0.10.8
 numpy==1.26.2
 
