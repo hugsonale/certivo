@@ -34,7 +34,7 @@ sqlalchemy-utils==0.41.1
 
 # ===== JUPYTER (Optional) =====
 jupyter==1.0.0
-notebook==7.0.6
+notebook==7.5.5
 
 # ===== PRE-COMMIT HOOKS =====
 pre-commit==3.6.0
