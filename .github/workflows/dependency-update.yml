@@ -1,0 +1,33 @@
+name: Dependency Update Check
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly on Sunday
+  workflow_dispatch:
+
+jobs:
+  update-dependencies:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Check for outdated packages
+        run: |
+          pip install pip-review
+          pip-review --auto
+      
+      - name: Generate updated requirements
+        run: |
+          pip freeze > requirements-updated.txt
+      
+      - name: Upload updated requirements
+        uses: actions/upload-artifact@v4
+        with:
+          name: updated-requirements
+          path: requirements-updated.txt
