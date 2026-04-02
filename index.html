@@ -7,6 +7,31 @@
 
 <style>
 /* ============================================================================
+   CYBER SHIELD COLOR SYSTEM (FROM LANDING PAGE)
+   ============================================================================ */
+
+:root {
+    /* Primary: Sky Blue - Trust & Innovation */
+    --primary: #0ea5e9;
+    --primary-dark: #0284c7;
+    --primary-light: #38bdf8;
+    
+    /* Secondary: Modern Purple */
+    --secondary: #8b5cf6;
+    --secondary-dark: #7c3aed;
+    --secondary-light: #a78bfa;
+    
+    /* Tertiary: Success Cyan */
+    --tertiary: #06b6d4;
+    --tertiary-dark: #0891b2;
+    --tertiary-light: #22d3ee;
+    
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, #0ea5e9 0%, #8b5cf6 100%);
+    --gradient-hero: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+}
+
+/* ============================================================================
    GLOBAL STYLES
    ============================================================================ */
 
@@ -18,12 +43,20 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--gradient-primary);
+    background-size: 200% 200%;
+    animation: gradientShift 10s ease infinite;
     min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 20px;
+}
+
+@keyframes gradientShift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
 }
 
 /* ============================================================================
@@ -65,12 +98,14 @@ body {
     width: 64px;
     height: 64px;
     margin: 0 auto 24px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--gradient-primary);
+    background-size: 200% 200%;
+    animation: gradientShift 3s ease infinite;
     border-radius: 16px;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 8px 24px rgba(14, 165, 233, 0.4);
 }
 
 .logo-text {
@@ -123,7 +158,9 @@ body {
 .feature-icon {
     width: 24px;
     height: 24px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--gradient-primary);
+    background-size: 200% 200%;
+    animation: gradientShift 3s ease infinite;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -164,7 +201,9 @@ body {
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--gradient-primary);
+    background-size: 200% 200%;
+    animation: gradientShift 3s ease infinite;
     color: white;
     font-size: 16px;
     font-weight: 600;
@@ -174,12 +213,12 @@ body {
     cursor: pointer;
     width: 100%;
     transition: all 0.3s ease;
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 8px 24px rgba(14, 165, 233, 0.4);
 }
 
 .btn-primary:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+    box-shadow: 0 12px 32px rgba(14, 165, 233, 0.5);
 }
 
 .btn-primary:active {
@@ -211,7 +250,7 @@ body {
 }
 
 .powered-by strong {
-    color: #667eea;
+    color: var(--primary);
     font-weight: 600;
 }
 
@@ -223,7 +262,9 @@ body {
     width: 80px;
     height: 80px;
     margin: 0 auto 24px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--gradient-primary);
+    background-size: 200% 200%;
+    animation: gradientShift 3s ease infinite;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -367,7 +408,7 @@ body {
 .scanning-dot {
     width: 12px;
     height: 12px;
-    background: #667eea;
+    background: var(--primary);
     border-radius: 50%;
     animation: scanning-pulse 1.5s ease-in-out infinite;
 }
@@ -405,7 +446,9 @@ body {
 
 .progress-bar {
     height: 100%;
-    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    background: var(--gradient-primary);
+    background-size: 200% 200%;
+    animation: gradientShift 3s ease infinite;
     width: 0%;
     transition: width 0.1s linear;
     border-radius: 2px;
@@ -432,7 +475,7 @@ body {
 .challenge-progress-text {
     font-size: 14px;
     font-weight: 600;
-    color: #667eea;
+    color: var(--primary);
     margin-bottom: 8px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -454,7 +497,7 @@ body {
 }
 
 .challenge-status.listening {
-    color: #667eea;
+    color: var(--primary);
     font-weight: 600;
 }
 
@@ -466,7 +509,7 @@ body {
     border-radius: 16px;
     overflow: hidden;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    border: 3px solid #667eea;
+    border: 3px solid var(--primary);
 }
 
 #challengeVideo {
@@ -487,7 +530,9 @@ body {
 
 .timer-bar {
     height: 100%;
-    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    background: var(--gradient-primary);
+    background-size: 200% 200%;
+    animation: gradientShift 3s ease infinite;
     width: 100%;
     transition: width 1s linear;
     border-radius: 4px;
@@ -500,7 +545,7 @@ body {
 .timer-countdown {
     font-size: 48px;
     font-weight: 700;
-    color: #667eea;
+    color: var(--primary);
     margin-bottom: 16px;
     transition: color 0.3s ease;
 }
@@ -607,7 +652,7 @@ body {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #667eea;
+    color: var(--primary);
     margin-bottom: 4px;
 }
 
@@ -637,7 +682,9 @@ body {
 }
 
 .btn-continue {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--gradient-primary);
+    background-size: 200% 200%;
+    animation: gradientShift 3s ease infinite;
     color: white;
     font-size: 16px;
     font-weight: 600;
@@ -647,12 +694,12 @@ body {
     cursor: pointer;
     width: 100%;
     transition: all 0.3s ease;
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 8px 24px rgba(14, 165, 233, 0.4);
 }
 
 .btn-continue:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+    box-shadow: 0 12px 32px rgba(14, 165, 233, 0.5);
 }
 
 .auto-advance-text {
@@ -677,22 +724,23 @@ body {
     width: 80px;
     height: 80px;
     margin: 0 auto 24px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--gradient-primary);
+    background-size: 200% 200%;
+    animation: pulse-transition 1s ease-in-out infinite;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    animation: pulse-transition 1s ease-in-out infinite;
 }
 
 @keyframes pulse-transition {
     0%, 100% {
         transform: scale(1);
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        box-shadow: 0 8px 24px rgba(14, 165, 233, 0.4);
     }
     50% {
         transform: scale(1.05);
-        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.6);
+        box-shadow: 0 12px 32px rgba(14, 165, 233, 0.6);
     }
 }
 
@@ -704,7 +752,7 @@ body {
 .transition-progress {
     font-size: 14px;
     font-weight: 600;
-    color: #667eea;
+    color: var(--primary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 12px;
@@ -727,7 +775,7 @@ body {
 .transition-dot {
     width: 10px;
     height: 10px;
-    background: #667eea;
+    background: var(--primary);
     border-radius: 50%;
     animation: bounce-dot 1.4s ease-in-out infinite;
 }
@@ -767,8 +815,8 @@ body {
 
 .transition-progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-    width: 0%;
+    background: var(--gradient-primary);
+    background-size: 200% 200%;
     animation: fill-progress 1s linear forwards;
     border-radius: 2px;
 }
@@ -779,7 +827,7 @@ body {
 }
 
 /* ============================================================================
-   SCREEN 7: FINAL DECISION - 10/10
+   SCREEN 7: FINAL DECISION
    ============================================================================ */
 
 .final-icon-wrapper {
@@ -853,7 +901,7 @@ body {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #667eea;
+    color: var(--primary);
     margin-bottom: 12px;
 }
 
@@ -974,7 +1022,9 @@ body {
 }
 
 .btn-start-over {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--gradient-primary);
+    background-size: 200% 200%;
+    animation: gradientShift 3s ease infinite;
     color: white;
     font-size: 16px;
     font-weight: 600;
@@ -984,12 +1034,12 @@ body {
     cursor: pointer;
     width: 100%;
     transition: all 0.3s ease;
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 8px 24px rgba(14, 165, 233, 0.4);
 }
 
 .btn-start-over:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+    box-shadow: 0 12px 32px rgba(14, 165, 233, 0.5);
 }
 
 .failure-explanation {
