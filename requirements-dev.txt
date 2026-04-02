@@ -13,7 +13,7 @@ isort==5.13.2
 # ===== CODE LINTING =====
 flake8==6.1.0
 pylint==3.0.3
-mypy==1.7.1
+mypy==1.20.0
 
 # ===== TESTING TOOLS =====
 pytest-xdist==3.5.0          # Parallel testing
