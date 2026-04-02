@@ -50,3 +50,8 @@ temp/
 uploads/*.webm
 uploads/*.mp4
 
+
+# Coverage
+htmlcov/
+.coverage
+coverage.xml
