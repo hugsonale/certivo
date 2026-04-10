@@ -1,0 +1,34 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['api-gateway:8000']
+    metrics_path: '/metrics'
+
+  - job_name: 'verification-api'
+    static_configs:
+      - targets: ['verification-api:8001']
+    metrics_path: '/metrics'
+
+  - job_name: 'challenge-service'
+    static_configs:
+      - targets: ['challenge-service:8002']
+    metrics_path: '/metrics'
+
+  - job_name: 'risk-scoring'
+    static_configs:
+      - targets: ['risk-scoring:8003']
+    metrics_path: '/metrics'
+
+  - job_name: 'async-worker'
+    static_configs:
+      - targets: ['async-worker:8004']
+    metrics_path: '/metrics'
+
+  - job_name: 'admin-service'
+    static_configs:
+      - targets: ['admin-service:8005']
+    metrics_path: '/metrics'
