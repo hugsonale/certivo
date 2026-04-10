@@ -1,0 +1,343 @@
+version: '3.8'
+
+services:
+  # ==========================================================================
+  # INFRASTRUCTURE SERVICES
+  # ==========================================================================
+  
+  # PostgreSQL - Primary database
+  postgres:
+    image: postgres:15-alpine
+    container_name: certivo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: certivo
+      POSTGRES_USER: certivo
+      POSTGRES_PASSWORD: certivo_secure_password_change_me
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U certivo"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - certivo-network
+
+  # Redis - Caching & rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: certivo-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass certivo_redis_password
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - certivo-network
+
+  # MinIO - Object storage (S3-compatible)
+  minio:
+    image: minio/minio:latest
+    container_name: certivo-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin_change_me
+    volumes:
+      - minio-data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - certivo-network
+
+  # ==========================================================================
+  # APPLICATION SERVICES
+  # ==========================================================================
+
+  # API Gateway - Edge layer
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: certivo-api-gateway
+    restart: unless-stopped
+    environment:
+      VERIFICATION_SERVICE_URL: http://verification-api:8001
+      CHALLENGE_SERVICE_URL: http://challenge-service:8002
+      RISK_SCORING_URL: http://risk-scoring:8003
+      REDIS_URL: redis://:certivo_redis_password@redis:6379
+      INTERNAL_AUTH_TOKEN: ${INTERNAL_AUTH_TOKEN:-super_secret_token_change_me}
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    networks:
+      - certivo-network
+
+  # Verification API - Stateless verification
+  verification-api:
+    build:
+      context: ./services/verification-api
+      dockerfile: Dockerfile
+    container_name: certivo-verification-api
+    restart: unless-stopped
+    environment:
+      CHALLENGE_SERVICE_URL: http://challenge-service:8002
+      RISK_SCORING_URL: http://risk-scoring:8003
+      ASYNC_WORKER_URL: http://async-worker:8004
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin_change_me
+      S3_BUCKET: certivo-videos
+      INTERNAL_AUTH_TOKEN: ${INTERNAL_AUTH_TOKEN:-super_secret_token_change_me}
+    depends_on:
+      - minio
+      - challenge-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - certivo-network
+
+  # Challenge Service - Challenge generation
+  challenge-service:
+    build:
+      context: ./services/challenge-service
+      dockerfile: Dockerfile
+    container_name: certivo-challenge-service
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://:certivo_redis_password@redis:6379
+      CHALLENGE_TTL: 300
+      INTERNAL_AUTH_TOKEN: ${INTERNAL_AUTH_TOKEN:-super_secret_token_change_me}
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - certivo-network
+
+  # Risk Scoring Service - ML-based analysis
+  risk-scoring:
+    build:
+      context: ./services/risk-scoring
+      dockerfile: Dockerfile
+    container_name: certivo-risk-scoring
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://:certivo_redis_password@redis:6379
+      POSTGRES_URL: postgresql://certivo:certivo_secure_password_change_me@postgres:5432/certivo
+      INTERNAL_AUTH_TOKEN: ${INTERNAL_AUTH_TOKEN:-super_secret_token_change_me}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - certivo-network
+
+  # Async Worker - Background processing
+  async-worker:
+    build:
+      context: ./services/async-worker
+      dockerfile: Dockerfile
+    container_name: certivo-async-worker
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://:certivo_redis_password@redis:6379
+      POSTGRES_URL: postgresql://certivo:certivo_secure_password_change_me@postgres:5432/certivo
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin_change_me
+      S3_BUCKET: certivo-videos
+      INTERNAL_AUTH_TOKEN: ${INTERNAL_AUTH_TOKEN:-super_secret_token_change_me}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+    networks:
+      - certivo-network
+
+  # Admin Service - Isolated admin panel
+  admin-service:
+    build:
+      context: ./services/admin-service
+      dockerfile: Dockerfile
+    container_name: certivo-admin-service
+    restart: unless-stopped
+    environment:
+      POSTGRES_URL: postgresql://certivo:certivo_secure_password_change_me@postgres:5432/certivo
+      REDIS_URL: redis://:certivo_redis_password@redis:6379
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme123}
+      ALLOWED_ADMIN_IPS: ${ALLOWED_ADMIN_IPS:-*}
+      INTERNAL_AUTH_TOKEN: ${INTERNAL_AUTH_TOKEN:-super_secret_token_change_me}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8005:8005"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - certivo-network
+
+  # ==========================================================================
+  # MONITORING (Optional)
+  # ==========================================================================
+
+  # Prometheus - Metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: certivo-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9090:9090"
+    networks:
+      - certivo-network
+
+  # Grafana - Metrics visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: certivo-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - certivo-network
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+
+networks:
+  certivo-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# =============================================================================
+# VOLUMES
+# =============================================================================
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  minio-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
