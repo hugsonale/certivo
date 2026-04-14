@@ -1,0 +1,102 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: verification-api
+  namespace: certivo
+spec:
+  selector:
+    app: verification-api
+  ports:
+    - port: 8001
+      targetPort: 8001
+  type: ClusterIP
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: verification-api
+  namespace: certivo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: verification-api
+  template:
+    metadata:
+      labels:
+        app: verification-api
+    spec:
+      containers:
+      - name: verification-api
+        image: certivo/verification-api:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8001
+        envFrom:
+        - configMapRef:
+            name: certivo-config
+        env:
+        - name: INTERNAL_AUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: certivo-secrets
+              key: INTERNAL_AUTH_TOKEN
+        - name: S3_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: certivo-secrets
+              key: S3_ACCESS_KEY
+        - name: S3_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: certivo-secrets
+              key: S3_SECRET_KEY
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+
+---
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: verification-api-hpa
+  namespace: certivo
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: verification-api
+  minReplicas: 2
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
