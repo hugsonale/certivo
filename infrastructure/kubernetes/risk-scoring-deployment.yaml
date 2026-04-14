@@ -1,0 +1,103 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: risk-scoring
+  namespace: certivo
+spec:
+  selector:
+    app: risk-scoring
+  ports:
+    - port: 8003
+      targetPort: 8003
+  type: ClusterIP
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: risk-scoring
+  namespace: certivo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: risk-scoring
+  template:
+    metadata:
+      labels:
+        app: risk-scoring
+    spec:
+      containers:
+      - name: risk-scoring
+        image: certivo/risk-scoring:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8003
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: certivo-secrets
+              key: REDIS_PASSWORD
+        - name: REDIS_URL
+          value: "redis://:$(REDIS_PASSWORD)@redis:6379"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: certivo-secrets
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_URL
+          value: "postgresql://certivo:$(POSTGRES_PASSWORD)@postgres:5432/certivo"
+        - name: INTERNAL_AUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: certivo-secrets
+              key: INTERNAL_AUTH_TOKEN
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8003
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8003
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+
+---
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: risk-scoring-hpa
+  namespace: certivo
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: risk-scoring
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
