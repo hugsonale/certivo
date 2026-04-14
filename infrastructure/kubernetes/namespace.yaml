@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: certivo
+  labels:
+    name: certivo
+    environment: production
