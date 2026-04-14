@@ -425,7 +425,7 @@ Use a binary + maturity score for each criterion:
 5. Async resilient processing pipeline exists for video workloads.  
 6. Data retention/deletion controls are implemented and testable.  
 7. Red-team bypass tests pass launch threshold.  
-8. Incident response and recovery drills completed.
+8. Incident response and recovery drills completed
 
 ---
 
