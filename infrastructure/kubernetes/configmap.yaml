@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: certivo-config
+  namespace: certivo
+data:
+  ENVIRONMENT: "production"
+  CHALLENGE_TTL: "300"
+  S3_BUCKET: "certivo-videos"
+  ALLOWED_ADMIN_IPS: "10.0.0.0/8"
+  
+  # Service URLs (internal DNS)
+  VERIFICATION_SERVICE_URL: "http://verification-api:8001"
+  CHALLENGE_SERVICE_URL: "http://challenge-service:8002"
+  RISK_SCORING_URL: "http://risk-scoring:8003"
+  ASYNC_WORKER_URL: "http://async-worker:8004"
+  
+  # Redis URL
+  REDIS_URL: "redis://:$(REDIS_PASSWORD)@redis:6379"
+  
+  # Postgres URL
+  POSTGRES_URL: "postgresql://certivo:$(POSTGRES_PASSWORD)@postgres:5432/certivo"
+  
+  # S3 Endpoint
+  S3_ENDPOINT: "http://minio:9000"
