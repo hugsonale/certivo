@@ -1,0 +1,766 @@
+openapi: 3.1.0
+info:
+  title: Certivo Human Verification API
+  version: 1.0.0
+  description: |
+    Production-grade human verification system using motion-based challenges.
+    
+    ## Authentication
+    - Public endpoints require no authentication
+    - Internal endpoints require `X-Gateway-Token` header
+    - Admin endpoints require HTTP Basic Auth
+    
+    ## Rate Limiting
+    - Challenge generation: 10 requests/minute per IP
+    - Verification: 5 requests/minute per IP
+    - Finalization: 10 requests/minute per IP
+    
+    ## Idempotency
+    - POST endpoints support `Idempotency-Key` header
+    - Keys are valid for 24 hours
+    - Duplicate requests return cached response
+    
+  contact:
+    name: Certivo API Support
+    email: api-support@certivo.com
+    url: https://docs.certivo.com
+  license:
+    name: Proprietary
+    url: https://certivo.com/license
+
+servers:
+  - url: https://api.certivo.com
+    description: Production
+  - url: https://staging-api.certivo.com
+    description: Staging
+  - url: http://localhost:8000
+    description: Local development
+
+tags:
+  - name: Verification
+    description: Human verification endpoints
+  - name: Session
+    description: Session management
+  - name: Device
+    description: Device trust management
+  - name: Admin
+    description: Administrative endpoints
+
+paths:
+  # ==========================================================================
+  # VERIFICATION ENDPOINTS
+  # ==========================================================================
+  
+  /v1/challenge:
+    post:
+      operationId: createChallenge
+      summary: Generate verification challenge
+      description: |
+        Creates adaptive challenges based on device trust level.
+        
+        **Trust Levels:**
+        - High trust: 1 easy challenge
+        - Unknown/Low trust: 2 medium challenges
+        
+        **Idempotency:** Supported via `Idempotency-Key` header
+        
+      tags:
+        - Verification
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChallengeRequest'
+            examples:
+              newDevice:
+                summary: New device
+                value:
+                  device_id: "device_abc123"
+              trustedDevice:
+                summary: Trusted device
+                value:
+                  device_id: "device_trusted_xyz"
+      responses:
+        '200':
+          description: Challenges generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChallengeResponse'
+              examples:
+                standardChallenge:
+                  summary: Standard 2-challenge response
+                  value:
+                    challenges:
+                      - challenge_id: "ch_abc123"
+                        token_id: "tok_xyz789"
+                        instruction: "Turn your head to the left"
+                        expected_movement: "left"
+                        difficulty: "medium"
+                        expires_at: "2026-04-14T15:30:00Z"
+                      - challenge_id: "ch_def456"
+                        token_id: "tok_uvw012"
+                        instruction: "Blink twice"
+                        expected_movement: "blink"
+                        difficulty: "medium"
+                        expires_at: "2026-04-14T15:30:00Z"
+                fastTrack:
+                  summary: Fast-track trusted device
+                  value:
+                    challenges:
+                      - challenge_id: "ch_ghi789"
+                        token_id: "tok_rst345"
+                        instruction: "Turn your head to the right"
+                        expected_movement: "right"
+                        difficulty: "easy"
+                        expires_at: "2026-04-14T15:30:00Z"
+                    fast_track_enabled: true
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /v1/verify:
+    post:
+      operationId: verifyChallenge
+      summary: Verify challenge submission
+      description: |
+        Validates user's video submission against challenge requirements.
+        
+        **Processing:**
+        1. Video format validation (WebM/MP4, max 10MB)
+        2. Video integrity checks (motion, brightness)
+        3. Liveness detection
+        4. Challenge-specific validation
+        
+        **Idempotency:** Supported via `Idempotency-Key` header
+        
+      tags:
+        - Verification
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VerifyRequest'
+      responses:
+        '200':
+          description: Verification completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyResponse'
+              examples:
+                success:
+                  summary: Successful verification
+                  value:
+                    challenge_passed: true
+                    liveness_score: 0.96
+                    confidence: 0.92
+                    action_detected: "left"
+                    action_matched: true
+                    processing_time_ms: 1234.56
+                    error: null
+                    error_code: null
+                failure:
+                  summary: Failed verification
+                  value:
+                    challenge_passed: false
+                    liveness_score: 0.42
+                    confidence: 0.31
+                    action_detected: "none"
+                    action_matched: false
+                    error: "Required action not detected"
+                    error_code: "ACTION_NOT_DETECTED"
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /v1/finalize:
+    post:
+      operationId: finalizeSession
+      summary: Finalize verification session
+      description: |
+        Calculates final trust score and device trust level.
+        
+        **Trust Score Algorithm:**
+        - Liveness scores: 40%
+        - Challenge success rate: 30%
+        - Device reputation: 20%
+        - Behavioral patterns: 10%
+        
+        **Idempotency:** Supported via `Idempotency-Key` header
+        
+      tags:
+        - Session
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FinalizeRequest'
+            example:
+              device_id: "device_abc123"
+              results:
+                - challenge_passed: true
+                  liveness_score: 0.95
+                  confidence: 0.91
+                - challenge_passed: true
+                  liveness_score: 0.92
+                  confidence: 0.89
+      responses:
+        '200':
+          description: Session finalized successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinalizeResponse'
+              example:
+                session_id: "session_abc123_1713107400"
+                trust_score: 87.5
+                trust_level: "high"
+                breakdown:
+                  liveness_factor: 37.2
+                  challenge_factor: 30.0
+                  reputation_score: 15.0
+                  behavior_score: 5.3
+                flags:
+                  low_variance: false
+                  suspicious_device: false
+                  new_device: false
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ==========================================================================
+  # DEVICE MANAGEMENT
+  # ==========================================================================
+  
+  /v1/device/{device_id}/stats:
+    get:
+      operationId: getDeviceStats
+      summary: Get device statistics
+      description: Retrieve verification history and statistics for a device
+      tags:
+        - Device
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          description: Device identifier
+          schema:
+            type: string
+            example: "device_abc123"
+      responses:
+        '200':
+          description: Device statistics retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceStats'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  # ==========================================================================
+  # ADMIN ENDPOINTS
+  # ==========================================================================
+  
+  /admin/sessions:
+    get:
+      operationId: listSessions
+      summary: List recent sessions
+      description: Get recent verification sessions (admin only)
+      tags:
+        - Admin
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Sessions retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionList'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /admin/device/{device_id}/revoke:
+    post:
+      operationId: revokeDeviceTrust
+      summary: Revoke device trust
+      description: Revoke trust from a device (admin only)
+      tags:
+        - Admin
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Trust revoked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "revoked"
+                  device_id:
+                    type: string
+                    example: "device_abc123"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+# =============================================================================
+# COMPONENTS
+# =============================================================================
+
+components:
+  # ===========================================================================
+  # SECURITY SCHEMES
+  # ===========================================================================
+  
+  securitySchemes:
+    BasicAuth:
+      type: http
+      scheme: basic
+      description: HTTP Basic Authentication for admin endpoints
+    
+    GatewayToken:
+      type: apiKey
+      in: header
+      name: X-Gateway-Token
+      description: Internal service authentication token
+
+  # ===========================================================================
+  # PARAMETERS
+  # ===========================================================================
+  
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        Optional idempotency key for safe retries.
+        Must be a unique string (max 255 chars).
+        Keys are valid for 24 hours.
+      schema:
+        type: string
+        maxLength: 255
+        example: "idem_abc123xyz789"
+
+  # ===========================================================================
+  # SCHEMAS
+  # ===========================================================================
+  
+  schemas:
+    # Request schemas
+    ChallengeRequest:
+      type: object
+      required:
+        - device_id
+      properties:
+        device_id:
+          type: string
+          description: Unique device identifier (fingerprint)
+          example: "device_abc123"
+          minLength: 1
+          maxLength: 255
+
+    VerifyRequest:
+      type: object
+      required:
+        - device_id
+        - challenge_id
+        - token_id
+        - video
+      properties:
+        device_id:
+          type: string
+          description: Device ID from challenge request
+        challenge_id:
+          type: string
+          description: Challenge ID to verify
+        token_id:
+          type: string
+          description: Verification token from challenge
+        video:
+          type: string
+          format: binary
+          description: Video recording (WebM/MP4, max 10MB)
+
+    FinalizeRequest:
+      type: object
+      required:
+        - device_id
+        - results
+      properties:
+        device_id:
+          type: string
+          example: "device_abc123"
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              challenge_passed:
+                type: boolean
+              liveness_score:
+                type: number
+                format: float
+                minimum: 0
+                maximum: 1
+              confidence:
+                type: number
+                format: float
+                minimum: 0
+                maximum: 1
+        session_metadata:
+          type: object
+          description: Optional session metadata for risk analysis
+          properties:
+            total_time_seconds:
+              type: number
+            has_webgl:
+              type: boolean
+            is_headless:
+              type: boolean
+
+    # Response schemas
+    ChallengeResponse:
+      type: object
+      required:
+        - challenges
+      properties:
+        challenges:
+          type: array
+          items:
+            $ref: '#/components/schemas/Challenge'
+        fast_track_enabled:
+          type: boolean
+          description: Whether fast-track mode is active
+
+    Challenge:
+      type: object
+      required:
+        - challenge_id
+        - token_id
+        - instruction
+        - difficulty
+        - expires_at
+      properties:
+        challenge_id:
+          type: string
+          description: Unique challenge identifier
+          example: "ch_abc123"
+        token_id:
+          type: string
+          description: One-time verification token
+          example: "tok_xyz789"
+        instruction:
+          type: string
+          description: Human-readable challenge instruction
+          example: "Turn your head to the left"
+        expected_movement:
+          type: string
+          enum: [left, right, blink, nod, mouth, eyebrows]
+          description: Expected movement type
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+          description: Challenge difficulty level
+        expires_at:
+          type: string
+          format: date-time
+          description: Challenge expiration timestamp (ISO 8601)
+          example: "2026-04-14T15:30:00Z"
+
+    VerifyResponse:
+      type: object
+      required:
+        - challenge_passed
+        - liveness_score
+        - confidence
+      properties:
+        challenge_passed:
+          type: boolean
+          description: Whether challenge was successfully completed
+        liveness_score:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Liveness detection score (0-1)
+        confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Overall confidence score (0-1)
+        action_detected:
+          type: string
+          description: Detected action/movement
+          example: "left"
+        action_matched:
+          type: boolean
+          description: Whether detected action matched expected
+        processing_time_ms:
+          type: number
+          format: float
+          description: Processing time in milliseconds
+        error:
+          type: string
+          nullable: true
+          description: Error message if verification failed
+        error_code:
+          type: string
+          nullable: true
+          description: Machine-readable error code
+          enum:
+            - ACTION_NOT_DETECTED
+            - VIDEO_INTEGRITY_FAILED
+            - CHALLENGE_EXPIRED
+            - INVALID_TOKEN
+            - DEVICE_BLOCKED
+            - RATE_LIMIT_EXCEEDED
+            - PROCESSING_ERROR
+
+    FinalizeResponse:
+      type: object
+      required:
+        - session_id
+        - trust_score
+        - trust_level
+      properties:
+        session_id:
+          type: string
+          description: Unique session identifier
+          example: "session_abc123_1713107400"
+        trust_score:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+          description: Final trust score (0-100)
+        trust_level:
+          type: string
+          enum: [high, medium, low]
+          description: Trust level classification
+        breakdown:
+          type: object
+          description: Score breakdown by factor
+          properties:
+            liveness_factor:
+              type: number
+            challenge_factor:
+              type: number
+            reputation_score:
+              type: number
+            behavior_score:
+              type: number
+        flags:
+          type: object
+          description: Risk analysis flags
+          properties:
+            low_variance:
+              type: boolean
+            suspicious_device:
+              type: boolean
+            new_device:
+              type: boolean
+
+    DeviceStats:
+      type: object
+      properties:
+        device_id:
+          type: string
+        trust_level:
+          type: string
+          enum: [high, medium, low]
+        total_verifications:
+          type: integer
+        successful_verifications:
+          type: integer
+        success_rate:
+          type: number
+          format: float
+        first_seen:
+          type: string
+          format: date-time
+        last_verified:
+          type: string
+          format: date-time
+        trust_revoked:
+          type: boolean
+        is_suspicious:
+          type: boolean
+        is_blocked:
+          type: boolean
+
+    SessionList:
+      type: object
+      properties:
+        sessions:
+          type: array
+          items:
+            type: object
+            properties:
+              session_id:
+                type: string
+              device_id:
+                type: string
+              trust_score:
+                type: number
+              trust_level:
+                type: string
+              total_challenges:
+                type: integer
+              failed_challenges:
+                type: integer
+              timestamp_utc:
+                type: string
+                format: date-time
+
+    # Error schemas
+    Error:
+      type: object
+      required:
+        - error
+        - error_code
+        - timestamp
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+        error_code:
+          type: string
+          description: Machine-readable error code
+        error_details:
+          type: object
+          description: Additional error context
+          additionalProperties: true
+        timestamp:
+          type: string
+          format: date-time
+          description: Error timestamp (ISO 8601)
+        request_id:
+          type: string
+          description: Unique request identifier for debugging
+
+  # ===========================================================================
+  # RESPONSES
+  # ===========================================================================
+  
+  responses:
+    BadRequestError:
+      description: Bad request - Invalid input
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Invalid video format"
+            error_code: "INVALID_VIDEO_FORMAT"
+            error_details:
+              allowed_formats: ["webm", "mp4"]
+              received_format: "avi"
+            timestamp: "2026-04-14T14:30:00Z"
+            request_id: "req_abc123"
+
+    UnauthorizedError:
+      description: Unauthorized - Invalid credentials
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Invalid credentials"
+            error_code: "UNAUTHORIZED"
+            timestamp: "2026-04-14T14:30:00Z"
+
+    ForbiddenError:
+      description: Forbidden - Access denied
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Device blocked due to suspicious activity"
+            error_code: "DEVICE_BLOCKED"
+            timestamp: "2026-04-14T14:30:00Z"
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Challenge not found or expired"
+            error_code: "CHALLENGE_NOT_FOUND"
+            timestamp: "2026-04-14T14:30:00Z"
+
+    RateLimitError:
+      description: Rate limit exceeded
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds to wait before retrying
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Too many requests. Please wait 60 seconds."
+            error_code: "RATE_LIMIT_EXCEEDED"
+            error_details:
+              retry_after: 60
+              limit: 10
+              window: "1 minute"
+            timestamp: "2026-04-14T14:30:00Z"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Internal server error"
+            error_code: "INTERNAL_ERROR"
+            timestamp: "2026-04-14T14:30:00Z"
+            request_id: "req_xyz789"
