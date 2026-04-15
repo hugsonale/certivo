@@ -1,6 +1,6 @@
 # Certivo Microservices Architecture
 
-Production-grade microservices deployment for Certivo human verification system
+Production-grade microservices deployment for Certivo human verification system.
 
 ## Architecture
 
