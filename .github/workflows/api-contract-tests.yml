@@ -1,0 +1,115 @@
+name: API Contract Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  contract-tests:
+    name: API Contract Validation
+    runs-on: ubuntu-latest
+    
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: certivo
+          POSTGRES_USER: certivo
+          POSTGRES_PASSWORD: certivo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-glx libglib2.0-0 ffmpeg
+      
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r services/api-gateway/requirements.txt
+          pip install -r services/challenge-service/requirements.txt
+          pip install -r services/risk-scoring/requirements.txt
+          pip install pytest pytest-asyncio httpx jsonschema pyyaml
+      
+      - name: Validate OpenAPI Specification
+        run: |
+          pip install openapi-spec-validator
+          openapi-spec-validator api/openapi.yaml
+      
+      - name: Start services
+        run: |
+          # Start challenge service
+          cd services/challenge-service
+          REDIS_URL=redis://localhost:6379 python main.py &
+          CHALLENGE_PID=$!
+          cd ../..
+          
+          # Start risk scoring service
+          cd services/risk-scoring
+          REDIS_URL=redis://localhost:6379 \
+          POSTGRES_URL=postgresql://certivo:certivo@localhost:5432/certivo \
+          python main.py &
+          RISK_PID=$!
+          cd ../..
+          
+          # Start API gateway
+          cd services/api-gateway
+          REDIS_URL=redis://localhost:6379 \
+          CHALLENGE_SERVICE_URL=http://localhost:8002 \
+          RISK_SCORING_URL=http://localhost:8003 \
+          python main.py &
+          GATEWAY_PID=$!
+          cd ../..
+          
+          # Wait for services to be ready
+          sleep 10
+          
+          # Health checks
+          curl -f http://localhost:8000/health || exit 1
+          curl -f http://localhost:8002/health || exit 1
+          curl -f http://localhost:8003/health || exit 1
+      
+      - name: Run contract tests
+        env:
+          REDIS_URL: redis://localhost:6379
+          POSTGRES_URL: postgresql://certivo:certivo@localhost:5432/certivo
+        run: |
+          pytest tests/contract/ -v --tb=short
+      
+      - name: Check OpenAPI coverage
+        run: |
+          python scripts/check_openapi_coverage.py
+      
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-test-results
+          path: test-results/
