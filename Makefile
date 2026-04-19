@@ -1,5 +1,18 @@
 .PHONY: help docker-build docker-push k8s-deploy k8s-delete local-up local-down
 
+
+.PHONY: help test contract-tests validate-openapi api-docs
+
+
+help:
+	@echo "Certivo API Commands"
+	@echo "==================="
+	@echo "make test              - Run all tests"
+	@echo "make contract-tests    - Run API contract tests"
+	@echo "make validate-openapi  - Validate OpenAPI specification"
+	@echo "make api-docs          - Generate API documentation"
+	@echo "make check-coverage    - Check OpenAPI coverage"
+
 help:
 	@echo "Certivo Deployment Commands"
 	@echo "============================"
@@ -9,6 +22,7 @@ help:
 	@echo "make k8s-delete      - Delete from Kubernetes"
 	@echo "make local-up        - Start local Docker Compose"
 	@echo "make local-down      - Stop local Docker Compose"
+
 
 # Docker commands
 docker-build:
@@ -46,3 +60,26 @@ local-down:
 
 local-logs:
 	docker-compose logs -f
+
+
+# Testing
+test: contract-tests
+
+contract-tests:
+	pytest tests/contract/ -v
+
+# OpenAPI validation
+validate-openapi:
+	openapi-spec-validator api/openapi.yaml
+
+# API documentation
+api-docs:
+	./scripts/generate_api_docs.sh
+
+# Coverage check
+check-coverage:
+	python scripts/check_openapi_coverage.py
+
+# Run all checks (for CI)
+ci-checks: validate-openapi check-coverage contract-tests
+	@echo "✅ All CI checks passed"
