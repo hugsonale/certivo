@@ -1,0 +1,53 @@
+groups:
+  - name: rate_limiting_alerts
+    interval: 30s
+    rules:
+      # Rate limit breach detection
+      - alert: HighRateLimitHitRate
+        expr: rate(rate_limit_blocked_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rate limit hit rate detected"
+          description: "{{ $value }} requests/sec are being rate limited"
+      
+      # Bypass attempt detection
+      - alert: BypassAttemptsDetected
+        expr: increase(bypass_attempts_total[10m]) > 50
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Bypass attempts detected"
+          description: "{{ $value }} bypass attempts in last 10 minutes"
+      
+      # DDoS detection
+      - alert: PossibleDDoSAttack
+        expr: rate(http_requests_total[1m]) > 1000
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Possible DDoS attack"
+          description: "{{ $value }} requests/sec - possible DDoS"
+      
+      # Temporary ban spike
+      - alert: HighTemporaryBanRate
+        expr: rate(temporary_bans_total[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High temporary ban rate"
+          description: "{{ $value }} temporary bans/sec"
+      
+      # Redis connection issues
+      - alert: RedisConnectionFailure
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis connection failure"
+          description: "Rate limiting may not be enforced correctly"

@@ -1,0 +1,100 @@
+name: Rate Limiting & Anti-Abuse Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  rate-limiting-tests:
+    name: Multi-Dimensional Rate Limiting
+    runs-on: ubuntu-latest
+    
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r services/api-gateway/requirements.txt
+          pip install -r services/challenge-service/requirements.txt
+          pip install pytest pytest-asyncio httpx
+      
+      - name: Start services
+        env:
+          REDIS_URL: redis://localhost:6379
+        run: |
+          # Start challenge service
+          cd services/challenge-service
+          python main.py &
+          CHALLENGE_PID=$!
+          cd ../..
+          
+          # Start API gateway
+          cd services/api-gateway
+          python main.py &
+          GATEWAY_PID=$!
+          cd ../..
+          
+          sleep 10
+          
+          # Health checks
+          curl -f http://localhost:8000/health || exit 1
+          curl -f http://localhost:8002/health || exit 1
+      
+      - name: Test multi-dimensional rate limiting
+        run: |
+          pytest tests/integration/test_rate_limiting.py::TestMultiDimensionalRateLimiting -v
+      
+      - name: Test progressive penalties
+        run: |
+          pytest tests/integration/test_rate_limiting.py::TestProgressivePenalties -v
+      
+      - name: Test distributed enforcement (3+ replicas)
+        run: |
+          pytest tests/integration/test_distributed_consistency.py::TestDistributedConsistency::test_three_replica_consistency -v
+      
+      - name: Verify no race conditions
+        run: |
+          pytest tests/integration/test_distributed_consistency.py::TestDistributedConsistency::test_no_race_conditions_under_load -v
+      
+      - name: Test bypass detection
+        run: |
+          pytest tests/integration/test_rate_limiting.py::TestBypassDetection -v
+      
+      - name: Verify bypass cost metrics
+        run: |
+          pytest tests/integration/test_distributed_consistency.py::TestBypassCostMetrics::test_bypass_metric_increases -v
+      
+      - name: Generate rate limiting report
+        if: always()
+        run: |
+          echo "# Rate Limiting Test Report" > rate-limit-report.md
+          echo "" >> rate-limit-report.md
+          echo "## Test Results" >> rate-limit-report.md
+          pytest tests/integration/ --tb=no -v >> rate-limit-report.md || true
+      
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rate-limit-report
+          path: rate-limit-report.md
