@@ -1,0 +1,94 @@
+{
+  "dashboard": {
+    "title": "Certivo Rate Limiting & Anti-Abuse",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Requests by Dimension",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(rate_limit_checks_total[5m])",
+            "legendFormat": "{{dimension}}"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Rate Limit Hit Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(rate_limit_blocked_total[5m])",
+            "legendFormat": "Blocked"
+          },
+          {
+            "expr": "rate(rate_limit_allowed_total[5m])",
+            "legendFormat": "Allowed"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Progressive Penalties",
+        "type": "pie",
+        "targets": [
+          {
+            "expr": "sum(rate_limit_soft_throttle_total)",
+            "legendFormat": "Soft Throttle"
+          },
+          {
+            "expr": "sum(rate_limit_hard_block_total)",
+            "legendFormat": "Hard Block"
+          },
+          {
+            "expr": "sum(temporary_bans_total)",
+            "legendFormat": "Temporary Ban"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Bypass Attempts (Attacker Cost)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "increase(bypass_attempts_total[10m])",
+            "legendFormat": "{{type}}"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Top Blocked IPs",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "topk(10, sum by (ip) (rate_limit_blocked_total))"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Top Blocked ASNs",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "topk(10, sum by (asn) (rate_limit_blocked_total))"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Redis Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(redis_commands_processed_total[1m])",
+            "legendFormat": "Commands/sec"
+          }
+        ]
+      }
+    ]
+  }
+}
