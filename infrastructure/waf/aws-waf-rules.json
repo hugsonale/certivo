@@ -1,0 +1,106 @@
+{
+  "Name": "CertivoWAFRuleSet",
+  "Description": "AWS WAF rules for Certivo API protection",
+  "Rules": [
+    {
+      "Name": "RateLimitRule",
+      "Priority": 1,
+      "Statement": {
+        "RateBasedStatement": {
+          "Limit": 100,
+          "AggregateKeyType": "IP"
+        }
+      },
+      "Action": {
+        "Block": {
+          "CustomResponse": {
+            "ResponseCode": 429,
+            "CustomResponseBodyKey": "RateLimitExceeded"
+          }
+        }
+      },
+      "VisibilityConfig": {
+        "SampledRequestsEnabled": true,
+        "CloudWatchMetricsEnabled": true,
+        "MetricName": "RateLimitRule"
+      }
+    },
+    {
+      "Name": "IPReputationRule",
+      "Priority": 2,
+      "Statement": {
+        "ManagedRuleGroupStatement": {
+          "VendorName": "AWS",
+          "Name": "AWSManagedRulesAmazonIpReputationList"
+        }
+      },
+      "OverrideAction": {
+        "None": {}
+      },
+      "VisibilityConfig": {
+        "SampledRequestsEnabled": true,
+        "CloudWatchMetricsEnabled": true,
+        "MetricName": "IPReputationRule"
+      }
+    },
+    {
+      "Name": "CommonAttackRule",
+      "Priority": 3,
+      "Statement": {
+        "ManagedRuleGroupStatement": {
+          "VendorName": "AWS",
+          "Name": "AWSManagedRulesCommonRuleSet"
+        }
+      },
+      "OverrideAction": {
+        "None": {}
+      },
+      "VisibilityConfig": {
+        "SampledRequestsEnabled": true,
+        "CloudWatchMetricsEnabled": true,
+        "MetricName": "CommonAttackRule"
+      }
+    },
+    {
+      "Name": "KnownBadInputsRule",
+      "Priority": 4,
+      "Statement": {
+        "ManagedRuleGroupStatement": {
+          "VendorName": "AWS",
+          "Name": "AWSManagedRulesKnownBadInputsRuleSet"
+        }
+      },
+      "OverrideAction": {
+        "None": {}
+      },
+      "VisibilityConfig": {
+        "SampledRequestsEnabled": true,
+        "CloudWatchMetricsEnabled": true,
+        "MetricName": "KnownBadInputsRule"
+      }
+    },
+    {
+      "Name": "GeoBlockingRule",
+      "Priority": 5,
+      "Statement": {
+        "GeoMatchStatement": {
+          "CountryCodes": ["KP", "IR", "SY"]
+        }
+      },
+      "Action": {
+        "Block": {}
+      },
+      "VisibilityConfig": {
+        "SampledRequestsEnabled": true,
+        "CloudWatchMetricsEnabled": true,
+        "MetricName": "GeoBlockingRule"
+      }
+    }
+  ],
+  "CustomResponseBodies": {
+    "RateLimitExceeded": {
+      "ContentType": "APPLICATION_JSON",
+      "Content": "{\"error\":\"Rate limit exceeded\",\"error_code\":\"RATE_LIMIT_EXCEEDED\",\"retry_after\":60}"
+    }
+  }
+}
