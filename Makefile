@@ -4,6 +4,17 @@
 .PHONY: help test contract-tests validate-openapi api-docs
 
 
+.PHONY: help test-rate-limits test-distributed manual-rate-test
+
+help:
+	@echo "Certivo Rate Limiting Commands"
+	@echo "=============================="
+	@echo "make test-rate-limits      - Run rate limiting tests"
+	@echo "make test-distributed      - Test distributed enforcement"
+	@echo "make manual-rate-test      - Manual rate limit testing"
+	@echo "make bypass-metrics        - Show bypass attempt metrics"
+
+
 help:
 	@echo "Certivo API Commands"
 	@echo "==================="
@@ -83,3 +94,17 @@ check-coverage:
 # Run all checks (for CI)
 ci-checks: validate-openapi check-coverage contract-tests
 	@echo "✅ All CI checks passed"
+
+
+# Rate limiting tests
+test-rate-limits:
+	pytest tests/integration/test_rate_limiting.py -v
+
+test-distributed:
+	pytest tests/integration/test_distributed_consistency.py -v
+
+manual-rate-test:
+	python scripts/test_rate_limits.py
+
+bypass-metrics:
+	curl http://localhost:8000/metrics/bypass-attempts | jq
