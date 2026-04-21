@@ -1,0 +1,86 @@
+{
+  "name": "Certivo WAF Rules",
+  "description": "Edge-level protection for Certivo verification API",
+  "rules": [
+    {
+      "id": "block_known_bots",
+      "description": "Block known bot user agents",
+      "expression": "(http.user_agent contains \"bot\" or http.user_agent contains \"crawler\" or http.user_agent contains \"spider\") and not cf.client.bot",
+      "action": "block",
+      "enabled": true
+    },
+    {
+      "id": "block_automated_tools",
+      "description": "Block automated security tools",
+      "expression": "http.user_agent contains \"sqlmap\" or http.user_agent contains \"nikto\" or http.user_agent contains \"nmap\" or http.user_agent contains \"masscan\"",
+      "action": "block",
+      "enabled": true
+    },
+    {
+      "id": "rate_limit_challenge_endpoint",
+      "description": "Edge rate limiting for challenge endpoint",
+      "expression": "http.request.uri.path eq \"/v1/challenge\"",
+      "action": "rate_limit",
+      "enabled": true,
+      "rate_limit": {
+        "requests_per_period": 10,
+        "period": 60,
+        "mitigation_timeout": 600
+      }
+    },
+    {
+      "id": "rate_limit_verify_endpoint",
+      "description": "Edge rate limiting for verify endpoint",
+      "expression": "http.request.uri.path eq \"/v1/verify\"",
+      "action": "rate_limit",
+      "enabled": true,
+      "rate_limit": {
+        "requests_per_period": 5,
+        "period": 60,
+        "mitigation_timeout": 900
+      }
+    },
+    {
+      "id": "challenge_on_suspicious_asn",
+      "description": "Challenge requests from suspicious ASNs",
+      "expression": "ip.geoip.asnum in {174 16276 45102 20473}",
+      "action": "challenge",
+      "enabled": true
+    },
+    {
+      "id": "block_vpn_providers",
+      "description": "Block known VPN/proxy providers",
+      "expression": "cf.threat_score gt 50",
+      "action": "challenge",
+      "enabled": true
+    },
+    {
+      "id": "validate_http_method",
+      "description": "Only allow POST for verification endpoints",
+      "expression": "(http.request.uri.path eq \"/v1/challenge\" or http.request.uri.path eq \"/v1/verify\" or http.request.uri.path eq \"/v1/finalize\") and http.request.method ne \"POST\"",
+      "action": "block",
+      "enabled": true
+    },
+    {
+      "id": "block_large_payloads",
+      "description": "Block unusually large payloads (except video uploads)",
+      "expression": "http.request.uri.path ne \"/v1/verify\" and http.request.body.size gt 1048576",
+      "action": "block",
+      "enabled": true
+    },
+    {
+      "id": "geo_blocking",
+      "description": "Block requests from high-risk countries (optional)",
+      "expression": "ip.geoip.country in {\"KP\" \"IR\" \"SY\"}",
+      "action": "block",
+      "enabled": false
+    },
+    {
+      "id": "require_tls",
+      "description": "Enforce TLS 1.2+",
+      "expression": "ssl and cf.tls_version lt \"TLSv1.2\"",
+      "action": "block",
+      "enabled": true
+    }
+  ]
+}
