@@ -69,3 +69,65 @@ Certivo implements a **multi-dimensional distributed rate limiting system** with
 ## Distributed Enforcement
 
 ### Redis-Based Coordination
+
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  Replica 1  │────▶│    Redis    │◀────│  Replica 2  │
+└─────────────┘     │  (Central)  │     └─────────────┘
+└─────────────┘
+▲
+│
+┌─────────────┐
+│  Replica 3  │
+└─────────────┘
+
+**Atomic Operations:**
+- `INCR` for counter increment
+- `EXPIRE NX` for TTL initialization
+- Pipeline for consistency
+
+**Consistency Guarantee:**
+- Limits enforced correctly across 3+ replicas
+- No race conditions under concurrent load
+- No over-allowance due to distributed state
+
+## Bypass Detection
+
+### IP Rotation Detection
+
+```python
+# Track device-IP mapping
+device_ip_map[device_id] = current_ip
+
+# Detect rotation
+if previous_ip != current_ip:
+    bypass_attempts["ip_rotation"] += 1
+```
+
+**Cost Increase Metric:**
+- Each bypass attempt tracked
+- Monitored via `/metrics/bypass-attempts`
+- Alerts trigger on threshold
+
+### Attack Cost Analysis
+
+| Attack Type | Without Rate Limiting | With Rate Limiting | Cost Multiplier |
+|-------------|----------------------|-------------------|-----------------|
+| Simple spam | 1000 req/sec | 100 req/min | **600x** |
+| IP rotation | Unlimited | Tracked + penalized | **∞** (banned) |
+| Distributed attack | Unlimited | ASN-level limits | **Network-wide ban** |
+
+## WAF Integration
+
+### Edge Layer (Cloudflare/AWS WAF)
+- Bot detection
+- IP reputation filtering
+- Geographic blocking
+- DDoS mitigation
+
+### Application Layer (API Gateway)
+- Multi-dimensional limits
+- Progressive penalties
+- Bypass detection
+
+### Combined Protection
+
