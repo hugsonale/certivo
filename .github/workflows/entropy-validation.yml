@@ -1,0 +1,116 @@
+name: Challenge Entropy Validation
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  entropy-validation:
+    name: Validate Entropy & Red Team Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r services/challenge-service/requirements.txt
+          pip install -r services/verification-api/requirements.txt
+          pip install -r services/async-worker/requirements.txt
+          pip install pytest pytest-asyncio httpx
+      
+      - name: Start services
+        env:
+          REDIS_URL: redis://localhost:6379
+          TARGET_SESSION_ENTROPY: 20.0
+        run: |
+          # Start challenge service
+          cd services/challenge-service
+          python main.py &
+          CHALLENGE_PID=$!
+          cd ../..
+          
+          # Start verification service
+          cd services/verification-api
+          python main.py &
+          VERIFY_PID=$!
+          cd ../..
+          
+          # Start async worker
+          cd services/async-worker
+          python main.py &
+          WORKER_PID=$!
+          cd ../..
+          
+          # Start API gateway
+          cd services/api-gateway
+          python main.py &
+          GATEWAY_PID=$!
+          cd ../..
+          
+          sleep 15
+          
+          # Health checks
+          curl -f http://localhost:8000/health || exit 1
+          curl -f http://localhost:8002/health || exit 1
+      
+      - name: Test entropy >= 20 bits per session
+        run: |
+          pytest tests/red_team/test_prerecorded_attacks.py::TestEntropyValidation::test_session_entropy_meets_target -v
+      
+      - name: Test prerecorded attack < 1% success
+        run: |
+          pytest tests/red_team/test_prerecorded_attacks.py::TestPrerecordedVideoAttacks::test_simple_prerecorded_attack -v
+      
+      - name: Test multi-step attack < 1% success
+        run: |
+          pytest tests/red_team/test_prerecorded_attacks.py::TestPrerecordedVideoAttacks::test_multi_step_prerecorded_attack -v
+      
+      - name: Test library exhaustion attack
+        run: |
+          pytest tests/red_team/test_prerecorded_attacks.py::TestPrerecordedVideoAttacks::test_library_exhaustion_attack -v
+      
+      - name: Test adaptive learning attack
+        run: |
+          pytest tests/red_team/test_prerecorded_attacks.py::TestCombinedAttacks::test_adaptive_learning_attack -v
+      
+      - name: Verify CSPRNG usage
+        run: |
+          # Verify secrets module is used (not random)
+          grep -r "import secrets" services/shared/challenge_entropy.py || exit 1
+          ! grep -r "import random" services/shared/challenge_entropy.py || exit 1
+      
+      - name: Generate entropy report
+        if: always()
+        run: |
+          echo "# Challenge Entropy Report" > entropy-report.md
+          echo "" >> entropy-report.md
+          echo "## Test Results" >> entropy-report.md
+          pytest tests/red_team/ --tb=no -v >> entropy-report.md || true
+      
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: entropy-report
+          path: entropy-report.md
