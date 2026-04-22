@@ -6,6 +6,10 @@
 
 .PHONY: help test-rate-limits test-distributed manual-rate-test
 
+
+.PHONY: test-entropy test-red-team validate-entropy
+
+
 help:
 	@echo "Certivo Rate Limiting Commands"
 	@echo "=============================="
@@ -108,3 +112,18 @@ manual-rate-test:
 
 bypass-metrics:
 	curl http://localhost:8000/metrics/bypass-attempts | jq
+
+
+# Entropy testing
+test-entropy:
+	pytest tests/red_team/test_prerecorded_attacks.py::TestEntropyValidation -v
+
+test-red-team:
+	pytest tests/red_team/ -v
+
+validate-entropy:
+	python scripts/validate_entropy.py
+
+# Combined validation
+validate-all: validate-entropy test-red-team
+	@echo "✅ All entropy and red team tests passed"
