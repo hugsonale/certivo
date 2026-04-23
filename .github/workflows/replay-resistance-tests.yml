@@ -1,0 +1,97 @@
+name: Replay Resistance & Tamper Detection
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  replay-resistance:
+    name: Replay Resistance Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+      
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: certivo
+          POSTGRES_USER: certivo
+          POSTGRES_PASSWORD: certivo
+        ports:
+          - 5432:5432
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pyseto pillow
+          pip install -r services/challenge-service/requirements.txt
+          pip install -r services/verification-api/requirements.txt
+          pip install pytest pytest-asyncio httpx
+      
+      - name: Initialize database
+        run: |
+          PGPASSWORD=certivo psql -h localhost -U certivo -d certivo -f infrastructure/postgres/init.sql
+      
+      - name: Start services
+        env:
+          REDIS_URL: redis://localhost:6379
+          POSTGRES_URL: postgresql://certivo:certivo@localhost:5432/certivo
+        run: |
+          cd services/challenge-service && python main.py &
+          cd services/verification-api && python main.py &
+          cd services/api-gateway && python main.py &
+          sleep 15
+      
+      - name: Test token tamper detection (100%)
+        run: |
+          pytest tests/security/test_token_tampering.py::TestTokenTamperDetection::test_tampered_payload_rejected_100_percent -v
+      
+      - name: Test replay prevention (100%)
+        run: |
+          pytest tests/security/test_token_tampering.py::TestReplayAttacks::test_token_reuse_fails_100_percent -v
+      
+      - name: Test concurrent replay blocking
+        run: |
+          pytest tests/security/test_token_tampering.py::TestReplayAttacks::test_concurrent_replay_attempts_blocked -v
+      
+      - name: Test distributed consumption atomicity
+        run: |
+          pytest tests/security/test_token_tampering.py::TestDistributedConsumption::test_consumption_atomic_across_replicas -v
+      
+      - name: Test device ID binding
+        run: |
+          pytest tests/security/test_token_tampering.py::TestTokenTamperDetection::test_device_id_mismatch_rejected -v
+      
+      - name: Test cross-session replay
+        run: |
+          pytest tests/security/test_token_tampering.py::TestReplayAttacks::test_cross_session_replay_blocked -v
+      
+      - name: Generate security report
+        if: always()
+        run: |
+          echo "# Replay Resistance Report" > security-report.md
+          echo "" >> security-report.md
+          echo "## Test Results" >> security-report.md
+          pytest tests/security/ --tb=no -v >> security-report.md || true
+      
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: security-report.md
