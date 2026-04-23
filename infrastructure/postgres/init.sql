@@ -1,12 +1,130 @@
 -- =============================================================================
--- CERTIVO DATABASE SCHEMA
+-- CERTIVO DATABASE SCHEMA - WITH CONSUMPTION TRACKING
 -- =============================================================================
 
--- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- =============================================================================
--- SESSIONS TABLE
+-- CHALLENGES TABLE (Enhanced for consumption tracking)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS challenges (
+    id SERIAL PRIMARY KEY,
+    challenge_id VARCHAR(255) UNIQUE NOT NULL,
+    device_id VARCHAR(255) NOT NULL,
+    template_id VARCHAR(100),
+    nonce VARCHAR(255) UNIQUE NOT NULL,
+    
+    -- Consumption tracking
+    consumed BOOLEAN DEFAULT false,
+    consumed_at TIMESTAMP,
+    consumed_by_device VARCHAR(255),
+    consume_metadata TEXT,
+    
+    -- Session binding
+    session_metadata TEXT,
+    ip_hash VARCHAR(32),
+    user_agent_hash VARCHAR(32),
+    
+    -- Watermark
+    watermark_seed VARCHAR(64),
+    
+    -- Timestamps
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL,
+    
+    INDEX idx_challenge_id (challenge_id),
+    INDEX idx_nonce (nonce),
+    INDEX idx_consumed (consumed),
+    INDEX idx_device_id (device_id),
+    INDEX idx_expires_at (expires_at)
+);
+
+-- =============================================================================
+-- TOKEN CONSUMPTIONS TABLE (Audit log)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS token_consumptions (
+    id SERIAL PRIMARY KEY,
+    token_id TEXT NOT NULL,
+    challenge_id VARCHAR(255) NOT NULL,
+    device_id VARCHAR(255) NOT NULL,
+    
+    -- Consumption details
+    consumed_at DOUBLE PRECISION NOT NULL,
+    metadata TEXT,
+    
+    -- Verification result
+    verification_passed BOOLEAN,
+    liveness_score FLOAT,
+    
+    -- Session info
+    ip_hash VARCHAR(32),
+    user_agent_hash VARCHAR(32),
+    
+    timestamp_utc TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    INDEX idx_token_id (token_id),
+    INDEX idx_challenge_id (challenge_id),
+    INDEX idx_device_id (device_id),
+    INDEX idx_consumed_at (consumed_at),
+    UNIQUE(token_id)  -- Ensure one consumption per token
+);
+
+-- =============================================================================
+-- TAMPER ATTEMPTS TABLE (Security monitoring)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS tamper_attempts (
+    id SERIAL PRIMARY KEY,
+    
+    -- Attack details
+    attempted_token TEXT,
+    challenge_id VARCHAR(255),
+    device_id VARCHAR(255),
+    
+    -- Detection
+    tamper_type VARCHAR(50),  -- 'signature_invalid', 'expired', 'metadata_mismatch', etc.
+    detection_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Context
+    ip_hash VARCHAR(32),
+    user_agent_hash VARCHAR(32),
+    
+    INDEX idx_tamper_type (tamper_type),
+    INDEX idx_device_id (device_id),
+    INDEX idx_detection_time (detection_time)
+);
+
+-- =============================================================================
+-- REPLAY ATTEMPTS TABLE (Security monitoring)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS replay_attempts (
+    id SERIAL PRIMARY KEY,
+    
+    -- Attack details
+    token_id TEXT,
+    challenge_id VARCHAR(255) NOT NULL,
+    device_id VARCHAR(255) NOT NULL,
+    
+    -- Original consumption
+    original_consumed_at DOUBLE PRECISION,
+    
+    -- Replay attempt
+    replay_attempt_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Context
+    ip_hash VARCHAR(32),
+    user_agent_hash VARCHAR(32),
+    
+    INDEX idx_challenge_id (challenge_id),
+    INDEX idx_device_id (device_id),
+    INDEX idx_replay_time (replay_attempt_time)
+);
+
+-- =============================================================================
+-- EXISTING TABLES (from previous parts)
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -24,10 +142,6 @@ CREATE TABLE IF NOT EXISTS sessions (
     INDEX idx_timestamp (timestamp_utc),
     INDEX idx_trust_level (trust_level)
 );
-
--- =============================================================================
--- CHALLENGE RESULTS TABLE
--- =============================================================================
 
 CREATE TABLE IF NOT EXISTS challenge_results (
     id SERIAL PRIMARY KEY,
@@ -57,10 +171,6 @@ CREATE TABLE IF NOT EXISTS challenge_results (
     INDEX idx_timestamp (timestamp_utc)
 );
 
--- =============================================================================
--- TRUSTED DEVICES TABLE
--- =============================================================================
-
 CREATE TABLE IF NOT EXISTS trusted_devices (
     id SERIAL PRIMARY KEY,
     device_id VARCHAR(255) UNIQUE NOT NULL,
@@ -82,61 +192,5 @@ CREATE TABLE IF NOT EXISTS trusted_devices (
     INDEX idx_trust_revoked (trust_revoked),
     INDEX idx_last_verified (last_verified_utc)
 );
-
--- =============================================================================
--- BOT REPORTS TABLE
--- =============================================================================
-
-CREATE TABLE IF NOT EXISTS bot_reports (
-    id SERIAL PRIMARY KEY,
-    device_id VARCHAR(255) NOT NULL,
-    
-    bot_detected BOOLEAN NOT NULL,
-    suspicion_score INTEGER NOT NULL,
-    
-    frontend_checks TEXT,
-    fingerprint TEXT,
-    backend_signals TEXT,
-    
-    ip_address VARCHAR(45),
-    user_agent TEXT,
-    
-    timestamp_utc TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    INDEX idx_device_id (device_id),
-    INDEX idx_bot_detected (bot_detected),
-    INDEX idx_suspicion_score (suspicion_score),
-    INDEX idx_timestamp (timestamp_utc)
-);
-
--- =============================================================================
--- SUSPICIOUS DEVICES TABLE
--- =============================================================================
-
-CREATE TABLE IF NOT EXISTS suspicious_devices (
-    id SERIAL PRIMARY KEY,
-    device_id VARCHAR(255) NOT NULL,
-    
-    reason TEXT NOT NULL,
-    suspicion_score INTEGER NOT NULL,
-    evidence TEXT,
-    
-    is_blocked BOOLEAN DEFAULT false,
-    flagged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    INDEX idx_device_id (device_id),
-    INDEX idx_is_blocked (is_blocked),
-    INDEX idx_suspicion_score (suspicion_score),
-    INDEX idx_flagged_at (flagged_at)
-);
-
--- =============================================================================
--- INITIAL DATA
--- =============================================================================
-
--- Insert test device (for development only - remove in production)
-INSERT INTO trusted_devices (device_id, trust_level, total_verifications, successful_verifications)
-VALUES ('test_device_001', 'high', 10, 10)
-ON CONFLICT (device_id) DO NOTHING;
 
 COMMIT;
