@@ -9,6 +9,7 @@
 
 .PHONY: test-entropy test-red-team validate-entropy
 
+.PHONY: test-security validate-replay-resistance
 
 help:
 	@echo "Certivo Rate Limiting Commands"
@@ -127,3 +128,16 @@ validate-entropy:
 # Combined validation
 validate-all: validate-entropy test-red-team
 	@echo "✅ All entropy and red team tests passed"
+
+
+
+# Security testing
+test-security:
+	pytest tests/security/ -v
+
+validate-replay-resistance:
+	python scripts/validate_replay_resistance.py
+
+# Complete validation
+validate-all: validate-replay-resistance test-security
+	@echo "✅ All replay resistance validations passed"
