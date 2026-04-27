@@ -1,0 +1,180 @@
+name: Liveness and Deepfake Resistance
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  liveness-tests:
+    name: Multi-Signal Liveness Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+      
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: certivo
+          POSTGRES_USER: certivo
+          POSTGRES_PASSWORD: certivo
+        ports:
+          - 5432:5432
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgl1-mesa-glx \
+            libglib2.0-0 \
+            ffmpeg \
+            libsm6 \
+            libxext6 \
+            libxrender-dev
+      
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install mediapipe==0.10.9
+          pip install opencv-python==4.9.0.80
+          pip install librosa==0.10.1
+          pip install soundfile==0.12.1
+          pip install scipy==1.11.4
+          pip install -r services/async-worker/requirements.txt
+          pip install pytest pytest-asyncio httpx
+      
+      - name: Initialize database
+        run: |
+          PGPASSWORD=certivo psql -h localhost -U certivo -d certivo -f infrastructure/postgres/init.sql
+      
+      - name: Start services
+        env:
+          REDIS_URL: redis://localhost:6379
+          POSTGRES_URL: postgresql://certivo:certivo@localhost:5432/certivo
+        run: |
+          cd services/challenge-service && python main.py &
+          cd services/verification-api && python main.py &
+          cd services/async-worker && python main.py &
+          cd services/api-gateway && python main.py &
+          sleep 20
+      
+      - name: Test motion trajectory detection
+        run: |
+          pytest tests/red_team/test_deepfake_resistance.py::TestLivenessSignals::test_motion_trajectory_detection -v
+      
+      - name: Test temporal landmark consistency
+        run: |
+          pytest tests/red_team/test_deepfake_resistance.py::TestLivenessSignals::test_temporal_landmark_consistency -v
+      
+      - name: Test spoof detection
+        run: |
+          pytest tests/red_team/test_deepfake_resistance.py::TestLivenessSignals::test_spoof_detection_accuracy -v
+      
+      - name: Test screen replay attack (< 5%)
+        run: |
+          pytest tests/red_team/test_deepfake_resistance.py::TestDeepfakeResistance::test_screen_replay_attack_blocked -v
+      
+      - name: Test deepfake video attack (< 5%)
+        run: |
+          pytest tests/red_team/test_deepfake_resistance.py::TestDeepfakeResistance::test_deepfake_video_attack_blocked -v
+      
+      - name: Test combined attack suite (< 5%)
+        run: |
+          pytest tests/red_team/test_deepfake_resistance.py::TestDeepfakeResistance::test_combined_attack_suite -v
+      
+      - name: Verify FAR/FRR monitoring active
+        run: |
+          curl -f http://localhost:8004/metrics/policy-compliance \
+            -H "X-Internal-Token: secret" || exit 1
+      
+      - name: Generate liveness report
+        if: always()
+        run: |
+          echo "# Liveness and Deepfake Resistance Report" > liveness-report.md
+          echo "" >> liveness-report.md
+          echo "## Test Results" >> liveness-report.md
+          pytest tests/red_team/test_deepfake_resistance.py --tb=no -v >> liveness-report.md || true
+      
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: liveness-report
+          path: liveness-report.md
+
+  far-frr-monitoring:
+    name: FAR/FRR Compliance Check
+    runs-on: ubuntu-latest
+    needs: liveness-tests
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: certivo
+          POSTGRES_USER: certivo
+          POSTGRES_PASSWORD: certivo
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r services/async-worker/requirements.txt
+          pip install pytest httpx
+      
+      - name: Initialize database
+        run: |
+          PGPASSWORD=certivo psql -h localhost -U certivo -d certivo -f infrastructure/postgres/init.sql
+      
+      - name: Start async worker
+        env:
+          POSTGRES_URL: postgresql://certivo:certivo@localhost:5432/certivo
+          REDIS_URL: redis://localhost:6379
+        run: |
+          cd services/async-worker && python main.py &
+          sleep 10
+      
+      - name: Check FAR/FRR policy compliance
+        run: |
+          python scripts/check_far_frr_compliance.py
+      
+      - name: Generate FAR/FRR report
+        if: always()
+        run: |
+          python scripts/generate_far_frr_report.py > far-frr-report.md
+      
+      - name: Upload FAR/FRR report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: far-frr-report
+          path: far-frr-report.md

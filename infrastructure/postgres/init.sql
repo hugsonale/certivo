@@ -193,4 +193,67 @@ CREATE TABLE IF NOT EXISTS trusted_devices (
     INDEX idx_last_verified (last_verified_utc)
 );
 
+
+-- =============================================================================
+-- VERIFICATION OUTCOMES TABLE (For FAR/FRR tracking)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS verification_outcomes (
+    id SERIAL PRIMARY KEY,
+    session_id VARCHAR(255) NOT NULL,
+    device_id VARCHAR(255) NOT NULL,
+    
+    -- Ground truth and prediction
+    is_genuine BOOLEAN NOT NULL,  -- Ground truth: true genuine user
+    was_accepted BOOLEAN NOT NULL,  -- System decision
+    
+    -- Outcome classification
+    outcome_type VARCHAR(50) NOT NULL,  -- true_accept, false_reject, false_accept, true_reject
+    
+    -- Metrics
+    liveness_score FLOAT NOT NULL,
+    
+    -- Metadata
+    metadata TEXT,
+    
+    timestamp_utc TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    INDEX idx_outcome_type (outcome_type),
+    INDEX idx_timestamp (timestamp_utc),
+    INDEX idx_device_id (device_id)
+);
+
+-- =============================================================================
+-- DEEPFAKE DETECTION RESULTS TABLE
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS deepfake_detection_results (
+    id SERIAL PRIMARY KEY,
+    session_id VARCHAR(255) NOT NULL,
+    device_id VARCHAR(255) NOT NULL,
+    challenge_id VARCHAR(255) NOT NULL,
+    
+    -- Detection scores
+    motion_score FLOAT,
+    temporal_score FLOAT,
+    anti_spoof_score FLOAT,
+    av_sync_score FLOAT,
+    
+    -- Spoof indicators
+    moire_detected BOOLEAN,
+    color_temp_inconsistent BOOLEAN,
+    face_warping BOOLEAN,
+    
+    -- Final decision
+    is_spoof BOOLEAN,
+    liveness_score FLOAT,
+    
+    timestamp_utc TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    INDEX idx_session_id (session_id),
+    INDEX idx_is_spoof (is_spoof),
+    INDEX idx_timestamp (timestamp_utc)
+);
+
+
 COMMIT;
