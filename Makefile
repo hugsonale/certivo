@@ -129,8 +129,6 @@ validate-entropy:
 validate-all: validate-entropy test-red-team
 	@echo "✅ All entropy and red team tests passed"
 
-
-
 # Security testing
 test-security:
 	pytest tests/security/ -v
@@ -141,3 +139,19 @@ validate-replay-resistance:
 # Complete validation
 validate-all: validate-replay-resistance test-security
 	@echo "✅ All replay resistance validations passed"
+
+
+.PHONY: test-liveness test-deepfake check-far-frr validate-liveness
+
+# Liveness testing
+test-liveness:
+	pytest tests/unit/test_liveness_detection.py -v
+
+test-deepfake:
+	pytest tests/red_team/test_deepfake_resistance.py -v
+
+check-far-frr:
+	python scripts/check_far_frr_compliance.py
+
+validate-liveness: test-liveness test-deepfake check-far-frr
+	@echo "✅ All liveness and deepfake resistance tests passed"
