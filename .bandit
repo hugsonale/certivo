@@ -1,0 +1,78 @@
+[bandit]
+# Bandit configuration for Python security scanning
+
+# Exclude test files and virtual environments
+exclude_dirs = [
+    '/tests/',
+    '/venv/',
+    '/.venv/',
+    '/node_modules/'
+]
+
+# Test levels (LOW, MEDIUM, HIGH)
+# Only report HIGH severity issues in CI
+skips = []
+
+# Specific tests to run
+tests = [
+    'B201',  # Flask debug mode
+    'B301',  # Pickle usage
+    'B302',  # Marshal usage
+    'B303',  # MD5/SHA1 usage
+    'B304',  # Insecure cipher usage
+    'B305',  # Insecure cipher mode
+    'B306',  # Insecure mktemp usage
+    'B307',  # Eval usage
+    'B308',  # Mark safe usage
+    'B309',  # HTTPSConnection usage
+    'B310',  # urllib usage
+    'B311',  # Random usage for crypto
+    'B312',  # Telnet usage
+    'B313',  # XML parsing
+    'B314',  # XML etree
+    'B315',  # XML expat
+    'B316',  # XML sax
+    'B317',  # XML minidom
+    'B318',  # XML pulldom
+    'B319',  # XML xmlrpc
+    'B320',  # XML lxml
+    'B321',  # FTP usage
+    'B322',  # Input usage
+    'B323',  # Unverified SSL context
+    'B324',  # Insecure hash function
+    'B325',  # Insecure tempfile
+    'B401',  # Import telnetlib
+    'B402',  # Import ftplib
+    'B403',  # Import pickle
+    'B404',  # Import subprocess
+    'B405',  # Import xml.etree
+    'B406',  # Import xml.sax
+    'B407',  # Import xml.expat
+    'B408',  # Import xml.minidom
+    'B409',  # Import xml.pulldom
+    'B410',  # Import lxml
+    'B411',  # Import xmlrpclib
+    'B412',  # Import httpoxy
+    'B413',  # Import pycrypto
+    'B501',  # Request with verify=False
+    'B502',  # SSL with bad version
+    'B503',  # SSL with bad defaults
+    'B504',  # SSL with no version
+    'B505',  # Weak cryptographic key
+    'B506',  # YAML load
+    'B507',  # SSH no host key verification
+    'B601',  # Paramiko exec
+    'B602',  # Shell with shell=True
+    'B603',  # Subprocess without shell
+    'B604',  # Any other function with shell
+    'B605',  # Start process with shell
+    'B606',  # Start process without shell
+    'B607',  # Partial path in subprocess
+    'B608',  # SQL injection
+    'B609',  # Wildcard injection
+    'B610',  # Django extra
+    'B611',  # Django rawsql
+    'B701',  # Jinja2 autoescape false
+    'B702',  # Mako templates
+    'B703'   # Django mark safe
+]

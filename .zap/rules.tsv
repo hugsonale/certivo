@@ -1,0 +1,117 @@
+# OWASP ZAP scan rules configuration
+# Format: ID	THRESHOLD	[IGNORE/WARN/FAIL]
+
+10010	MEDIUM	WARN	# Cookie No HttpOnly Flag
+10011	MEDIUM	WARN	# Cookie Without Secure Flag
+10012	MEDIUM	FAIL	# Password Autocomplete
+10015	MEDIUM	WARN	# Re-examine Cache-control Directives
+10016	MEDIUM	WARN	# Web Browser XSS Protection Not Enabled
+10017	MEDIUM	WARN	# Cross-Domain JavaScript Source File Inclusion
+10019	MEDIUM	WARN	# Content-Type Header Missing
+10020	MEDIUM	WARN	# X-Frame-Options Header Missing
+10021	MEDIUM	WARN	# X-Content-Type-Options Header Missing
+10023	MEDIUM	WARN	# Information Disclosure - Debug Error Messages
+10024	MEDIUM	WARN	# Information Disclosure - Sensitive Information in URL
+10025	MEDIUM	WARN	# Information Disclosure - Sensitive Information in HTTP Referrer Header
+10026	MEDIUM	WARN	# HTTP Parameter Override
+10027	MEDIUM	WARN	# Information Disclosure - Suspicious Comments
+10028	MEDIUM	WARN	# Open Redirect
+10029	MEDIUM	WARN	# Cookie Poisoning
+10030	MEDIUM	FAIL	# User Controllable Charset
+10031	MEDIUM	WARN	# User Controllable HTML Element Attribute (Potential XSS)
+10032	MEDIUM	WARN	# Viewstate Scanner
+10033	MEDIUM	WARN	# Directory Browsing
+10034	MEDIUM	WARN	# Heartbleed OpenSSL Vulnerability
+10035	MEDIUM	FAIL	# Strict-Transport-Security Header Not Set
+10036	MEDIUM	WARN	# HTTP Server Response Header
+10037	MEDIUM	WARN	# Server Leaks Information via "X-Powered-By" HTTP Response Header Field(s)
+10038	MEDIUM	WARN	# Content Security Policy (CSP) Header Not Set
+10039	MEDIUM	WARN	# X-Backend-Server Header Information Leak
+10040	MEDIUM	FAIL	# Secure Pages Include Mixed Content
+10041	MEDIUM	FAIL	# HTTP to HTTPS Insecure Transition in Form Post
+10042	MEDIUM	FAIL	# HTTPS to HTTP Insecure Transition in Form Post
+10043	MEDIUM	WARN	# User Controllable JavaScript Event (XSS)
+10044	MEDIUM	WARN	# Big Redirect Detected (Potential Sensitive Information Leak)
+10045	MEDIUM	FAIL	# Source Code Disclosure - /WEB-INF folder
+10046	MEDIUM	WARN	# Sensitive Information in HTTP Referrer Header
+10047	MEDIUM	WARN	# HTTPS Content Available via HTTP
+10048	MEDIUM	WARN	# Remote Code Execution - Shell Shock
+10049	MEDIUM	WARN	# Content Cacheability
+10050	MEDIUM	WARN	# Retrieved from Cache
+10051	MEDIUM	FAIL	# Relative Path Confusion
+10052	MEDIUM	WARN	# X-ChromeLogger-Data (XCOLD) Header Information Leak
+10053	MEDIUM	WARN	# Apache Range Header DoS (CVE-2011-3192)
+10054	MEDIUM	FAIL	# Cookie Without SameSite Attribute
+10055	MEDIUM	WARN	# CSP Scanner
+10056	MEDIUM	WARN	# X-Debug-Token Information Leak
+10057	MEDIUM	WARN	# Username Hash Found
+10058	MEDIUM	WARN	# GET for POST
+10061	MEDIUM	FAIL	# X-AspNet-Version Response Header Scanner
+10062	MEDIUM	WARN	# PII Scanner
+10063	MEDIUM	WARN	# Permissions Policy Header Not Set
+10095	MEDIUM	WARN	# Backup File Disclosure
+10096	MEDIUM	WARN	# Timestamp Disclosure
+10097	MEDIUM	WARN	# Hash Disclosure
+10098	MEDIUM	FAIL	# Cross-Domain Misconfiguration
+10099	MEDIUM	FAIL	# Source Code Disclosure
+10103	MEDIUM	WARN	# Suspicious HTTP Methods Allowed
+10104	MEDIUM	WARN	# User Agent Fuzzer
+10105	MEDIUM	WARN	# Weak Authentication Method
+10106	MEDIUM	FAIL	# HTTP Only Site
+10107	MEDIUM	WARN	# Httpoxy - Proxy Header Misuse
+10108	MEDIUM	WARN	# Reverse Tabnabbing
+10109	MEDIUM	FAIL	# Modern Web Application
+10110	MEDIUM	WARN	# Dangerous JS Functions
+10202	MEDIUM	WARN	# Absence of Anti-CSRF Tokens
+40003	MEDIUM	FAIL	# CRLF Injection
+40008	MEDIUM	FAIL	# Parameter Tampering
+40009	MEDIUM	FAIL	# Server Side Include
+40012	MEDIUM	FAIL	# Cross Site Scripting (Reflected)
+40013	MEDIUM	FAIL	# Session Fixation
+40014	MEDIUM	FAIL	# Cross Site Scripting (Persistent)
+40016	MEDIUM	FAIL	# Cross Site Scripting (Persistent) - Prime
+40017	MEDIUM	FAIL	# Cross Site Scripting (Persistent) - Spider
+40018	MEDIUM	FAIL	# SQL Injection
+40019	MEDIUM	FAIL	# SQL Injection - MySQL
+40020	MEDIUM	FAIL	# SQL Injection - Hypersonic SQL
+40021	MEDIUM	FAIL	# SQL Injection - Oracle
+40022	MEDIUM	FAIL	# SQL Injection - PostgreSQL
+40023	MEDIUM	FAIL	# Possible Username Enumeration
+40024	MEDIUM	FAIL	# SQL Injection - SQLite
+40025	MEDIUM	FAIL	# Proxy Disclosure
+40026	MEDIUM	FAIL	# Cross Site Scripting (DOM Based)
+40027	MEDIUM	FAIL	# SQL Injection - MsSQL
+40028	MEDIUM	FAIL	# ELMAH Information Leak
+40029	MEDIUM	FAIL	# Trace.axd Information Leak
+40030	MEDIUM	FAIL	# Cross Site Request Forgery
+40031	MEDIUM	FAIL	# HTTP Strict Transport Security (HSTS)
+40032	MEDIUM	FAIL	# .htaccess Information Leak
+40033	MEDIUM	FAIL	# .env Information Leak
+40034	MEDIUM	FAIL	# Cloud Metadata Potentially Exposed
+40035	MEDIUM	FAIL	# Hidden File Found
+40036	MEDIUM	FAIL	# Server Side Template Injection
+40037	MEDIUM	FAIL	# Server Side Template Injection (Blind)
+40038	MEDIUM	FAIL	# Log4Shell (CVE-2021-44228, CVE-2021-45046)
+40039	MEDIUM	FAIL	# Web Cache Deception
+40040	MEDIUM	FAIL	# CORS Header
+40041	MEDIUM	FAIL	# Spring4Shell (CVE-2022-22965)
+40042	MEDIUM	FAIL	# Spring Actuator Information Leak
+40043	MEDIUM	FAIL	# SQL Injection - Snowflake
+90001	MEDIUM	FAIL	# Insecure JSF ViewState
+90002	MEDIUM	WARN	# Private IP Disclosure
+90003	MEDIUM	WARN	# Sub Resource Integrity Attribute Missing
+90004	MEDIUM	FAIL	# Insufficient Site Isolation Against Spectre Vulnerability
+90011	MEDIUM	FAIL	# Charset Mismatch
+90020	MEDIUM	FAIL	# HTTP Parameter Pollution
+90021	MEDIUM	FAIL	# XXE
+90022	MEDIUM	FAIL	# Application Error Disclosure
+90023	MEDIUM	FAIL	# XML External Entity Attack
+90024	MEDIUM	FAIL	# Generic Padding Oracle
+90025	MEDIUM	FAIL	# Expression Language Injection
+90026	MEDIUM	FAIL	# SOAP Action Spoofing
+90027	MEDIUM	FAIL	# Cookie Slack Detector
+90028	MEDIUM	FAIL	# Insecure HTTP Method
+90029	MEDIUM	FAIL	# SOAP XML Injection
+90030	MEDIUM	FAIL	# WSDL File Detection
+90033	MEDIUM	FAIL	# Loosely Scoped Cookie
+90034	MEDIUM	FAIL	# Cloud Metadata Potentially Exposed

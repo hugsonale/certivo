@@ -1,0 +1,71 @@
+# Semgrep security rules configuration
+
+rules:
+  - id: sql-injection-format-string
+    pattern: |
+      execute($SQL, ...)
+    message: Potential SQL injection via format string
+    languages: [python]
+    severity: ERROR
+    
+  - id: sql-injection-concatenation
+    pattern-either:
+      - pattern: execute("..." + $VAR)
+      - pattern: execute(f"...{$VAR}...")
+    message: SQL injection via string concatenation
+    languages: [python]
+    severity: ERROR
+    
+  - id: command-injection
+    pattern-either:
+      - pattern: subprocess.call($CMD, shell=True)
+      - pattern: os.system($CMD)
+    message: Potential command injection
+    languages: [python]
+    severity: ERROR
+    
+  - id: hardcoded-secret
+    pattern-either:
+      - pattern: password = "..."
+      - pattern: api_key = "..."
+      - pattern: secret = "..."
+    message: Hardcoded secret detected
+    languages: [python]
+    severity: WARNING
+    
+  - id: unsafe-deserialization
+    pattern-either:
+      - pattern: pickle.loads($DATA)
+      - pattern: yaml.load($DATA)
+    message: Unsafe deserialization
+    languages: [python]
+    severity: ERROR
+    
+  - id: weak-crypto
+    pattern-either:
+      - pattern: hashlib.md5(...)
+      - pattern: hashlib.sha1(...)
+    message: Weak cryptographic hash function
+    languages: [python]
+    severity: WARNING
+    
+  - id: insecure-random
+    pattern: |
+      random.random()
+    message: Use secrets module for cryptographic randomness
+    languages: [python]
+    severity: WARNING
+    
+  - id: missing-csrf-protection
+    pattern: |
+      @app.route(..., methods=["POST"])
+    message: POST endpoint without CSRF protection
+    languages: [python]
+    severity: WARNING
+    
+  - id: debug-mode-enabled
+    pattern: |
+      app.run(debug=True)
+    message: Debug mode enabled in production
+    languages: [python]
+    severity: ERROR
