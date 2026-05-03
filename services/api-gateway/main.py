@@ -1,37 +1,33 @@
 """
-API Gateway with Multi-Dimensional Rate Limiting
-- IP, Subnet, ASN, Device, Session, Challenge tracking
-- Distributed enforcement via Redis
-- Progressive penalties
+API Gateway with Request Validation
 """
 
-from fastapi import FastAPI, Request, HTTPException, Header, Response
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 import httpx
-import redis.asyncio as redis
 import os
 import sys
 import time
-import hashlib
-from typing import Dict, Any, Optional
 
-# Add shared modules to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'shared'))
 
-from error_codes import ErrorCode, RateLimitError, InternalError
-from rate_limiter import (
-    DistributedRateLimiter, RateLimitDimension, PenaltyLevel
+from request_validation import (
+    ChallengeRequest,
+    VerifyRequest,
+    FinalizeRequest,
+    AdminRevokeRequest,
+    validate_request
 )
-from asn_lookup import asn_lookup
+from file_upload_validation import FileUploadValidator
+from error_codes import ErrorCode, ValidationError as CustomValidationError
 
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
 
-VERIFICATION_SERVICE_URL = os.getenv("VERIFICATION_SERVICE_URL", "http://verification-api:8001")
 CHALLENGE_SERVICE_URL = os.getenv("CHALLENGE_SERVICE_URL", "http://challenge-service:8002")
-RISK_SCORING_URL = os.getenv("RISK_SCORING_URL", "http://risk-scoring:8003")
-REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379")
+VERIFICATION_SERVICE_URL = os.getenv("VERIFICATION_SERVICE_URL", "http://verification-api:8003")
 INTERNAL_AUTH_TOKEN = os.getenv("INTERNAL_AUTH_TOKEN", "secret")
 
 # ============================================================================
@@ -39,336 +35,304 @@ INTERNAL_AUTH_TOKEN = os.getenv("INTERNAL_AUTH_TOKEN", "secret")
 # ============================================================================
 
 app = FastAPI(
-    title="Certivo API Gateway",
-    description="Multi-dimensional rate limiting with progressive penalties",
-    version="1.0.0"
+    title="Certivo API Gateway - Hardened",
+    version="2.0.0"
 )
 
-redis_client = None
-rate_limiter = None
+file_validator = FileUploadValidator()
 
 # ============================================================================
-# METRICS TRACKING
-# ============================================================================
-
-async def track_bypass_attempt(
-    dimension: str,
-    identifier: str,
-    previous_identifier: Optional[str] = None
-):
-    """
-    Track bypass attempts (e.g., IP rotation)
-    Increases attacker cost metric
-    """
-    metric_key = f"bypass_attempts:{dimension}"
-    
-    # Increment bypass counter
-    await redis_client.incr(metric_key)
-    
-    # Store details
-    detail_key = f"bypass_detail:{dimension}:{identifier}"
-    await redis_client.setex(
-        detail_key,
-        3600,  # 1 hour
-        f"previous:{previous_identifier},timestamp:{int(time.time())}"
-    )
-    
-    # Log for monitoring
-    print(f"⚠️  Bypass attempt detected: {dimension} - {identifier}")
-
-async def get_bypass_metrics() -> Dict[str, int]:
-    """Get bypass attempt metrics"""
-    dimensions = ["ip", "subnet", "asn", "device"]
-    metrics = {}
-    
-    for dimension in dimensions:
-        key = f"bypass_attempts:{dimension}"
-        count = await redis_client.get(key)
-        metrics[dimension] = int(count) if count else 0
-    
-    return metrics
-
-# ============================================================================
-# STARTUP/SHUTDOWN
-# ============================================================================
-
-@app.on_event("startup")
-async def startup():
-    global redis_client, rate_limiter
-    redis_client = await redis.from_url(REDIS_URL, decode_responses=True)
-    rate_limiter = DistributedRateLimiter(redis_client)
-    print("✅ API Gateway started with multi-dimensional rate limiting")
-
-@app.on_event("shutdown")
-async def shutdown():
-    if redis_client:
-        await redis_client.close()
-
-# ============================================================================
-# MIDDLEWARE: MULTI-DIMENSIONAL RATE LIMITING
+# MIDDLEWARE - REQUEST SIZE LIMIT
 # ============================================================================
 
 @app.middleware("http")
-async def rate_limit_middleware(request: Request, call_next):
-    """
-    Multi-dimensional rate limiting middleware
-    Checks: IP, Subnet, ASN, Device
-    """
+async def limit_upload_size(request: Request, call_next):
+    """Limit request body size"""
     
-    # Skip health check
-    if request.url.path == "/health":
+    # Skip for non-upload endpoints
+    if request.url.path != "/v1/verify":
         return await call_next(request)
     
-    # Extract identifiers
-    client_ip = request.client.host
-    device_id = request.headers.get("X-Device-ID")
+    # Check Content-Length header
+    content_length = request.headers.get("content-length")
     
-    # Build dimensions to check
-    dimensions = {
-        RateLimitDimension.IP: client_ip
-    }
-    
-    # Add subnet
-    subnet = rate_limiter._get_subnet(client_ip, prefix_length=24)
-    dimensions[RateLimitDimension.SUBNET] = subnet
-    
-    # Add ASN (async lookup)
-    asn = await asn_lookup.get_asn(client_ip)
-    if asn:
-        dimensions[RateLimitDimension.ASN] = asn
-    
-    # Add device if provided
-    if device_id:
-        dimensions[RateLimitDimension.DEVICE] = device_id
-    
-    # Check all dimensions
-    result = await rate_limiter.check_multi_dimensional(dimensions)
-    
-    # Handle blocked requests
-    if not result["allowed"]:
-        # Track bypass attempt if IP changed but device same
-        if device_id:
-            previous_ip_key = f"device_ip:{device_id}"
-            previous_ip = await redis_client.get(previous_ip_key)
-            
-            if previous_ip and previous_ip != client_ip:
-                await track_bypass_attempt("ip_rotation", client_ip, previous_ip)
+    if content_length:
+        content_length = int(content_length)
         
-        # Return 429 with details
-        raise RateLimitError(
-            message=result.get("reason", "Rate limit exceeded"),
-            retry_after=result["retry_after"],
-            dimension=result.get("dimension"),
-            limit=result.get("limit"),
-            window="60 seconds"
-        )
+        # 55MB max (50MB video + 5MB overhead)
+        if content_length > 55 * 1024 * 1024:
+            return JSONResponse(
+                status_code=413,
+                content={
+                    "error": "Request too large",
+                    "error_code": "REQUEST_TOO_LARGE",
+                    "max_size_bytes": 55 * 1024 * 1024
+                }
+            )
     
-    # Handle soft throttle (add delay)
-    if result["penalty_level"] == PenaltyLevel.SOFT_THROTTLE:
-        # Add artificial delay (0.5 - 2 seconds based on proximity to limit)
-        throttle_ratio = result["current_count"] / result["limit"]
-        delay = 0.5 + (throttle_ratio * 1.5)
-        
-        import asyncio
-        await asyncio.sleep(delay)
-        
-        response = await call_next(request)
-        response.headers["X-RateLimit-Throttled"] = "true"
-        return response
+    return await call_next(request)
+
+# ============================================================================
+# ERROR HANDLERS
+# ============================================================================
+
+@app.exception_handler(ValidationError)
+async def validation_exception_handler(request: Request, exc: ValidationError):
+    """Handle Pydantic validation errors"""
     
-    # Store device-IP mapping for bypass detection
-    if device_id:
-        device_ip_key = f"device_ip:{device_id}"
-        await redis_client.setex(device_ip_key, 3600, client_ip)
-    
-    # Add rate limit headers
-    response = await call_next(request)
-    
-    response.headers["X-RateLimit-Limit"] = str(result.get("limit", "N/A"))
-    response.headers["X-RateLimit-Remaining"] = str(
-        result.get("limit", 0) - result.get("current_count", 0)
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "Validation failed",
+            "error_code": "VALIDATION_ERROR",
+            "details": exc.errors()
+        }
     )
-    response.headers["X-RateLimit-Reset"] = str(
-        int(time.time()) + result.get("reset_in", 0)
-    )
+
+@app.exception_handler(CustomValidationError)
+async def custom_validation_handler(request: Request, exc: CustomValidationError):
+    """Handle custom validation errors"""
     
-    return response
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=exc.to_dict()
+    )
 
 # ============================================================================
 # HEALTH CHECK
 # ============================================================================
 
 @app.get("/health")
-async def health():
-    """Gateway health check"""
-    try:
-        await redis_client.ping()
-        redis_status = "healthy"
-    except Exception as e:
-        redis_status = f"unhealthy: {str(e)}"
-    
+async def health_check():
     return {
         "status": "healthy",
-        "service": "api-gateway",
-        "redis": redis_status,
+        "service": "api-gateway-hardened",
         "timestamp": time.time()
     }
 
 # ============================================================================
-# METRICS ENDPOINT
-# ============================================================================
-
-@app.get("/metrics/bypass-attempts")
-async def get_bypass_attempt_metrics():
-    """Get bypass attempt metrics (for monitoring)"""
-    metrics = await get_bypass_metrics()
-    
-    return {
-        "bypass_attempts": metrics,
-        "timestamp": time.time()
-    }
-
-# ============================================================================
-# CHALLENGE ENDPOINT
+# CHALLENGE ENDPOINT (WITH VALIDATION)
 # ============================================================================
 
 @app.post("/v1/challenge")
-async def create_challenge(
-    request: Request,
-    x_device_id: str = Header(None, alias="X-Device-ID")
-):
-    """Generate challenge with session-level rate limiting"""
+async def create_challenge(request: Request):
+    """
+    Create verification challenge with strict validation
     
-    # Additional session-level rate limit
-    if x_device_id:
-        session_result = await rate_limiter.check_rate_limit(
-            RateLimitDimension.SESSION,
-            x_device_id
+    Validation:
+    - Device ID format and SQL injection prevention
+    - Trust level enum validation
+    - Client metadata size and structure validation
+    """
+    
+    # Parse request body
+    try:
+        body = await request.json()
+    except:
+        raise CustomValidationError(
+            ErrorCode.INVALID_REQUEST_FORMAT,
+            "Invalid JSON in request body"
         )
-        
-        if not session_result["allowed"]:
-            raise RateLimitError(
-                message="Too many challenge requests for this session",
-                retry_after=session_result["retry_after"],
-                dimension="session",
-                limit=session_result["limit"],
-                window="5 minutes"
-            )
     
-    # Get request body
-    body = await request.json()
+    # Validate against schema
+    try:
+        validated = validate_request(ChallengeRequest, body)
+    except ValidationError as e:
+        raise CustomValidationError(
+            ErrorCode.VALIDATION_ERROR,
+            str(e),
+            details=e.errors()
+        )
     
     # Forward to challenge service
     async with httpx.AsyncClient() as client:
-        try:
-            response = await client.post(
-                f"{CHALLENGE_SERVICE_URL}/generate",
-                json=body,
-                headers={"X-Internal-Token": INTERNAL_AUTH_TOKEN},
-                timeout=10.0
-            )
-            
-            if response.status_code != 200:
-                raise InternalError("Challenge service unavailable")
-            
-            return response.json()
-            
-        except httpx.TimeoutException:
-            raise InternalError("Request timeout")
-        except httpx.RequestError:
-            raise InternalError("Challenge service unavailable")
+        response = await client.post(
+            f"{CHALLENGE_SERVICE_URL}/generate",
+            json=validated.dict(),
+            headers={
+                "X-Internal-Token": INTERNAL_AUTH_TOKEN,
+                "X-Forwarded-For": request.client.host,
+                "User-Agent": request.headers.get("User-Agent", "")
+            }
+        )
+        
+        return JSONResponse(
+            status_code=response.status_code,
+            content=response.json()
+        )
 
 # ============================================================================
-# VERIFY ENDPOINT
+# VERIFY ENDPOINT (WITH FILE VALIDATION)
 # ============================================================================
 
 @app.post("/v1/verify")
 async def verify_challenge(
-    request: Request
+    request: Request,
+    video: UploadFile = File(...),
+    device_id: str = Form(...),
+    challenge_id: str = Form(...),
+    token_id: str = Form(...),
+    audio_challenge: str = Form(None),
+    camera_attestation: str = Form(None)
 ):
-    """Verify challenge with challenge-level rate limiting"""
+    """
+    Verify challenge with comprehensive file validation
     
-    # Parse form data
-    form = await request.form()
-    challenge_id = form.get("challenge_id")
+    Validation:
+    - Request parameters (device_id, challenge_id, token)
+    - File size limits
+    - MIME type verification
+    - Content sniffing (magic bytes)
+    - Polyglot file detection
+    - Malformed file detection
+    """
     
-    # Challenge-level rate limit
-    if challenge_id:
-        challenge_result = await rate_limiter.check_rate_limit(
-            RateLimitDimension.CHALLENGE,
-            challenge_id
+    # Validate request parameters
+    try:
+        verify_req = VerifyRequest(
+            device_id=device_id,
+            challenge_id=challenge_id,
+            token_id=token_id,
+            audio_challenge=audio_challenge,
+            camera_attestation=camera_attestation
+        )
+    except ValidationError as e:
+        raise CustomValidationError(
+            ErrorCode.VALIDATION_ERROR,
+            "Request validation failed",
+            details=e.errors()
+        )
+    
+    # Validate video file
+    try:
+        file_validation = await file_validator.validate_video_upload(
+            file=video,
+            expected_duration_range=(1.0, 10.0)  # 1-10 seconds
         )
         
-        if not challenge_result["allowed"]:
-            raise RateLimitError(
-                message="Too many verification attempts for this challenge",
-                retry_after=challenge_result["retry_after"],
-                dimension="challenge",
-                limit=challenge_result["limit"],
-                window="5 minutes"
+        if not file_validation["valid"]:
+            raise CustomValidationError(
+                ErrorCode.INVALID_VIDEO_FORMAT,
+                "Video validation failed"
             )
+        
+    except ValueError as e:
+        raise CustomValidationError(
+            ErrorCode.INVALID_VIDEO_FORMAT,
+            str(e)
+        )
+    
+    # Reset file pointer
+    await video.seek(0)
     
     # Forward to verification service
-    async with httpx.AsyncClient() as client:
-        try:
-            # Reconstruct multipart form
-            files = {}
-            data = {}
-            
-            for key, value in form.items():
-                if hasattr(value, 'read'):  # File
-                    content = await value.read()
-                    files[key] = (value.filename, content, value.content_type)
-                else:
-                    data[key] = value
-            
-            response = await client.post(
-                f"{VERIFICATION_SERVICE_URL}/v1/verify",
-                files=files,
-                data=data,
-                headers={"X-Gateway-Token": INTERNAL_AUTH_TOKEN},
-                timeout=30.0
-            )
-            
-            return Response(
-                content=response.content,
-                status_code=response.status_code,
-                headers=dict(response.headers)
-            )
-            
-        except httpx.TimeoutException:
-            raise InternalError("Verification timeout")
-        except httpx.RequestError:
-            raise InternalError("Verification service unavailable")
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        # Prepare multipart form data
+        files = {"video": (video.filename, video.file, video.content_type)}
+        data = {
+            "device_id": verify_req.device_id,
+            "challenge_id": verify_req.challenge_id,
+            "token_id": verify_req.token_id
+        }
+        
+        if verify_req.audio_challenge:
+            data["audio_challenge"] = verify_req.audio_challenge
+        
+        if verify_req.camera_attestation:
+            data["camera_attestation"] = verify_req.camera_attestation
+        
+        response = await client.post(
+            f"{VERIFICATION_SERVICE_URL}/verify",
+            files=files,
+            data=data,
+            headers={"X-Internal-Token": INTERNAL_AUTH_TOKEN}
+        )
+        
+        return JSONResponse(
+            status_code=response.status_code,
+            content=response.json()
+        )
 
 # ============================================================================
-# FINALIZE ENDPOINT
+# FINALIZE ENDPOINT (WITH VALIDATION)
 # ============================================================================
 
 @app.post("/v1/finalize")
 async def finalize_session(request: Request):
-    """Finalize verification session"""
+    """Finalize verification session with validation"""
     
-    body = await request.json()
+    try:
+        body = await request.json()
+    except:
+        raise CustomValidationError(
+            ErrorCode.INVALID_REQUEST_FORMAT,
+            "Invalid JSON"
+        )
     
+    try:
+        validated = validate_request(FinalizeRequest, body)
+    except ValidationError as e:
+        raise CustomValidationError(
+            ErrorCode.VALIDATION_ERROR,
+            str(e),
+            details=e.errors()
+        )
+    
+    # Forward to verification service
     async with httpx.AsyncClient() as client:
-        try:
-            response = await client.post(
-                f"{RISK_SCORING_URL}/v1/finalize",
-                json=body,
-                headers={"X-Gateway-Token": INTERNAL_AUTH_TOKEN},
-                timeout=10.0
-            )
-            
-            if response.status_code != 200:
-                raise InternalError("Risk scoring service unavailable")
-            
-            return response.json()
-            
-        except httpx.TimeoutException:
-            raise InternalError("Request timeout")
-        except httpx.RequestError:
-            raise InternalError("Risk scoring service unavailable")
+        response = await client.post(
+            f"{VERIFICATION_SERVICE_URL}/finalize",
+            json=validated.dict(),
+            headers={"X-Internal-Token": INTERNAL_AUTH_TOKEN}
+        )
+        
+        return JSONResponse(
+            status_code=response.status_code,
+            content=response.json()
+        )
+
+# ============================================================================
+# ADMIN ENDPOINTS (WITH VALIDATION)
+# ============================================================================
+
+@app.post("/admin/device/revoke")
+async def revoke_device(request: Request):
+    """Revoke device trust with strict validation"""
+    
+    # Check admin auth
+    admin_token = request.headers.get("X-Admin-Token")
+    if admin_token != os.getenv("ADMIN_TOKEN", "admin_secret"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    try:
+        body = await request.json()
+    except:
+        raise CustomValidationError(
+            ErrorCode.INVALID_REQUEST_FORMAT,
+            "Invalid JSON"
+        )
+    
+    try:
+        validated = validate_request(AdminRevokeRequest, body)
+    except ValidationError as e:
+        raise CustomValidationError(
+            ErrorCode.VALIDATION_ERROR,
+            str(e),
+            details=e.errors()
+        )
+    
+    # Forward to admin service
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            f"{VERIFICATION_SERVICE_URL}/admin/revoke",
+            json=validated.dict(),
+            headers={"X-Internal-Token": INTERNAL_AUTH_TOKEN}
+        )
+        
+        return JSONResponse(
+            status_code=response.status_code,
+            content=response.json()
+        )
 
 if __name__ == "__main__":
     import uvicorn
