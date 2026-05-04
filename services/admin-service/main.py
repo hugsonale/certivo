@@ -1,22 +1,24 @@
 """
-Admin Service
-- Isolated behind strong authz
-- Network controls
-- Admin dashboard
-- Device management
+Admin Service with Authentication and Authorization
+Requires MFA and enforces RBAC
 """
 
-from fastapi import FastAPI, Depends, HTTPException, Header, Request
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, HTTPException, Request, Header, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel, Field
 import asyncpg
 import redis.asyncio as redis
-import secrets
 import os
-import time
-from typing import Optional
-from datetime import datetime, timedelta
+import sys
+from typing import Optional, Dict, Any
+from datetime import datetime
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'shared'))
+
+from mfa import MFAManager, MFAEnrollment, MFARateLimiter
+from rbac import RBACManager, Permission, Role
+from admin_sessions import AdminSessionManager
+from audit_logger import AuditLogger, AuditAction
 
 # ============================================================================
 # CONFIGURATION
@@ -24,64 +26,27 @@ from datetime import datetime, timedelta
 
 POSTGRES_URL = os.getenv("POSTGRES_URL", "postgresql://certivo:certivo@postgres:5432/certivo")
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379")
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "changeme123")
-INTERNAL_AUTH_TOKEN = os.getenv("INTERNAL_AUTH_TOKEN", "secret")
+SESSION_SECRET = os.getenv("SESSION_SECRET", "CHANGE_ME_IN_PRODUCTION")
 
 # ============================================================================
-# DATABASE
+# MODELS
 # ============================================================================
 
-postgres_pool = None
-redis_client = None
+class LoginRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=8, max_length=100)
 
-async def get_postgres():
-    global postgres_pool
-    if postgres_pool is None:
-        postgres_pool = await asyncpg.create_pool(POSTGRES_URL, min_size=2, max_size=10)
-    return postgres_pool
+class MFAVerifyRequest(BaseModel):
+    username: str
+    token: str = Field(..., regex="^[0-9]{6}$")
 
-async def get_redis():
-    global redis_client
-    if redis_client is None:
-        redis_client = await redis.from_url(REDIS_URL, decode_responses=True)
-    return redis_client
+class RevokeDeviceRequest(BaseModel):
+    device_id: str = Field(..., min_length=8, max_length=64)
+    reason: str = Field(..., min_length=5, max_length=500)
 
-# ============================================================================
-# AUTHENTICATION
-# ============================================================================
-
-security = HTTPBasic()
-
-def verify_admin(credentials: HTTPBasicCredentials = Depends(security)):
-    """Verify admin credentials"""
-    correct_username = secrets.compare_digest(credentials.username, ADMIN_USERNAME)
-    correct_password = secrets.compare_digest(credentials.password, ADMIN_PASSWORD)
-    
-    if not (correct_username and correct_password):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid credentials",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    return credentials.username
-
-# ============================================================================
-# NETWORK ACCESS CONTROL
-# ============================================================================
-
-ALLOWED_ADMIN_IPS = os.getenv("ALLOWED_ADMIN_IPS", "127.0.0.1,::1").split(",")
-
-async def verify_network_access(request: Request):
-    """Verify request comes from allowed network"""
-    client_ip = request.client.host
-    
-    if client_ip not in ALLOWED_ADMIN_IPS and "*" not in ALLOWED_ADMIN_IPS:
-        raise HTTPException(
-            status_code=403,
-            detail=f"Access denied from IP: {client_ip}"
-        )
-    return True
+class AssignRoleRequest(BaseModel):
+    user_id: str = Field(..., min_length=3, max_length=50)
+    role: Role
 
 # ============================================================================
 # FASTAPI APP
@@ -89,182 +54,40 @@ async def verify_network_access(request: Request):
 
 app = FastAPI(
     title="Certivo Admin Service",
-    description="Administrative interface with strong authz",
-    version="1.0.0",
-    dependencies=[Depends(verify_network_access)]
+    version="1.0.0"
 )
 
-# ============================================================================
-# HEALTH CHECK
-# ============================================================================
+security = HTTPBearer()
 
-@app.get("/health")
-async def health_check():
-    """Admin service health check"""
-    return {
-        "status": "healthy",
-        "service": "admin-service",
-        "timestamp": time.time()
-    }
+postgres_pool = None
+redis_client = None
+mfa_manager = None
+mfa_enrollment = None
+mfa_rate_limiter = None
+rbac_manager = None
+session_manager = None
+audit_logger = None
 
 # ============================================================================
-# DASHBOARD
-# ============================================================================
-
-@app.get("/admin/dashboard", response_class=HTMLResponse)
-async def dashboard(admin: str = Depends(verify_admin)):
-    """Admin dashboard"""
-    return """
-    <html>
-        <head><title>Certivo Admin</title></head>
-        <body>
-            <h1>Certivo Admin Dashboard</h1>
-            <p>Authenticated as: {admin}</p>
-            <ul>
-                <li><a href="/admin/stats">System Statistics</a></li>
-                <li><a href="/admin/devices">Device Management</a></li>
-                <li><a href="/admin/sessions">Recent Sessions</a></li>
-            </ul>
-        </body>
-    </html>
-    """.replace("{admin}", admin)
-
-# ============================================================================
-# SYSTEM STATS
-# ============================================================================
-
-@app.get("/admin/stats")
-async def get_stats(admin: str = Depends(verify_admin)):
-    """Get system statistics"""
-    pg_pool = await get_postgres()
-    
-    async with pg_pool.acquire() as conn:
-        # Total sessions
-        total_sessions = await conn.fetchval("SELECT COUNT(*) FROM sessions")
-        
-        # Success rate
-        high_trust = await conn.fetchval(
-            "SELECT COUNT(*) FROM sessions WHERE trust_level = 'high'"
-        )
-        
-        # Recent activity
-        recent_24h = await conn.fetchval(
-            """
-            SELECT COUNT(*) FROM sessions 
-            WHERE timestamp_utc >= $1
-            """,
-            datetime.utcnow() - timedelta(hours=24)
-        )
-        
-        # Device stats
-        total_devices = await conn.fetchval("SELECT COUNT(*) FROM trusted_devices")
-        trusted_devices = await conn.fetchval(
-            "SELECT COUNT(*) FROM trusted_devices WHERE trust_level = 'high'"
-        )
-    
-    return {
-        "total_sessions": total_sessions,
-        "high_trust_sessions": high_trust,
-        "success_rate": round((high_trust / total_sessions * 100), 2) if total_sessions > 0 else 0,
-        "recent_24h": recent_24h,
-        "total_devices": total_devices,
-        "trusted_devices": trusted_devices
-    }
-
-# ============================================================================
-# DEVICE MANAGEMENT
-# ============================================================================
-
-@app.get("/admin/devices")
-async def list_devices(
-    admin: str = Depends(verify_admin),
-    limit: int = 50,
-    offset: int = 0
-):
-    """List all devices"""
-    pg_pool = await get_postgres()
-    
-    async with pg_pool.acquire() as conn:
-        devices = await conn.fetch(
-            """
-            SELECT device_id, trust_level, total_verifications, 
-                   successful_verifications, last_verified_utc
-            FROM trusted_devices
-            ORDER BY last_verified_utc DESC
-            LIMIT $1 OFFSET $2
-            """,
-            limit, offset
-        )
-    
-    return {
-        "devices": [dict(d) for d in devices],
-        "total": len(devices)
-    }
-
-@app.post("/admin/device/{device_id}/revoke")
-async def revoke_device_trust(
-    device_id: str,
-    admin: str = Depends(verify_admin)
-):
-    """Revoke trust from a device"""
-    pg_pool = await get_postgres()
-    redis_conn = await get_redis()
-    
-    async with pg_pool.acquire() as conn:
-        await conn.execute(
-            """
-            UPDATE trusted_devices 
-            SET trust_level = 'low', trust_revoked = true, revoked_at = $1
-            WHERE device_id = $2
-            """,
-            datetime.utcnow(),
-            device_id
-        )
-    
-    # Clear from cache
-    await redis_conn.delete(f"device:{device_id}")
-    
-    return {"status": "revoked", "device_id": device_id}
-
-# ============================================================================
-# SESSION LOGS
-# ============================================================================
-
-@app.get("/admin/sessions")
-async def recent_sessions(
-    admin: str = Depends(verify_admin),
-    limit: int = 50
-):
-    """Get recent verification sessions"""
-    pg_pool = await get_postgres()
-    
-    async with pg_pool.acquire() as conn:
-        sessions = await conn.fetch(
-            """
-            SELECT session_id, device_id, trust_score, trust_level,
-                   total_challenges, failed_challenges, timestamp_utc
-            FROM sessions
-            ORDER BY timestamp_utc DESC
-            LIMIT $1
-            """,
-            limit
-        )
-    
-    return {
-        "sessions": [dict(s) for s in sessions]
-    }
-
-# ============================================================================
-# STARTUP/SHUTDOWN
+# STARTUP
 # ============================================================================
 
 @app.on_event("startup")
 async def startup():
-    global postgres_pool, redis_client
-    postgres_pool = await asyncpg.create_pool(POSTGRES_URL, min_size=2, max_size=10)
+    global postgres_pool, redis_client, mfa_manager, mfa_enrollment
+    global mfa_rate_limiter, rbac_manager, session_manager, audit_logger
+    
+    postgres_pool = await asyncpg.create_pool(POSTGRES_URL)
     redis_client = await redis.from_url(REDIS_URL, decode_responses=True)
+    
+    mfa_manager = MFAManager()
+    mfa_enrollment = MFAEnrollment(redis_client)
+    mfa_rate_limiter = MFARateLimiter(redis_client)
+    rbac_manager = RBACManager(redis_client, postgres_pool)
+    session_manager = AdminSessionManager(redis_client, postgres_pool, SESSION_SECRET)
+    audit_logger = AuditLogger(postgres_pool)
+    
     print("✅ Admin Service started")
-    print(f"⚠️  ALLOWED IPs: {ALLOWED_ADMIN_IPS}")
 
 @app.on_event("shutdown")
 async def shutdown():
@@ -272,7 +95,468 @@ async def shutdown():
         await postgres_pool.close()
     if redis_client:
         await redis_client.close()
-    print("🛑 Admin Service shutdown")
+
+# ============================================================================
+# AUTHENTICATION DEPENDENCY
+# ============================================================================
+
+async def get_current_admin(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> Dict[str, Any]:
+    """
+    Dependency: Verify admin session
+    
+    Returns:
+        Admin user data
+    
+    Raises:
+        HTTPException if not authenticated
+    """
+    
+    token = credentials.credentials
+    
+    # Validate session
+    session = await session_manager.validate_session(
+        signed_token=token,
+        ip_address=request.client.host,
+        check_ip_binding=True
+    )
+    
+    if not session:
+        await audit_logger.log_action(
+            action=AuditAction.UNAUTHORIZED_ACCESS_ATTEMPT,
+            actor_id="unknown",
+            actor_ip=request.client.host,
+            result="failure"
+        )
+        
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "error": "Invalid or expired session",
+                "error_code": "INVALID_SESSION"
+            }
+        )
+    
+    return session
+
+# ============================================================================
+# AUTHORIZATION DEPENDENCY
+# ============================================================================
+
+def require_permission(permission: Permission):
+    """
+    Dependency factory: Require specific permission
+    
+    Usage:
+        @app.get("/endpoint", dependencies=[Depends(require_permission(Permission.VIEW_USERS))])
+    """
+    
+    async def check_permission(
+        request: Request,
+        admin: Dict[str, Any] = Depends(get_current_admin)
+    ):
+        user_id = admin["user_id"]
+        
+        has_permission = await rbac_manager.check_permission(user_id, permission)
+        
+        if not has_permission:
+            await audit_logger.log_action(
+                action=AuditAction.PERMISSION_DENIED,
+                actor_id=user_id,
+                actor_ip=request.client.host,
+                details={
+                    "required_permission": permission.value,
+                    "endpoint": str(request.url)
+                },
+                result="failure"
+            )
+            
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": "Permission denied",
+                    "error_code": "INSUFFICIENT_PERMISSIONS",
+                    "required_permission": permission.value
+                }
+            )
+    
+    return check_permission
+
+# ============================================================================
+# HEALTH CHECK
+# ============================================================================
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "service": "admin"}
+
+# ============================================================================
+# AUTHENTICATION ENDPOINTS
+# ============================================================================
+
+@app.post("/auth/login")
+async def login(request: Request, body: LoginRequest):
+    """
+    Step 1: Username/password authentication
+    
+    Returns:
+        MFA challenge (requires TOTP verification)
+    """
+    
+    # Validate credentials (simplified - use proper password hashing)
+    async with postgres_pool.acquire() as conn:
+        user = await conn.fetchrow(
+            """
+            SELECT user_id, username, password_hash, mfa_secret, mfa_enabled
+            FROM admin_users
+            WHERE username = $1 AND active = true
+            """,
+            body.username
+        )
+    
+    if not user:
+        await audit_logger.log_action(
+            action=AuditAction.LOGIN_FAILURE,
+            actor_id=body.username,
+            actor_ip=request.client.host,
+            details={"reason": "user_not_found"},
+            result="failure"
+        )
+        
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    # Verify password (use bcrypt in production)
+    import bcrypt
+    if not bcrypt.checkpw(body.password.encode(), user["password_hash"].encode()):
+        await audit_logger.log_action(
+            action=AuditAction.LOGIN_FAILURE,
+            actor_id=body.username,
+            actor_ip=request.client.host,
+            details={"reason": "invalid_password"},
+            result="failure"
+        )
+        
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    # Check if MFA enabled
+    if not user["mfa_enabled"]:
+        return {
+            "mfa_required": False,
+            "message": "MFA not enabled. Please enroll in MFA first."
+        }
+    
+    # Create temporary auth token (pending MFA)
+    import secrets
+    temp_token = secrets.token_urlsafe(32)
+    
+    await redis_client.setex(
+        f"pending_mfa:{temp_token}",
+        300,  # 5 minutes
+        user["user_id"]
+    )
+    
+    return {
+        "mfa_required": True,
+        "temp_token": temp_token,
+        "message": "Enter TOTP code from authenticator app"
+    }
+
+@app.post("/auth/mfa-verify")
+async def verify_mfa(request: Request, body: MFAVerifyRequest):
+    """
+    Step 2: MFA verification
+    
+    Returns:
+        Session token
+    """
+    
+    # Get user from pending MFA
+    temp_token = request.headers.get("X-Temp-Token")
+    
+    if not temp_token:
+        raise HTTPException(status_code=400, detail="Missing temp token")
+    
+    user_id = await redis_client.get(f"pending_mfa:{temp_token}")
+    
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired temp token")
+    
+    # Get user MFA secret
+    async with postgres_pool.acquire() as conn:
+        user = await conn.fetchrow(
+            "SELECT user_id, username, mfa_secret FROM admin_users WHERE user_id = $1",
+            user_id
+        )
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    
+    # Check rate limit
+    is_locked, attempts_remaining, lockout_seconds = await mfa_rate_limiter.record_attempt(
+        user_id=user_id,
+        success=False  # Assume failure initially
+    )
+    
+    if is_locked:
+        await audit_logger.log_action(
+            action=AuditAction.LOGIN_FAILURE,
+            actor_id=user_id,
+            actor_ip=request.client.host,
+            details={"reason": "mfa_rate_limit"},
+            result="failure"
+        )
+        
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many failed attempts. Locked out for {lockout_seconds} seconds."
+        )
+    
+    # Verify TOTP
+    valid = mfa_manager.verify_totp(user["mfa_secret"], body.token)
+    
+    if not valid:
+        await mfa_rate_limiter.record_attempt(user_id, success=False)
+        
+        await audit_logger.log_action(
+            action=AuditAction.LOGIN_FAILURE,
+            actor_id=user_id,
+            actor_ip=request.client.host,
+            details={"reason": "invalid_mfa_token"},
+            result="failure"
+        )
+        
+        raise HTTPException(
+            status_code=401,
+            detail=f"Invalid MFA token. {attempts_remaining} attempts remaining."
+        )
+    
+    # MFA successful - record success
+    await mfa_rate_limiter.record_attempt(user_id, success=True)
+    
+    # Delete temp token
+    await redis_client.delete(f"pending_mfa:{temp_token}")
+    
+    # Create admin session
+    session_token = await session_manager.create_session(
+        user_id=user_id,
+        ip_address=request.client.host,
+        user_agent=request.headers.get("User-Agent", ""),
+        mfa_verified=True
+    )
+    
+    await audit_logger.log_action(
+        action=AuditAction.LOGIN_SUCCESS,
+        actor_id=user_id,
+        actor_ip=request.client.host,
+        result="success"
+    )
+    
+    return {
+        "session_token": session_token,
+        "message": "Authentication successful"
+    }
+
+@app.post("/auth/logout")
+async def logout(
+    request: Request,
+    admin: Dict[str, Any] = Depends(get_current_admin)
+):
+    """Logout (revoke session)"""
+    
+    token = admin["token"]
+    user_id = admin["user_id"]
+    
+    await session_manager.revoke_session(token)
+    
+    await audit_logger.log_action(
+        action=AuditAction.LOGOUT,
+        actor_id=user_id,
+        actor_ip=request.client.host,
+        result="success"
+    )
+    
+    return {"message": "Logged out successfully"}
+
+# ============================================================================
+# DEVICE MANAGEMENT (RBAC PROTECTED)
+# ============================================================================
+
+@app.post(
+    "/device/revoke",
+    dependencies=[Depends(require_permission(Permission.REVOKE_DEVICE))]
+)
+async def revoke_device(
+    request: Request,
+    body: RevokeDeviceRequest,
+    admin: Dict[str, Any] = Depends(get_current_admin)
+):
+    """
+    Revoke device trust
+    
+    Requires: REVOKE_DEVICE permission
+    """
+    
+    user_id = admin["user_id"]
+    
+    # Revoke device in database
+    async with postgres_pool.acquire() as conn:
+        result = await conn.execute(
+            """
+            UPDATE trusted_devices
+            SET trust_revoked = true,
+                revoked_at = $1,
+                revocation_reason = $2,
+                revoked_by = $3
+            WHERE device_id = $4
+            """,
+            datetime.utcnow(),
+            body.reason,
+            user_id,
+            body.device_id
+        )
+    
+    # Audit log
+    await audit_logger.log_action(
+        action=AuditAction.DEVICE_REVOKED,
+        actor_id=user_id,
+        actor_ip=request.client.host,
+        target_resource=body.device_id,
+        details={"reason": body.reason},
+        result="success"
+    )
+    
+    return {
+        "message": "Device revoked successfully",
+        "device_id": body.device_id
+    }
+
+# ============================================================================
+# USER MANAGEMENT (RBAC PROTECTED)
+# ============================================================================
+
+@app.get(
+    "/users",
+    dependencies=[Depends(require_permission(Permission.VIEW_USERS))]
+)
+async def list_users(
+    admin: Dict[str, Any] = Depends(get_current_admin)
+):
+    """
+    List admin users
+    
+    Requires: VIEW_USERS permission
+    """
+    
+    async with postgres_pool.acquire() as conn:
+        users = await conn.fetch(
+            """
+            SELECT user_id, username, email, active, mfa_enabled, created_at
+            FROM admin_users
+            ORDER BY created_at DESC
+            """
+        )
+    
+    return {
+        "users": [dict(user) for user in users]
+    }
+
+@app.post(
+    "/users/{user_id}/role",
+    dependencies=[Depends(require_permission(Permission.MANAGE_ROLES))]
+)
+async def assign_role(
+    request: Request,
+    user_id: str,
+    body: AssignRoleRequest,
+    admin: Dict[str, Any] = Depends(get_current_admin)
+):
+    """
+    Assign role to user
+    
+    Requires: MANAGE_ROLES permission (Super Admin only)
+    """
+    
+    actor_id = admin["user_id"]
+    
+    # Assign role
+    await rbac_manager.assign_role_to_user(
+        user_id=user_id,
+        role=body.role,
+        assigned_by=actor_id
+    )
+    
+    # Audit log
+    await audit_logger.log_action(
+        action=AuditAction.ROLE_ASSIGNED,
+        actor_id=actor_id,
+        actor_ip=request.client.host,
+        target_resource=user_id,
+        details={"role": body.role.value},
+        result="success"
+    )
+    
+    return {
+        "message": "Role assigned successfully",
+        "user_id": user_id,
+        "role": body.role.value
+    }
+
+# ============================================================================
+# AUDIT LOGS (RBAC PROTECTED)
+# ============================================================================
+
+@app.get(
+    "/audit-logs",
+    dependencies=[Depends(require_permission(Permission.VIEW_AUDIT_LOGS))]
+)
+async def get_audit_logs(
+    actor_id: Optional[str] = None,
+    action: Optional[str] = None,
+    limit: int = 100,
+    admin: Dict[str, Any] = Depends(get_current_admin)
+):
+    """
+    Query audit logs
+    
+    Requires: VIEW_AUDIT_LOGS permission
+    """
+    
+    action_enum = AuditAction(action) if action else None
+    
+    logs = await audit_logger.query_logs(
+        actor_id=actor_id,
+        action=action_enum,
+        limit=limit
+    )
+    
+    return {
+        "logs": logs,
+        "total": len(logs)
+    }
+
+@app.get(
+    "/audit-logs/verify",
+    dependencies=[Depends(require_permission(Permission.VIEW_AUDIT_LOGS))]
+)
+async def verify_audit_integrity(
+    start_id: Optional[int] = None,
+    end_id: Optional[int] = None,
+    admin: Dict[str, Any] = Depends(get_current_admin)
+):
+    """
+    Verify audit log integrity
+    
+    Requires: VIEW_AUDIT_LOGS permission
+    """
+    
+    result = await audit_logger.verify_integrity(
+        start_id=start_id,
+        end_id=end_id
+    )
+    
+    return result
 
 if __name__ == "__main__":
     import uvicorn
