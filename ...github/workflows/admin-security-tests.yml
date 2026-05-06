@@ -1,0 +1,99 @@
+name: Admin Authentication & Authorization Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  admin-security:
+    name: Admin Security Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: certivo
+          POSTGRES_USER: certivo
+          POSTGRES_PASSWORD: certivo
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pyotp qrcode bcrypt
+          pip install -r services/admin-service/requirements.txt
+          pip install pytest pytest-asyncio httpx
+      
+      - name: Initialize database
+        run: |
+          PGPASSWORD=certivo psql -h localhost -U certivo -d certivo -f infrastructure/postgres/init.sql
+      
+      - name: Create test admin user
+        run: |
+          python scripts/create_test_admin.py
+      
+      - name: Start admin service
+        env:
+          POSTGRES_URL: postgresql://certivo:certivo@localhost:5432/certivo
+          REDIS_URL: redis://localhost:6379
+          SESSION_SECRET: test_secret_key_change_in_production
+        run: |
+          cd services/admin-service && python main.py &
+          sleep 10
+      
+      - name: Test unauthorized access (100% blocked)
+        run: |
+          pytest tests/security/test_admin_authentication.py::TestUnauthorizedAccess::test_all_unauthorized_access_blocked -v
+      
+      - name: Test privilege escalation (0 passes)
+        run: |
+          pytest tests/security/test_admin_authentication.py::TestPrivilegeEscalation::test_all_privilege_escalation_blocked -v
+      
+      - name: Test MFA security
+        run: |
+          pytest tests/security/test_admin_authentication.py::TestMFASecurity -v
+      
+      - name: Test audit logging
+        run: |
+          pytest tests/security/test_admin_authentication.py::TestAuditLogging -v
+      
+      - name: Verify audit log integrity
+        run: |
+          python scripts/verify_audit_integrity.py
+      
+      - name: Generate security report
+        if: always()
+        run: |
+          echo "# Admin Security Test Report" > admin-security-report.md
+          echo "" >> admin-security-report.md
+          echo "## Unauthorized Access Prevention" >> admin-security-report.md
+          echo "Target: 100% blocked" >> admin-security-report.md
+          echo "" >> admin-security-report.md
+          echo "## Privilege Escalation Prevention" >> admin-security-report.md
+          echo "Target: 0 successful escalations" >> admin-security-report.md
+          pytest tests/security/test_admin_authentication.py --tb=no -v >> admin-security-report.md || true
+      
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-security-report
+          path: admin-security-report.md
