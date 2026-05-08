@@ -256,4 +256,107 @@ CREATE TABLE IF NOT EXISTS deepfake_detection_results (
 );
 
 
+-- =============================================================================
+-- ADMIN AUTHENTICATION AND AUTHORIZATION TABLES
+-- =============================================================================
+
+-- Admin users table
+CREATE TABLE IF NOT EXISTS admin_users (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(50) UNIQUE NOT NULL,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    
+    -- MFA
+    mfa_enabled BOOLEAN DEFAULT false,
+    mfa_secret VARCHAR(255),
+    backup_codes TEXT,  -- JSON array of hashed backup codes
+    
+    -- Status
+    active BOOLEAN DEFAULT true,
+    locked_out BOOLEAN DEFAULT false,
+    lockout_until TIMESTAMP,
+    
+    -- Metadata
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(50),
+    last_login TIMESTAMP,
+    
+    INDEX idx_username (username),
+    INDEX idx_email (email),
+    INDEX idx_active (active)
+);
+
+-- User roles table
+CREATE TABLE IF NOT EXISTS user_roles (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(50) UNIQUE NOT NULL,
+    role VARCHAR(50) NOT NULL,
+    assigned_by VARCHAR(50) NOT NULL,
+    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    INDEX idx_user_id (user_id),
+    INDEX idx_role (role),
+    FOREIGN KEY (user_id) REFERENCES admin_users(user_id)
+);
+
+-- Admin sessions table
+CREATE TABLE IF NOT EXISTS admin_sessions (
+    id SERIAL PRIMARY KEY,
+    session_token VARCHAR(255) UNIQUE NOT NULL,
+    user_id VARCHAR(50) NOT NULL,
+    
+    -- Session metadata
+    ip_address_hash VARCHAR(32),
+    user_agent_hash VARCHAR(32),
+    mfa_verified BOOLEAN NOT NULL,
+    
+    -- Lifecycle
+    created_at TIMESTAMP NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    revoked BOOLEAN DEFAULT false,
+    revoked_at TIMESTAMP,
+    
+    INDEX idx_session_token (session_token),
+    INDEX idx_user_id (user_id),
+    INDEX idx_created_at (created_at),
+    FOREIGN KEY (user_id) REFERENCES admin_users(user_id)
+);
+
+-- Audit logs table (immutable)
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id SERIAL PRIMARY KEY,
+    
+    -- Action details
+    action VARCHAR(100) NOT NULL,
+    actor_id VARCHAR(50) NOT NULL,
+    actor_ip_hash VARCHAR(32),
+    target_resource VARCHAR(255),
+    details TEXT,  -- JSON
+    result VARCHAR(20) NOT NULL,  -- success, failure
+    
+    -- Timestamp
+    timestamp_utc TIMESTAMP NOT NULL,
+    
+    -- Hash chain for integrity
+    previous_hash VARCHAR(64),
+    hash VARCHAR(64) NOT NULL,
+    
+    INDEX idx_action (action),
+    INDEX idx_actor_id (actor_id),
+    INDEX idx_timestamp (timestamp_utc),
+    INDEX idx_target_resource (target_resource)
+);
+
+-- Note: NO UPDATE or DELETE operations allowed on audit_logs
+-- Enforce via database permissions
+
+-- =============================================================================
+-- SECURITY: Revoke UPDATE/DELETE on audit_logs
+-- =============================================================================
+
+REVOKE UPDATE, DELETE ON audit_logs FROM certivo;
+GRANT INSERT, SELECT ON audit_logs TO certivo;
+
 COMMIT;
