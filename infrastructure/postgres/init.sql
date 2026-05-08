@@ -359,4 +359,59 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 REVOKE UPDATE, DELETE ON audit_logs FROM certivo;
 GRANT INSERT, SELECT ON audit_logs TO certivo;
 
+-- =============================================================================
+-- KEY ROTATION TRACKING TABLE
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS key_rotations (
+    id SERIAL PRIMARY KEY,
+    
+    -- Key details
+    key_type VARCHAR(50) NOT NULL,  -- database_password, api_key, session_secret, etc.
+    key_name VARCHAR(255) NOT NULL,  -- production/database/password
+    
+    -- Rotation status
+    status VARCHAR(20) NOT NULL,  -- pending, in_progress, completed, failed, rolled_back
+    
+    -- Error information
+    error TEXT,
+    
+    -- Metadata
+    metadata JSONB,
+    
+    -- Timestamp
+    rotated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    INDEX idx_key_type (key_type),
+    INDEX idx_key_name (key_name),
+    INDEX idx_status (status),
+    INDEX idx_rotated_at (rotated_at)
+);
+
+-- =============================================================================
+-- SECRET ACCESS AUDIT TABLE
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS secret_access_audit (
+    id SERIAL PRIMARY KEY,
+    
+    -- Access details
+    secret_name VARCHAR(255) NOT NULL,
+    service_name VARCHAR(100) NOT NULL,
+    
+    -- Context
+    access_type VARCHAR(20) NOT NULL,  -- read, write, rotate
+    
+    -- Result
+    success BOOLEAN NOT NULL,
+    error TEXT,
+    
+    -- Timestamp
+    accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    INDEX idx_secret_name (secret_name),
+    INDEX idx_service_name (service_name),
+    INDEX idx_accessed_at (accessed_at)
+);
+
 COMMIT;
