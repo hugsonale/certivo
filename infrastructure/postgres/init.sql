@@ -414,4 +414,134 @@ CREATE TABLE IF NOT EXISTS secret_access_audit (
     INDEX idx_accessed_at (accessed_at)
 );
 
+
+
+-- =============================================================================
+-- RED-TEAM TESTING TABLES
+-- =============================================================================
+
+-- Attack results table
+CREATE TABLE IF NOT EXISTS red_team_attacks (
+    id SERIAL PRIMARY KEY,
+    
+    -- Attack details
+    attack_type VARCHAR(50) NOT NULL,
+    success BOOLEAN NOT NULL,
+    confidence FLOAT NOT NULL,
+    bypass_rate FLOAT NOT NULL,
+    
+    -- Details (JSON)
+    details JSONB,
+    
+    -- Severity
+    severity VARCHAR(10),  -- P0, P1, P2, P3
+    
+    -- Timestamp
+    timestamp TIMESTAMP NOT NULL,
+    
+    INDEX idx_attack_type (attack_type),
+    INDEX idx_timestamp (timestamp),
+    INDEX idx_severity (severity)
+);
+
+-- Findings table
+CREATE TABLE IF NOT EXISTS red_team_findings (
+    id SERIAL PRIMARY KEY,
+    
+    -- Finding identification
+    finding_id VARCHAR(50) UNIQUE NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    severity VARCHAR(10) NOT NULL,  -- P0, P1, P2, P3
+    attack_type VARCHAR(50) NOT NULL,
+    
+    -- Description
+    description TEXT NOT NULL,
+    impact TEXT NOT NULL,
+    reproduction_steps JSONB NOT NULL,
+    affected_components JSONB NOT NULL,
+    
+    -- Metrics
+    bypass_rate FLOAT NOT NULL,
+    
+    -- Discovery
+    discovered_at TIMESTAMP NOT NULL,
+    discovered_by VARCHAR(100) NOT NULL,
+    
+    -- Assignment
+    assigned_to VARCHAR(100),
+    assigned_at TIMESTAMP,
+    assigned_by VARCHAR(100),
+    
+    -- SLA
+    sla_deadline TIMESTAMP NOT NULL,
+    escalation_time TIMESTAMP NOT NULL,
+    time_remaining_hours FLOAT,
+    
+    -- Status
+    status VARCHAR(20) NOT NULL DEFAULT 'open',
+    sla_status VARCHAR(20) NOT NULL DEFAULT 'on_track',
+    
+    -- Resolution
+    closed_at TIMESTAMP,
+    resolution_hours FLOAT,
+    remediation_notes TEXT,
+    
+    -- Metadata
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_by VARCHAR(100),
+    
+    INDEX idx_finding_id (finding_id),
+    INDEX idx_severity (severity),
+    INDEX idx_status (status),
+    INDEX idx_sla_status (sla_status),
+    INDEX idx_sla_deadline (sla_deadline),
+    INDEX idx_assigned_to (assigned_to)
+);
+
+-- Finding status history
+CREATE TABLE IF NOT EXISTS finding_status_history (
+    id SERIAL PRIMARY KEY,
+    
+    finding_id VARCHAR(50) NOT NULL,
+    old_status VARCHAR(20),
+    new_status VARCHAR(20) NOT NULL,
+    changed_by VARCHAR(100) NOT NULL,
+    notes TEXT,
+    changed_at TIMESTAMP NOT NULL,
+    
+    INDEX idx_finding_id (finding_id),
+    INDEX idx_changed_at (changed_at),
+    FOREIGN KEY (finding_id) REFERENCES red_team_findings(finding_id)
+);
+
+-- Risk gate validation results
+CREATE TABLE IF NOT EXISTS risk_gate_validations (
+    id SERIAL PRIMARY KEY,
+    
+    -- Test run
+    test_run_id VARCHAR(50) NOT NULL,
+    
+    -- Results
+    weighted_bypass_score FLOAT NOT NULL,
+    threshold FLOAT NOT NULL,
+    passed BOOLEAN NOT NULL,
+    
+    -- Attack results (JSON)
+    attack_results JSONB NOT NULL,
+    
+    -- Findings
+    findings_count INTEGER NOT NULL,
+    p0_count INTEGER NOT NULL,
+    p1_count INTEGER NOT NULL,
+    
+    -- Timestamp
+    validated_at TIMESTAMP NOT NULL,
+    
+    INDEX idx_test_run_id (test_run_id),
+    INDEX idx_validated_at (validated_at),
+    INDEX idx_passed (passed)
+);
+
+
 COMMIT;
