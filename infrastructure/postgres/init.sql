@@ -606,5 +606,90 @@ CREATE TABLE IF NOT EXISTS challenge_templates_metadata (
     INDEX idx_is_active (is_active)
 );
 
+-- =============================================================================
+-- SESSION CONTROL TABLES
+-- =============================================================================
+
+-- Verification sessions
+CREATE TABLE IF NOT EXISTS verification_sessions (
+    id SERIAL PRIMARY KEY,
+    
+    -- Session identification
+    session_id VARCHAR(100) UNIQUE NOT NULL,
+    device_id VARCHAR(100) NOT NULL,
+    ip_address VARCHAR(45) NOT NULL,
+    challenge_id VARCHAR(100) NOT NULL,
+    
+    -- Status
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    
+    -- Attempt tracking
+    attempts INTEGER NOT NULL DEFAULT 0,
+    max_attempts INTEGER NOT NULL DEFAULT 3,
+    
+    -- Timing (server time authority)
+    created_at TIMESTAMP NOT NULL,
+    challenge_expires_at TIMESTAMP NOT NULL,
+    session_expires_at TIMESTAMP NOT NULL,
+    last_attempt_at TIMESTAMP,
+    next_retry_allowed_at TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Expiry tracking
+    expired_reason VARCHAR(100),
+    
+    INDEX idx_session_id (session_id),
+    INDEX idx_device_id (device_id),
+    INDEX idx_ip_address (ip_address),
+    INDEX idx_status (status),
+    INDEX idx_created_at (created_at),
+    INDEX idx_challenge_expires_at (challenge_expires_at),
+    INDEX idx_session_expires_at (session_expires_at)
+);
+
+-- Session attempt history
+CREATE TABLE IF NOT EXISTS session_attempt_history (
+    id SERIAL PRIMARY KEY,
+    
+    session_id VARCHAR(100) NOT NULL,
+    attempt_number INTEGER NOT NULL,
+    success BOOLEAN NOT NULL,
+    attempted_at TIMESTAMP NOT NULL,
+    
+    -- Additional metadata
+    device_id VARCHAR(100),
+    ip_address VARCHAR(45),
+    
+    INDEX idx_session_id (session_id),
+    INDEX idx_attempted_at (attempted_at),
+    INDEX idx_device_id (device_id),
+    INDEX idx_ip_address (ip_address),
+    FOREIGN KEY (session_id) REFERENCES verification_sessions(session_id)
+);
+
+-- Abuse incidents
+CREATE TABLE IF NOT EXISTS abuse_incidents (
+    id SERIAL PRIMARY KEY,
+    
+    pattern VARCHAR(50) NOT NULL,
+    severity VARCHAR(20) NOT NULL,
+    count INTEGER NOT NULL,
+    affected_entities TEXT[],
+    
+    first_seen TIMESTAMP NOT NULL,
+    last_seen TIMESTAMP NOT NULL,
+    detected_at TIMESTAMP NOT NULL,
+    
+    -- Resolution
+    resolved BOOLEAN DEFAULT false,
+    resolved_at TIMESTAMP,
+    resolution_notes TEXT,
+    
+    INDEX idx_pattern (pattern),
+    INDEX idx_severity (severity),
+    INDEX idx_detected_at (detected_at),
+    INDEX idx_resolved (resolved)
+);
+
 
 COMMIT;
