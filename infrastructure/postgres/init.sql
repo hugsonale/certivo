@@ -544,4 +544,67 @@ CREATE TABLE IF NOT EXISTS risk_gate_validations (
 );
 
 
+-- =============================================================================
+-- CHALLENGE DESIGN TABLES
+-- =============================================================================
+
+-- Challenge completion tracking
+CREATE TABLE IF NOT EXISTS challenge_completion_tracking (
+    id SERIAL PRIMARY KEY,
+    
+    -- Challenge details
+    challenge_id VARCHAR(100) NOT NULL,
+    template_id VARCHAR(50) NOT NULL,
+    user_id VARCHAR(100) NOT NULL,
+    
+    -- Completion status
+    status VARCHAR(20) NOT NULL,  -- completed, failed, abandoned, timeout
+    duration_seconds FLOAT NOT NULL,
+    
+    -- Cohort tracking
+    is_pilot_user BOOLEAN DEFAULT false,
+    
+    -- Accessibility
+    accessibility_profile JSONB,
+    
+    -- Failure analysis
+    failure_reason VARCHAR(255),
+    
+    -- Timestamp
+    attempted_at TIMESTAMP NOT NULL,
+    
+    INDEX idx_template_id (template_id),
+    INDEX idx_status (status),
+    INDEX idx_is_pilot_user (is_pilot_user),
+    INDEX idx_attempted_at (attempted_at),
+    INDEX idx_user_id (user_id)
+);
+
+-- Challenge templates metadata
+CREATE TABLE IF NOT EXISTS challenge_templates_metadata (
+    id SERIAL PRIMARY KEY,
+    
+    template_id VARCHAR(50) UNIQUE NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    challenge_type VARCHAR(50) NOT NULL,
+    difficulty VARCHAR(20) NOT NULL,
+    
+    -- Accessibility
+    requires_motion BOOLEAN NOT NULL,
+    requires_vision BOOLEAN NOT NULL,
+    requires_audio BOOLEAN NOT NULL,
+    
+    -- Metrics
+    entropy_bits FLOAT NOT NULL,
+    estimated_duration_seconds FLOAT NOT NULL,
+    
+    -- Status
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    INDEX idx_template_id (template_id),
+    INDEX idx_is_active (is_active)
+);
+
+
 COMMIT;
