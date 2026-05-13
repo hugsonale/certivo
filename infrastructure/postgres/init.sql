@@ -692,4 +692,139 @@ CREATE TABLE IF NOT EXISTS abuse_incidents (
 );
 
 
+-- =============================================================================
+-- RISK SCORING AND POLICY TABLES
+-- =============================================================================
+
+-- Risk policies
+CREATE TABLE IF NOT EXISTS risk_policies (
+    id SERIAL PRIMARY KEY,
+    
+    -- Policy identification
+    policy_id VARCHAR(100) UNIQUE NOT NULL,
+    customer_id VARCHAR(100) NOT NULL,
+    policy_name VARCHAR(255) NOT NULL,
+    
+    -- Thresholds
+    approve_threshold DECIMAL(5,4) NOT NULL,  -- e.g., 0.3000
+    review_threshold DECIMAL(5,4) NOT NULL,   -- e.g., 0.5000
+    deny_threshold DECIMAL(5,4) NOT NULL,     -- e.g., 0.7500
+    
+    -- Factor weights (JSON)
+    factor_weights JSONB NOT NULL,
+    
+    -- Custom rules (JSON)
+    custom_rules JSONB DEFAULT '{}',
+    
+    -- Versioning
+    version INTEGER NOT NULL DEFAULT 1,
+    is_active BOOLEAN DEFAULT true,
+    
+    -- Metadata
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    created_by VARCHAR(100) NOT NULL,
+    updated_by VARCHAR(100),
+    
+    INDEX idx_policy_id (policy_id),
+    INDEX idx_customer_id (customer_id),
+    INDEX idx_is_active (is_active)
+);
+
+-- Policy change log
+CREATE TABLE IF NOT EXISTS policy_change_log (
+    id SERIAL PRIMARY KEY,
+    
+    policy_id VARCHAR(100) NOT NULL,
+    customer_id VARCHAR(100) NOT NULL,
+    old_version INTEGER NOT NULL,
+    new_version INTEGER NOT NULL,
+    
+    -- Changes (JSON)
+    changes JSONB NOT NULL,
+    
+    -- Metadata
+    changed_by VARCHAR(100) NOT NULL,
+    changed_at TIMESTAMP NOT NULL,
+    
+    INDEX idx_policy_id (policy_id),
+    INDEX idx_changed_at (changed_at)
+);
+
+-- Risk assessments
+CREATE TABLE IF NOT EXISTS risk_assessments (
+    id SERIAL PRIMARY KEY,
+    
+    -- Session context
+    session_id VARCHAR(100) NOT NULL,
+    device_id VARCHAR(100) NOT NULL,
+    customer_id VARCHAR(100) NOT NULL,
+    
+    -- Assessment results
+    overall_risk_score DECIMAL(5,4) NOT NULL,
+    risk_level VARCHAR(20) NOT NULL,
+    decision VARCHAR(20) NOT NULL,
+    passed BOOLEAN NOT NULL,
+    
+    -- Factor scores (JSON)
+    factor_scores JSONB NOT NULL,
+    
+    -- Policy context
+    policy_id VARCHAR(100) NOT NULL,
+    policy_version INTEGER NOT NULL,
+    threshold_used DECIMAL(5,4) NOT NULL,
+    
+    -- Timestamp
+    assessed_at TIMESTAMP NOT NULL,
+    
+    INDEX idx_session_id (session_id),
+    INDEX idx_device_id (device_id),
+    INDEX idx_customer_id (customer_id),
+    INDEX idx_decision (decision),
+    INDEX idx_assessed_at (assessed_at)
+);
+
+-- Explainability records
+CREATE TABLE IF NOT EXISTS explainability_records (
+    id SERIAL PRIMARY KEY,
+    
+    -- Record identification
+    record_id VARCHAR(100) UNIQUE NOT NULL,
+    session_id VARCHAR(100) NOT NULL,
+    device_id VARCHAR(100) NOT NULL,
+    customer_id VARCHAR(100) NOT NULL,
+    
+    -- Decision details
+    decision VARCHAR(20) NOT NULL,
+    overall_risk_score DECIMAL(5,4) NOT NULL,
+    threshold_used DECIMAL(5,4) NOT NULL,
+    passed BOOLEAN NOT NULL,
+    
+    -- Factor breakdown (JSON)
+    factor_scores JSONB NOT NULL,
+    
+    -- Explanations
+    summary_explanation TEXT NOT NULL,
+    detailed_explanation TEXT NOT NULL,
+    technical_details JSONB NOT NULL,
+    
+    -- Primary concerns
+    primary_concerns TEXT[],
+    
+    -- Policy context
+    policy_id VARCHAR(100) NOT NULL,
+    policy_version INTEGER NOT NULL,
+    
+    -- Timestamp
+    timestamp TIMESTAMP NOT NULL,
+    
+    INDEX idx_record_id (record_id),
+    INDEX idx_session_id (session_id),
+    INDEX idx_device_id (device_id),
+    INDEX idx_customer_id (customer_id),
+    INDEX idx_decision (decision),
+    INDEX idx_timestamp (timestamp)
+);
+
+
 COMMIT;
