@@ -826,5 +826,102 @@ CREATE TABLE IF NOT EXISTS explainability_records (
     INDEX idx_timestamp (timestamp)
 );
 
+-- =============================================================================
+-- SLO MONITORING TABLES
+-- =============================================================================
+
+-- API request metrics
+CREATE TABLE IF NOT EXISTS api_requests (
+    id BIGSERIAL PRIMARY KEY,
+    
+    endpoint VARCHAR(255) NOT NULL,
+    status_code INTEGER NOT NULL,
+    duration_ms DECIMAL(10,3) NOT NULL,
+    success BOOLEAN NOT NULL,
+    timestamp TIMESTAMP NOT NULL,
+    
+    INDEX idx_endpoint (endpoint),
+    INDEX idx_timestamp (timestamp),
+    INDEX idx_success (success)
+);
+
+-- Partition by month for performance
+CREATE TABLE IF NOT EXISTS api_requests_2025_01 PARTITION OF api_requests
+FOR VALUES FROM ('2025-01-01') TO ('2025-02-01');
+
+CREATE TABLE IF NOT EXISTS api_requests_2025_02 PARTITION OF api_requests
+FOR VALUES FROM ('2025-02-01') TO ('2025-03-01');
+
+-- Challenge issuance metrics
+CREATE TABLE IF NOT EXISTS challenge_issuance_metrics (
+    id BIGSERIAL PRIMARY KEY,
+    
+    challenge_id VARCHAR(100) NOT NULL,
+    duration_ms DECIMAL(10,3) NOT NULL,
+    success BOOLEAN NOT NULL,
+    timestamp TIMESTAMP NOT NULL,
+    
+    INDEX idx_challenge_id (challenge_id),
+    INDEX idx_timestamp (timestamp),
+    INDEX idx_success (success)
+);
+
+-- Verify accept metrics
+CREATE TABLE IF NOT EXISTS verify_accept_metrics (
+    id BIGSERIAL PRIMARY KEY,
+    
+    session_id VARCHAR(100) NOT NULL,
+    duration_ms DECIMAL(10,3) NOT NULL,
+    upload_duration_ms DECIMAL(10,3) NOT NULL,
+    processing_duration_ms DECIMAL(10,3) NOT NULL,
+    success BOOLEAN NOT NULL,
+    timestamp TIMESTAMP NOT NULL,
+    
+    INDEX idx_session_id (session_id),
+    INDEX idx_timestamp (timestamp),
+    INDEX idx_success (success)
+);
+
+-- Queue processing metrics
+CREATE TABLE IF NOT EXISTS queue_processing_metrics (
+    id BIGSERIAL PRIMARY KEY,
+    
+    job_id VARCHAR(100) NOT NULL,
+    queue_name VARCHAR(50) NOT NULL,
+    queued_at TIMESTAMP NOT NULL,
+    started_at TIMESTAMP NOT NULL,
+    completed_at TIMESTAMP NOT NULL,
+    delay_ms DECIMAL(10,3) NOT NULL,
+    processing_ms DECIMAL(10,3) NOT NULL,
+    
+    INDEX idx_job_id (job_id),
+    INDEX idx_queue_name (queue_name),
+    INDEX idx_queued_at (queued_at)
+);
+
+-- SLO breach incidents
+CREATE TABLE IF NOT EXISTS slo_breach_incidents (
+    id SERIAL PRIMARY KEY,
+    
+    metric VARCHAR(50) NOT NULL,
+    target_value DECIMAL(10,3) NOT NULL,
+    actual_value DECIMAL(10,3) NOT NULL,
+    breach_percentage DECIMAL(5,2) NOT NULL,
+    
+    time_window VARCHAR(50) NOT NULL,
+    samples INTEGER NOT NULL,
+    
+    detected_at TIMESTAMP NOT NULL,
+    resolved_at TIMESTAMP,
+    
+    -- Incident details
+    root_cause TEXT,
+    remediation_notes TEXT,
+    
+    INDEX idx_metric (metric),
+    INDEX idx_detected_at (detected_at),
+    INDEX idx_resolved_at (resolved_at)
+);
+
 
 COMMIT;
