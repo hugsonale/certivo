@@ -923,5 +923,118 @@ CREATE TABLE IF NOT EXISTS slo_breach_incidents (
     INDEX idx_resolved_at (resolved_at)
 );
 
+-- =============================================================================
+-- ASYNC PIPELINE TABLES
+-- =============================================================================
+
+-- Job metadata tracking
+CREATE TABLE IF NOT EXISTS job_metadata (
+    job_id VARCHAR(100) PRIMARY KEY,
+    session_id VARCHAR(100) NOT NULL,
+    customer_id VARCHAR(100) NOT NULL,
+    
+    -- Video info
+    video_s3_key VARCHAR(500) NOT NULL,
+    video_size_bytes BIGINT NOT NULL,
+    video_content_hash VARCHAR(64) NOT NULL,
+    
+    -- Processing info
+    priority VARCHAR(20) NOT NULL,
+    max_retries INTEGER NOT NULL DEFAULT 3,
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    
+    -- Status
+    status VARCHAR(20) NOT NULL,
+    
+    -- Timestamps
+    created_at TIMESTAMP NOT NULL,
+    queued_at TIMESTAMP,
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    
+    -- Error tracking
+    last_error TEXT,
+    error_history JSONB,
+    
+    -- Idempotency
+    idempotency_key VARCHAR(200) UNIQUE NOT NULL,
+    
+    -- Indexes
+    INDEX idx_job_metadata_session (session_id),
+    INDEX idx_job_metadata_customer (customer_id),
+    INDEX idx_job_metadata_status (status),
+    INDEX idx_job_metadata_created (created_at DESC),
+    INDEX idx_job_metadata_idempotency (idempotency_key)
+);
+
+-- Job results
+CREATE TABLE IF NOT EXISTS job_results (
+    id BIGSERIAL PRIMARY KEY,
+    
+    job_id VARCHAR(100) NOT NULL REFERENCES job_metadata(job_id),
+    session_id VARCHAR(100) NOT NULL,
+    
+    success BOOLEAN NOT NULL,
+    
+    -- Results
+    liveness_result JSONB,
+    risk_assessment JSONB,
+    decision VARCHAR(50),
+    
+    -- Processing metadata
+    processing_duration_ms DECIMAL(10,3),
+    worker_id VARCHAR(100),
+    
+    -- Error info
+    error_message TEXT,
+    error_type VARCHAR(100),
+    
+    completed_at TIMESTAMP NOT NULL,
+    
+    -- Indexes
+    INDEX idx_job_results_job_id (job_id),
+    INDEX idx_job_results_session (session_id),
+    INDEX idx_job_results_success (success),
+    INDEX idx_job_results_completed (completed_at DESC)
+);
+
+-- Dead letter queue tracking
+CREATE TABLE IF NOT EXISTS dead_letter_jobs (
+    id BIGSERIAL PRIMARY KEY,
+    
+    job_id VARCHAR(100) NOT NULL,
+    job_metadata JSONB NOT NULL,
+    
+    reason TEXT NOT NULL,
+    retry_count INTEGER NOT NULL,
+    
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    
+    -- Indexes
+    INDEX idx_dead_letter_created (created_at DESC)
+);
+
+-- Poison queue tracking (jobs that cause worker crashes)
+CREATE TABLE IF NOT EXISTS poison_jobs (
+    id BIGSERIAL PRIMARY KEY,
+    
+    job_id VARCHAR(100) NOT NULL,
+    job_metadata JSONB NOT NULL,
+    
+    poison_reason TEXT NOT NULL,
+    failure_count INTEGER NOT NULL,
+    
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    
+    -- Indexes
+    INDEX idx_poison_created (created_at DESC)
+);
+
+-- Load test writes table (for bottleneck testing)
+CREATE TABLE IF NOT EXISTS load_test_writes (
+    id BIGSERIAL PRIMARY KEY,
+    data TEXT,
+    timestamp TIMESTAMP NOT NULL
+);
 
 COMMIT;
