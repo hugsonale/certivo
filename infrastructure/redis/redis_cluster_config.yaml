@@ -1,0 +1,113 @@
+# Redis High Availability Configuration
+# Architecture: Redis Cluster with Sentinel for automatic failover
+
+redis:
+  version: "7.2"
+  
+  # Cluster Configuration
+  cluster:
+    enabled: true
+    nodes: 6  # 3 masters + 3 replicas
+    
+    # Master nodes
+    masters:
+      - name: redis-master-1
+        host: redis-master-1.internal
+        port: 6379
+        availability_zone: us-east-1a
+        
+      - name: redis-master-2
+        host: redis-master-2.internal
+        port: 6379
+        availability_zone: us-east-1b
+        
+      - name: redis-master-3
+        host: redis-master-3.internal
+        port: 6379
+        availability_zone: us-east-1c
+    
+    # Replica configuration
+    replicas_per_master: 1
+    
+    # Cluster settings
+    cluster_require_full_coverage: yes
+    cluster_node_timeout: 15000  # 15 seconds
+    cluster_replica_validity_factor: 10
+    cluster_migration_barrier: 1
+    
+  # Sentinel Configuration (for automatic failover)
+  sentinel:
+    enabled: true
+    nodes: 3
+    quorum: 2  # Minimum sentinels to agree on failover
+    
+    sentinel_1:
+      host: redis-sentinel-1.internal
+      port: 26379
+      availability_zone: us-east-1a
+      
+    sentinel_2:
+      host: redis-sentinel-2.internal
+      port: 26379
+      availability_zone: us-east-1b
+      
+    sentinel_3:
+      host: redis-sentinel-3.internal
+      port: 26379
+      availability_zone: us-east-1c
+    
+    # Failover settings
+    down_after_milliseconds: 5000  # Declare master down after 5s
+    failover_timeout: 180000  # 3 minutes
+    parallel_syncs: 1
+    
+  # Performance Configuration
+  performance:
+    maxmemory: 16GB
+    maxmemory_policy: allkeys-lru  # Evict least recently used keys
+    
+    # Persistence (for critical data)
+    save:
+      - "900 1"    # Save if 1 key changed in 15 minutes
+      - "300 10"   # Save if 10 keys changed in 5 minutes
+      - "60 10000" # Save if 10000 keys changed in 1 minute
+    
+    # AOF (Append-Only File) for durability
+    appendonly: yes
+    appendfsync: everysec  # Sync every second
+    auto_aof_rewrite_percentage: 100
+    auto_aof_rewrite_min_size: 64mb
+    
+    # Connection settings
+    maxclients: 10000
+    timeout: 300  # Close idle connections after 5 minutes
+    tcp_keepalive: 300
+    
+    # Performance tuning
+    tcp_backlog: 511
+    databases: 16
+    hz: 10  # Internal cron frequency
+    
+  # Backup Configuration
+  backup:
+    enabled: true
+    schedule: "0 */6 * * *"  # Every 6 hours
+    retention_days: 7
+    backup_storage:
+      type: s3
+      bucket: certivo-redis-backups
+      region: us-east-1
+      
+  # Monitoring
+  monitoring:
+    memory_usage_alert_percent: 85
+    connection_usage_alert_percent: 80
+    replication_lag_alert_seconds: 10
+    
+  # TTL Policies (covered in Part 3)
+  ttl_policies:
+    sessions: 1800  # 30 minutes
+    rate_limits: 3600  # 1 hour
+    challenges: 600  # 10 minutes
+    job_locks: 300  # 5 minutes
+    results_cache: 604800  # 7 days
