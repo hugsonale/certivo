@@ -1,0 +1,98 @@
+# PostgreSQL High Availability Configuration
+# Architecture: Primary + Streaming Replicas + PITR
+
+postgresql:
+  version: "15"
+  
+  # Primary Database
+  primary:
+    name: certivo-primary
+    instance_type: db.r5.4xlarge
+    cpu: 16
+    memory_gb: 128
+    storage_gb: 1000
+    storage_type: gp3  # Provisioned IOPS
+    iops: 10000
+    throughput_mbps: 500
+    
+    # Connection settings
+    max_connections: 500
+    shared_buffers: 32GB
+    effective_cache_size: 96GB
+    maintenance_work_mem: 2GB
+    
+    # WAL settings for streaming replication
+    wal_level: replica
+    max_wal_senders: 10
+    wal_keep_size: 1GB
+    
+    # Point-In-Time Recovery (PITR)
+    archive_mode: on
+    archive_command: "pgbackrest --stanza=certivo archive-push %p"
+    
+    # Performance tuning
+    checkpoint_completion_target: 0.9
+    wal_buffers: 16MB
+    default_statistics_target: 100
+    random_page_cost: 1.1
+    effective_io_concurrency: 200
+    work_mem: 64MB
+    min_wal_size: 1GB
+    max_wal_size: 4GB
+  
+  # Read Replicas (Streaming Replication)
+  replicas:
+    count: 2
+    lag_target_ms: 100  # Max acceptable lag
+    
+    replica_1:
+      name: certivo-replica-1
+      instance_type: db.r5.4xlarge
+      availability_zone: us-east-1b
+      
+    replica_2:
+      name: certivo-replica-2
+      instance_type: db.r5.4xlarge
+      availability_zone: us-east-1c
+  
+  # Backup Configuration (pgBackRest)
+  backup:
+    tool: pgbackrest
+    stanza: certivo
+    
+    # Full backup schedule
+    full_backup_schedule: "0 2 * * 0"  # Weekly at 2 AM Sunday
+    
+    # Incremental backup schedule
+    incremental_backup_schedule: "0 2 * * 1-6"  # Daily at 2 AM
+    
+    # Continuous archiving (WAL)
+    wal_archive_enabled: true
+    wal_archive_retention_days: 7
+    
+    # Backup retention
+    full_backup_retention: 4  # Keep 4 full backups
+    differential_backup_retention: 4
+    incremental_backup_retention: 2
+    
+    # Backup storage
+    backup_storage:
+      type: s3
+      bucket: certivo-postgres-backups
+      region: us-east-1
+      encryption: AES256
+      
+    # Compression
+    compress_type: lz4
+    compress_level: 3
+  
+  # Recovery Objectives
+  recovery:
+    rpo_minutes: 15  # Recovery Point Objective
+    rto_minutes: 60  # Recovery Time Objective
+    
+  # Monitoring
+  monitoring:
+    replication_lag_alert_ms: 1000
+    connection_usage_alert_percent: 80
+    storage_usage_alert_percent: 85
