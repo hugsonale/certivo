@@ -1,0 +1,153 @@
+# Encryption Configuration
+# TLS 1.2+ in transit, KMS-managed keys at rest
+
+encryption:
+  
+  # Encryption in Transit
+  in_transit:
+    # TLS Configuration
+    tls:
+      min_version: "1.2"  # TLS 1.2 minimum (1.3 preferred)
+      ciphers:
+        - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+        - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+        - "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
+      
+      # Certificate settings
+      certificate:
+        type: "let's encrypt"  # or AWS ACM
+        auto_renewal: true
+        renewal_days_before: 30
+      
+      # HSTS (HTTP Strict Transport Security)
+      hsts:
+        enabled: true
+        max_age: 31536000  # 1 year
+        include_subdomains: true
+        preload: true
+    
+    # API endpoints
+    api:
+      force_https: true
+      redirect_http_to_https: true
+    
+    # Database connections
+    database:
+      postgres:
+        ssl_mode: "require"
+        ssl_cert_verification: true
+      redis:
+        tls_enabled: true
+        tls_verify_mode: "required"
+  
+  # Encryption at Rest
+  at_rest:
+    # AWS KMS Configuration
+    kms:
+      enabled: true
+      region: "us-east-1"
+      
+      # Master keys
+      keys:
+        # Database encryption key
+        database:
+          alias: "certivo-database-key"
+          description: "Master key for PostgreSQL encryption"
+          key_policy: "certivo-database-policy"
+          rotation_enabled: true
+          rotation_period_days: 365
+        
+        # S3 encryption key
+        s3:
+          alias: "certivo-s3-key"
+          description: "Master key for S3 video encryption"
+          key_policy: "certivo-s3-policy"
+          rotation_enabled: true
+          rotation_period_days: 365
+        
+        # Application secrets key
+        secrets:
+          alias: "certivo-secrets-key"
+          description: "Master key for application secrets"
+          key_policy: "certivo-secrets-policy"
+          rotation_enabled: true
+          rotation_period_days: 90
+    
+    # PostgreSQL encryption
+    postgresql:
+      encryption_enabled: true
+      encryption_method: "aws_kms"
+      kms_key: "certivo-database-key"
+      
+      # Column-level encryption for sensitive fields
+      encrypted_columns:
+        sessions:
+          - "ip_address"
+          - "device_id"
+        verification_results:
+          - "liveness_score"
+          - "motion_score"
+          - "temporal_score"
+        risk_assessments:
+          - "overall_risk_score"
+          - "risk_factors"
+    
+    # S3 encryption
+    s3:
+      default_encryption: "aws:kms"
+      kms_key: "certivo-s3-key"
+      bucket_key_enabled: true  # Reduce KMS costs
+      
+      # Bucket policies
+      video_bucket:
+        name: "certivo-videos"
+        encryption: "aws:kms"
+        versioning: true
+        lifecycle:
+          - id: "delete-old-videos"
+            enabled: true
+            expiration_days: 90
+    
+    # Redis encryption
+    redis:
+      encryption_enabled: true
+      encryption_at_rest: true
+      
+    # Backup encryption
+    backups:
+      postgres:
+        encryption_enabled: true
+        kms_key: "certivo-database-key"
+      
+      redis:
+        encryption_enabled: true
+        kms_key: "certivo-database-key"
+  
+  # Field-level encryption
+  field_level:
+    enabled: true
+    
+    # Sensitive fields requiring encryption
+    sensitive_fields:
+      - table: "sessions"
+        fields: ["ip_address", "device_id"]
+        encryption_method: "kms"
+      
+      - table: "verification_results"
+        fields: ["liveness_score", "motion_score", "temporal_score"]
+        encryption_method: "kms"
+      
+      - table: "risk_assessments"
+        fields: ["overall_risk_score", "risk_factors"]
+        encryption_method: "kms"
+  
+  # Key rotation schedule
+  rotation:
+    enabled: true
+    schedule:
+      database_key: "annually"
+      s3_key: "annually"
+      secrets_key: "quarterly"
+    
+    # Automatic re-encryption after rotation
+    auto_reencrypt: true
