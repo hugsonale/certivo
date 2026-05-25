@@ -1,0 +1,16 @@
+{
+  "welcome_title": "Bienvenido a la Verificación",
+  "welcome_message": "Verificaremos que eres una persona real en unos 15 segundos",
+  "start_button": "Comenzar",
+  "consent_title": "Tu Privacidad Importa",
+  "camera_setup": "Configuración de Cámara",
+  "position_face": "Coloca tu rostro en el marco",
+  "blink_now": "Parpadea ahora",
+  "smile_now": "Sonríe ahora",
+  "turn_left": "Gira tu cabeza a la izquierda",
+  "turn_right": "Gira tu cabeza a la derecha",
+  "processing": "Procesando...",
+  "complete": "¡Verificación Completa!",
+  "error_camera": "No se detectó cámara",
+  "fallback_options": "Métodos Alternativos"
+}
