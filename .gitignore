@@ -55,3 +55,15 @@ uploads/*.mp4
 htmlcov/
 .coverage
 coverage.xml
+
+# --- added by rebuild_setup.sh ---
+.env
+.env.*
+!.env.example
+node_modules/
+*.backup
+*.backup_*
+.coverage
+__pycache__/
+*.db
+backups/
