@@ -1,12 +1,22 @@
 name: platform-ci
+
 on:
   push:
     branches: [rebuild, main]
   pull_request:
-    paths: ["platform/**", "docs/spec/test-vectors/**", ".github/workflows/platform-ci.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
+    name: Test and lint (platform)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: platform

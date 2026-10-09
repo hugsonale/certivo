@@ -1,0 +1,33 @@
+#!/bin/sh
+# Certivo commit-msg hook: the first line must be a Conventional Commit.
+# Install once per clone with:  git config core.hooksPath .githooks
+msg_file="$1"
+first_line=$(head -n 1 "$msg_file" | tr -d '\r')
+
+case "$first_line" in
+  "Merge "*|"Revert "*|"fixup! "*|"squash! "*) exit 0 ;;
+esac
+
+if [ "${#first_line}" -gt 100 ]; then
+  echo "Commit message rejected: the first line is longer than 100 characters." >&2
+  exit 1
+fi
+
+if printf '%s' "$first_line" | grep -Eq '^(feat|fix|docs|chore|test|refactor|perf|ci|build|revert)(\([A-Za-z0-9._-]+\))?!?: [^ ].*$'; then
+  exit 0
+fi
+
+cat >&2 <<'MSG'
+Commit message rejected. The first line must look like:
+
+    type(scope): short summary
+
+Examples:
+    feat(platform): add webhook worker
+    docs: add ADR for signing algorithm
+    fix(sdk-web): handle missing camera permission
+
+Allowed types: feat, fix, docs, chore, test, refactor, perf, ci, build, revert
+Put the build step ID (for example P0-03) in the message body.
+MSG
+exit 1

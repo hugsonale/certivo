@@ -1,0 +1,82 @@
+name: security-scan
+
+on:
+  push:
+    branches: [rebuild, main]
+  pull_request:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GITLEAKS_VERSION: "8.30.1"
+
+jobs:
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks (checksum verified)
+        run: |
+          set -euo pipefail
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          file="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL -o "$file" "${base}/${file}"
+          curl -sSfL -o checksums.txt "${base}/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          sha256sum --ignore-missing -c checksums.txt
+          tar -xzf "$file" gitleaks
+          sudo mv gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      # Pull requests: scan only the commits the PR adds.
+      # TODO(after the history purge): scan the full history on every run.
+      - name: Scan the commits in this pull request
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: gitleaks git --config .gitleaks.toml --redact --verbose --log-opts="origin/${BASE_REF}..HEAD" .
+
+      # Pushes, weekly runs and manual runs: scan the files as they are now.
+      - name: Scan the current files
+        if: github.event_name != 'pull_request'
+        run: gitleaks dir --config .gitleaks.toml --redact --verbose .
+
+  python-audit:
+    name: Dependency audit (pip-audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "pip-audit==2.10.1"
+      - run: pip-audit -r platform/requirements.txt --strict
+
+  npm-audit:
+    name: Dependency audit (npm)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit every package-lock.json (skips cleanly if there are none yet)
+        run: |
+          set -euo pipefail
+          mapfile -t locks < <(git ls-files '*package-lock.json' | grep -v node_modules || true)
+          if [ "${#locks[@]}" -eq 0 ]; then
+            echo "No package-lock.json in the repo yet. Nothing to audit."
+            exit 0
+          fi
+          for lock in "${locks[@]}"; do
+            dir="$(dirname "$lock")"
+            echo "Auditing $dir"
+            (cd "$dir" && npm audit --audit-level=high)
+          done
