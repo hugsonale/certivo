@@ -1,0 +1,21 @@
+# NOT YET TESTED (written without Docker available). Local dev only.
+# Needs CERTIVO_ATTESTATION_SIGNING_KEY exported in your shell:
+#   export CERTIVO_ATTESTATION_SIGNING_KEY=$(python scripts/gen_signing_key.py)
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: certivo
+      POSTGRES_PASSWORD: certivo_dev_only
+      POSTGRES_DB: certivo
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+  api:
+    build: .
+    depends_on: [db]
+    ports: ["8000:8000"]
+    environment:
+      CERTIVO_DATABASE_URL: postgresql+psycopg://certivo:certivo_dev_only@db:5432/certivo
+      CERTIVO_ATTESTATION_SIGNING_KEY: ${CERTIVO_ATTESTATION_SIGNING_KEY}
+volumes:
+  pgdata:
