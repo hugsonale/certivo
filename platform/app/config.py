@@ -12,5 +12,6 @@ class Settings(BaseSettings):
     attestation_key_id: str = "att-dev-1"
     max_clock_skew_ms: int = 30_000
     max_interval_ms: int = 60_000
-    # Dev convenience. Replace with Alembic migrations before any real deployment.
-    auto_create_tables: bool = True
+    # Only honoured when env == "dev": the app then runs `alembic upgrade head` at startup.
+    # In every other environment migrations are run explicitly, never by the app.
+    auto_migrate: bool = True

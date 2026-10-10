@@ -1,7 +1,7 @@
 # Certivo Build Spec 0
 
 **Status:** draft for Jesutofunmi's review. **Scope:** Phase 0, the continuous-session backbone.
-**Code that implements it:** `platform/` (35 passing tests).
+**Code that implements it:** `platform/` (50 passing tests, on SQLite and on Postgres).
 **Derived from:** the v2 suite (chiefly Doc 6 API Specification §10, plus Docs 2, 4, 5, 12).
 Where this spec departs from a document it says so in section 3. Doc 6's v1 resource groups,
 the v1 error-code reference and the policy engine were not in the uploaded set, so anything
@@ -21,7 +21,7 @@ dropping to `reject` mid-call, and the signed attestation verifies and tells the
 
 **Not in Phase 0:** any real model, the Web SDK, WebRTC, native attestation (App Attest / Play
 Integrity), the Trusted Device Layer (Doc 6 §11), webhook *delivery*, retention jobs, rate
-limiting, Alembic migrations, mobile.
+limiting, mobile.
 
 ## 2. Phase 0 endpoint catalogue
 
@@ -145,9 +145,19 @@ Tables: `partners`, `api_keys` (SHA-256 hash only), `policies` (partner NULL = g
 `default_video_call`), `devices`, `continuous_sessions`, `continuous_score_events` (unique on
 session+participant+seq), `coverage_gaps`, `webhook_outbox`, `session_attestations`.
 
-Dev uses SQLite; production target is Postgres (written to be portable but **only SQLite is
-tested**). Doc 12's daily partitioning of the score-events table is a later migration. Schema
-changes should move to Alembic before any deployment (tables are auto-created in dev only).
+The schema is defined **only** by Alembic migrations in `platform/migrations/` (baseline `0001`).
+No code creates tables directly. Constraints and indexes have fixed names (a naming convention),
+so later migrations can change them safely. Rules:
+
+* `CERTIVO_ENV=dev`: the app applies migrations automatically at startup.
+* Any other environment: the app never changes the database. Migrations are run explicitly
+  (`alembic upgrade head`) and the app refuses to start if the database is not at the latest revision.
+* CI runs the whole test suite on SQLite **and** on Postgres 16, and runs `alembic check`, which
+  fails if `app/models.py` and the migrations disagree.
+* On Postgres, JSON columns are `JSONB`; elsewhere plain JSON. Global policies (no partner) are
+  protected by a partial unique index, because a plain UNIQUE constraint does not treat NULLs as equal.
+
+Doc 12's daily partitioning of the score-events table is still a later migration.
 
 Privacy posture carried over from the docs: no raw video or audio ever reaches this service;
 explanations are code lists and 0..1000 numbers only. Per-interval events are intended to have
@@ -223,7 +233,7 @@ What it does **not** give, and we must not claim:
 ## 12. Next build tasks (in order)
 
 1. Push, confirm CI is green on GitHub.
-2. Alembic migrations + Postgres in CI (retire "SQLite only").
+2. ~~Alembic migrations + Postgres in CI.~~ Done (P0-03, P0-04).
 3. Web SDK spike: reproduce the test vector in the browser (settles open decision 1).
 4. `demo-call/`: two-person WebRTC call using the sandbox flow, then the real SDK.
 5. Webhook delivery worker (HMAC-signed, retries) reading `webhook_outbox`.

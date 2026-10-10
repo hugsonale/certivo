@@ -12,3 +12,4 @@ An ADR is a short note recording one significant decision: what we faced, what w
 | [0002](0002-freeze-prototype-and-rebuild.md) | Freeze the prototype and rebuild on a new branch | Accepted |
 | [0003](0003-signing-and-canonical-json.md) | Ed25519 signatures over restricted canonical JSON | Accepted for the backend; browser support unverified |
 | [0004](0004-sdk-credentials.md) | Partner API keys and per-session SDK tokens | Accepted for Phase 0 |
+| [0005](0005-migrations-and-postgres.md) | Alembic migrations, and rules that keep SQLite and Postgres in step | Accepted |
