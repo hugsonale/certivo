@@ -6,14 +6,20 @@ sys.path.insert(0, ".")
 
 from app.admin import create_partner, ensure_default_policy  # noqa: E402
 from app.config import Settings  # noqa: E402
-from app.db import make_engine, make_session_factory  # noqa: E402
-from app.models import Base  # noqa: E402
+from app.db import (  # noqa: E402
+    assert_schema_current,
+    make_engine,
+    make_session_factory,
+    upgrade_to_head,
+)
 
 if __name__ == "__main__":
     name = sys.argv[1] if len(sys.argv) > 1 else "Dev Partner"
     settings = Settings()
+    if settings.env == "dev" and settings.auto_migrate:
+        upgrade_to_head(settings.database_url)  # dev convenience; no-op if already up to date
     engine = make_engine(settings.database_url)
-    Base.metadata.create_all(engine)
+    assert_schema_current(engine)  # other environments must be migrated explicitly first
     with make_session_factory(engine)() as db:
         ensure_default_policy(db)
         db.commit()

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import ApiKey, Partner, Policy, new_id
@@ -17,6 +18,11 @@ def ensure_default_policy(db: Session) -> None:
         validate_policy_config(DEFAULT_POLICY_CONFIG)
         db.add(Policy(id=new_id("pol"), partner_id=None, use_case=DEFAULT_USE_CASE, version=1,
                       config=dict(DEFAULT_POLICY_CONFIG), created_at_ms=now_ms()))
+        try:
+            db.flush()
+        except IntegrityError:
+            # Another process seeded it first (two app instances starting together). That's fine.
+            db.rollback()
 
 
 def create_partner(db: Session, name: str) -> tuple[Partner, str]:

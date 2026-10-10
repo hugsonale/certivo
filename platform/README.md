@@ -3,7 +3,7 @@
 FastAPI backend for continuous sessions: signed score packets in, policy outcomes and a signed
 session-length attestation out. Read `docs/spec/BUILD_SPEC_0.md` first.
 
-## Run it (Windows, Git Bash)
+## 1. Run it (Windows, Git Bash)
 
 ```bash
 cd platform
@@ -25,7 +25,70 @@ python -m uvicorn app.main:create_app --factory --reload     # http://127.0.0.1:
 python scripts/sandbox_call.py --api-key cvk_...
 ```
 
-## Layout
+In dev (`CERTIVO_ENV=dev`) the app and `create_partner.py` apply database migrations for you.
+
+**If you ran an earlier version of this project:** delete the old dev database once with
+`rm certivo_dev.db`, then run `create_partner.py` again. The old file was built without migrations,
+so the new migration system cannot adopt it. It only held sandbox data.
+
+## 2. Database migrations (the rule: every schema change is a migration)
+
+The database structure is defined by the files in `migrations/versions/`, never by code that
+creates tables directly. Run these from the `platform/` folder with the virtual environment active.
+
+| Task | Command |
+|---|---|
+| Apply all migrations | `alembic upgrade head` |
+| Show which migration the database is at | `alembic current` |
+| Check that `app/models.py` and the migrations agree | `alembic check` |
+| Draft a new migration after changing `app/models.py` | `alembic revision --autogenerate --rev-id 0002 -m "what changed"` |
+| Undo the last migration (dev only) | `alembic downgrade -1` |
+
+**When you change `app/models.py`:**
+
+1. Run `alembic revision --autogenerate --rev-id 0002 -m "short description"`. Use the next number.
+2. **Open the new file in `migrations/versions/` and read it.** Autogenerate can miss things (a renamed
+   column looks like "drop one, add one", which would destroy data).
+3. Run `alembic upgrade head`, then `alembic check` (it should say "No new upgrade operations detected").
+4. Run `pytest`. Commit the model change and the migration **in the same pull request**.
+
+Never edit a migration that has already been applied anywhere except your own computer. Add a new one.
+
+**Dev versus everything else.** With `CERTIVO_ENV=dev` the app migrates automatically at startup. With
+any other value (`staging`, `prod`, and so on) the app never changes the database: you run
+`alembic upgrade head` first, and the app refuses to start if the database is not up to date.
+
+## 3. Running on Postgres
+
+SQLite is what you use by default. Production uses Postgres, and CI runs every test on both.
+
+**Option A (nothing to install): let GitHub do it.** Open a pull request. The check named
+"Tests and migration check on Postgres" runs the whole suite on a real Postgres.
+
+**Option B: run the whole stack with Docker.** Needs Docker Desktop.
+
+```bash
+cd platform
+python scripts/gen_signing_key.py       # put the output in .env as CERTIVO_ATTESTATION_SIGNING_KEY=
+docker compose up --build               # starts Postgres and the API, runs the migrations
+```
+
+Then open http://127.0.0.1:8000/docs. In a second terminal:
+
+```bash
+docker compose exec api python scripts/create_partner.py "Docker Partner"
+docker compose exec api python scripts/sandbox_call.py --api-key cvk_...
+docker compose down        # stop (add -v to also delete the database volume)
+```
+
+**Option C: run the tests against your own Postgres.** Create an empty database, then:
+
+```bash
+export CERTIVO_TEST_DATABASE_URL="postgresql+psycopg://USER:PASSWORD@localhost:5432/certivo_test"
+pytest
+```
+
+## 4. Layout
 
 | Path | What |
 |---|---|
@@ -33,12 +96,14 @@ python scripts/sandbox_call.py --api-key cvk_...
 | `app/policy.py` | per-interval accept / fallback / reject (placeholder thresholds) |
 | `app/services/sessions.py` | start, ingest, pause/resume, end + attestation, status |
 | `app/attestation.py` | platform signer, attestation verification helper |
+| `app/db.py` | database engine plus the migration helpers |
+| `alembic.ini`, `migrations/` | the database schema, as migrations |
 | `app/sandbox.py` | scripted call used by tests and `scripts/sandbox_call.py` |
-| `tests/` | 35 tests, including the shared test vector |
+| `tests/` | 50 tests; run on SQLite and Postgres |
 
-## Rules we hold ourselves to
+## 5. Rules we hold ourselves to
 
 - `.env`, API keys, signing keys and `*.db` never get committed (`.gitignore` covers them).
 - Any change to the packet format must update `docs/spec/test-vectors/` via
   `python scripts/gen_test_vectors.py`; a test fails if they drift.
-- `docker-compose.yml` and Postgres have **not been tested yet** (SQLite is what the tests use).
+- Any change to `app/models.py` needs a migration in the same pull request; a test and CI fail if not.

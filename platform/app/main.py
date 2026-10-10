@@ -7,9 +7,8 @@ from fastapi import FastAPI
 from app.admin import ensure_default_policy
 from app.attestation import load_signer
 from app.config import Settings
-from app.db import make_engine, make_session_factory
+from app.db import assert_schema_current, make_engine, make_session_factory, upgrade_to_head
 from app.errors import install_error_handling
-from app.models import Base
 from app.routers import devices, meta, sessions
 from app.timeutil import now_ms
 
@@ -24,8 +23,12 @@ def create_app(settings: Settings | None = None, clock: Callable[[], int] | None
     app.state.clock = clock or now_ms
     app.state.signer = load_signer(settings)
 
-    if settings.auto_create_tables:
-        Base.metadata.create_all(engine)
+    # The schema comes from migrations only. Dev may apply them automatically; every other
+    # environment must have run `alembic upgrade head` already, or the app refuses to start.
+    if settings.env == "dev" and settings.auto_migrate:
+        upgrade_to_head(settings.database_url)
+    assert_schema_current(engine)
+
     with app.state.session_factory() as db:
         ensure_default_policy(db)
         db.commit()

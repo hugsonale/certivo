@@ -1,13 +1,18 @@
+import os
+
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, inspect, text
 
 from app.admin import create_partner
 from app.config import Settings
 from app.crypto import b64u_encode, public_key_b64u
 from app.main import create_app
+from app.models import Base
 
 T0 = 1_760_000_000_000
+SIGNING_KEY = b64u_encode(bytes(range(100, 132)))
 
 
 class FakeClock:
@@ -18,20 +23,49 @@ class FakeClock:
         return self.t
 
 
+@pytest.fixture(scope="session")
+def db_url(tmp_path_factory):
+    """Postgres when CERTIVO_TEST_DATABASE_URL is set (CI does this), otherwise a SQLite file."""
+    url = os.environ.get("CERTIVO_TEST_DATABASE_URL")
+    return url or f"sqlite:///{tmp_path_factory.mktemp('db') / 'test.db'}"
+
+
+def clear_all_tables(url: str) -> None:
+    """Empty every table between tests. The schema itself always comes from migrations."""
+    engine = create_engine(url)
+    try:
+        inspector = inspect(engine)
+        tables = [t for t in reversed(Base.metadata.sorted_tables) if inspector.has_table(t.name)]
+        if not tables:
+            return
+        with engine.begin() as conn:
+            if engine.dialect.name == "postgresql":
+                names = ", ".join(f'"{t.name}"' for t in tables)
+                conn.execute(text(f"TRUNCATE {names} RESTART IDENTITY CASCADE"))
+            else:
+                for table in tables:
+                    conn.execute(table.delete())
+    finally:
+        engine.dispose()
+
+
 @pytest.fixture
 def clock():
     return FakeClock()
 
 
 @pytest.fixture
-def app(tmp_path, clock):
+def app(db_url, clock):
+    clear_all_tables(db_url)
     settings = Settings(
-        database_url=f"sqlite:///{tmp_path / 'test.db'}",
-        attestation_signing_key=b64u_encode(bytes(range(100, 132))),
+        database_url=db_url,
+        attestation_signing_key=SIGNING_KEY,
         attestation_key_id="att-test-1",
         _env_file=None,
     )
-    return create_app(settings, clock=clock)
+    application = create_app(settings, clock=clock)  # env=dev, so it applies the migrations
+    yield application
+    application.state.engine.dispose()
 
 
 @pytest.fixture
