@@ -1,6 +1,8 @@
 """Regenerate docs/spec/test-vectors/score-packet-v1.json (cross-language contract).
 Run from platform/:  python scripts/gen_test_vectors.py
 The seed below is a PUBLIC TEST KEY. Never use it for anything real."""
+import hashlib
+import hmac
 import json
 import pathlib
 import sys
@@ -44,8 +46,30 @@ def build() -> dict:
     }
 
 
+def build_webhook() -> dict:
+    secret = "whsec_test_only_not_a_real_secret"
+    t_ms = 1760000004000
+    body = (
+        '{"id":"evt_00000000000000000000000000000001","type":"webhook.test",'
+        '"created_at_ms":1760000004000,"api_version":"v1",'
+        '"partner_id":"ptn_00000000000000000000000000000001","data":{}}'
+    )
+    sig = hmac.new(secret.encode(), f"{t_ms}.{body}".encode(), hashlib.sha256).hexdigest()
+    return {
+        "description": "HMAC-SHA256 over '<t>.<raw body>' using the signing secret, hex. "
+                       "Header value: t=<t>,v1=<signature_hex>. TEST ONLY: the secret below is "
+                       "public and not a real secret.",
+        "test_only_secret": secret,
+        "t_ms": t_ms,
+        "raw_body": body,
+        "signature_hex": sig,
+        "header": f"t={t_ms},v1={sig}",
+    }
+
+
 if __name__ == "__main__":
-    out = pathlib.Path("../docs/spec/test-vectors/score-packet-v1.json")
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(build(), indent=2) + "\n")
-    print("wrote", out)
+    folder = pathlib.Path("../docs/spec/test-vectors")
+    folder.mkdir(parents=True, exist_ok=True)
+    for name, data in (("score-packet-v1.json", build()), ("webhook-signature-v1.json", build_webhook())):
+        (folder / name).write_text(json.dumps(data, indent=2) + "\n")
+        print("wrote", folder / name)
