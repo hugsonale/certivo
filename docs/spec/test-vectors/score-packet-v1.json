@@ -1,0 +1,31 @@
+{
+  "description": "Ed25519 over SCORE_DOMAIN + canonical_json(packet). Reproduce canonical_utf8 and signature in every SDK language.",
+  "test_only_private_seed_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+  "public_key_b64u": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ",
+  "domain_utf8": "certivo.score.v1\n",
+  "packet": {
+    "v": 1,
+    "session_id": "cs_00000000000000000000000000000001",
+    "participant_reference": "alice",
+    "device_id": "dev_00000000000000000000000000000001",
+    "seq": 3,
+    "interval_start_ms": 1760000003000,
+    "interval_end_ms": 1760000004000,
+    "confidence_milli": 912,
+    "model_version": "edge-0.1.0",
+    "explanation": {
+      "reason_codes": [
+        "consistent_motion",
+        "stable_texture"
+      ],
+      "signal_milli": {
+        "temporal": 940,
+        "texture": 880
+      }
+    }
+  },
+  "canonical_utf8": "{\"confidence_milli\":912,\"device_id\":\"dev_00000000000000000000000000000001\",\"explanation\":{\"reason_codes\":[\"consistent_motion\",\"stable_texture\"],\"signal_milli\":{\"temporal\":940,\"texture\":880}},\"interval_end_ms\":1760000004000,\"interval_start_ms\":1760000003000,\"model_version\":\"edge-0.1.0\",\"participant_reference\":\"alice\",\"seq\":3,\"session_id\":\"cs_00000000000000000000000000000001\",\"v\":1}",
+  "canonical_bytes_hex": "7b22636f6e666964656e63655f6d696c6c69223a3931322c226465766963655f6964223a226465765f3030303030303030303030303030303030303030303030303030303030303031222c226578706c616e6174696f6e223a7b22726561736f6e5f636f646573223a5b22636f6e73697374656e745f6d6f74696f6e222c22737461626c655f74657874757265225d2c227369676e616c5f6d696c6c69223a7b2274656d706f72616c223a3934302c2274657874757265223a3838307d7d2c22696e74657276616c5f656e645f6d73223a313736303030303030343030302c22696e74657276616c5f73746172745f6d73223a313736303030303030333030302c226d6f64656c5f76657273696f6e223a22656467652d302e312e30222c227061727469636970616e745f7265666572656e6365223a22616c696365222c22736571223a332c2273657373696f6e5f6964223a2263735f3030303030303030303030303030303030303030303030303030303030303031222c2276223a317d",
+  "signature_b64u": "qIIxRYAM-70EFtaRHFwGGJBnlFiJPsZyTEKjF4Qz1Mq-LIP0r3fBURNVAcHIPIAeQNMQ1G4M63NMOnr5Pn76CQ",
+  "signature_b64u_len": 86
+}
