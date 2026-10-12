@@ -201,3 +201,18 @@ def test_device_registration(client, auth):
 def test_request_id_header_and_healthz(client):
     r = client.get("/healthz")
     assert r.json() == {"status": "ok"} and r.headers["x-request-id"].startswith("req_")
+
+
+def test_unexpected_crash_returns_the_standard_error_envelope(app):
+    from fastapi.testclient import TestClient
+
+    def boom():
+        raise RuntimeError("secret internal detail")
+
+    app.add_api_route("/__boom", boom, methods=["GET"])
+    resp = TestClient(app, raise_server_exceptions=False).get("/__boom")
+    assert resp.status_code == 500
+    body = resp.json()["error"]
+    assert body["code"] == "internal_error"
+    assert "secret" not in resp.text  # nothing internal is leaked
+    assert body["request_id"] and resp.headers["x-request-id"] == body["request_id"]

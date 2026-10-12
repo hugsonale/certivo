@@ -1,0 +1,8 @@
+{
+  "description": "HMAC-SHA256 over '<t>.<raw body>' using the signing secret, hex. Header value: t=<t>,v1=<signature_hex>. TEST ONLY: the secret below is public and not a real secret.",
+  "test_only_secret": "whsec_test_only_not_a_real_secret",
+  "t_ms": 1760000004000,
+  "raw_body": "{\"id\":\"evt_00000000000000000000000000000001\",\"type\":\"webhook.test\",\"created_at_ms\":1760000004000,\"api_version\":\"v1\",\"partner_id\":\"ptn_00000000000000000000000000000001\",\"data\":{}}",
+  "signature_hex": "e1d3d5a6032592115be9db5c8a74bfd6a7b4afd91589d4ec5efe0a58b91d0c1b",
+  "header": "t=1760000004000,v1=e1d3d5a6032592115be9db5c8a74bfd6a7b4afd91589d4ec5efe0a58b91d0c1b"
+}

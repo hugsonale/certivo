@@ -7,7 +7,7 @@ from app.db import get_db
 from app.errors import ApiError
 from app.models import ContinuousSession, Partner
 from app.schemas import PauseIn, ScoreEventIn, ScoreEventOut, SessionStartIn, SessionStartOut
-from app.security import require_partner, require_sdk_session
+from app.security import AuthContext, require_scope, require_sdk_session
 from app.services import sessions as svc
 
 router = APIRouter()
@@ -25,11 +25,14 @@ def _partner_session(db: Session, partner: Partner, session_id: str) -> Continuo
 
 
 @router.post("/v1/sessions/continuous", status_code=201, response_model=SessionStartOut)
-def start(body: SessionStartIn, request: Request, partner: Partner = Depends(require_partner),
+def start(body: SessionStartIn, request: Request,
+          ctx: AuthContext = Depends(require_scope("sessions:write")),
           db: Session = Depends(get_db)):
-    session, token = svc.start_session(db, partner, body, _now(request))
+    ttl_ms = request.app.state.settings.sdk_token_ttl_seconds * 1000
+    session, token = svc.start_session(db, ctx.partner, body, _now(request), ttl_ms)
     return SessionStartOut(
         id=session.id, status=session.status, sdk_token=token,
+        sdk_token_expires_at_ms=session.sdk_token_expires_at_ms,
         re_evaluation_interval_ms=session.policy_config["re_evaluation_interval_ms"])
 
 
@@ -55,15 +58,16 @@ def resume(request: Request, session: ContinuousSession = Depends(require_sdk_se
 
 
 @router.post("/v1/sessions/continuous/{session_id}/end")
-def end(session_id: str, request: Request, partner: Partner = Depends(require_partner),
+def end(session_id: str, request: Request,
+        ctx: AuthContext = Depends(require_scope("sessions:write")),
         db: Session = Depends(get_db)):
-    session = _partner_session(db, partner, session_id)
+    session = _partner_session(db, ctx.partner, session_id)
     attestation = svc.end_session(db, request.app.state.signer, session, _now(request))
     return {"id": session.id, "status": "ended", "attestation": attestation,
             "coverage_summary": attestation["payload"]["coverage"]}
 
 
 @router.get("/v1/sessions/continuous/{session_id}/status")
-def status(session_id: str, partner: Partner = Depends(require_partner),
+def status(session_id: str, ctx: AuthContext = Depends(require_scope("sessions:read")),
            db: Session = Depends(get_db)):
-    return svc.session_status(db, _partner_session(db, partner, session_id))
+    return svc.session_status(db, _partner_session(db, ctx.partner, session_id))

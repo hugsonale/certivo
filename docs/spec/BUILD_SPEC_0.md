@@ -1,11 +1,12 @@
 # Certivo Build Spec 0
 
 **Status:** draft for Jesutofunmi's review. **Scope:** Phase 0, the continuous-session backbone.
-**Code that implements it:** `platform/` (35 passing tests).
+**Code that implements it:** `platform/` (128 passing tests, on SQLite and on Postgres).
 **Derived from:** the v2 suite (chiefly Doc 6 API Specification §10, plus Docs 2, 4, 5, 12).
-Where this spec departs from a document it says so in section 3. Doc 6's v1 resource groups,
-the v1 error-code reference and the policy engine were not in the uploaded set, so anything
-touching them is marked **[reconcile]**.
+Where this spec departs from a document it says so in section 3. The suite's "Version 1.0"
+documents were never written, so the base parts they were meant to supply (error codes,
+authentication, policy engine, consent, webhooks, audit and analytics) are defined in
+`docs/spec/base/` and settled item by item in `docs/spec/RECONCILIATION.md` (step P0-05).
 
 ---
 
@@ -21,18 +22,20 @@ dropping to `reject` mid-call, and the signed attestation verifies and tells the
 
 **Not in Phase 0:** any real model, the Web SDK, WebRTC, native attestation (App Attest / Play
 Integrity), the Trusted Device Layer (Doc 6 §11), webhook *delivery*, retention jobs, rate
-limiting, Alembic migrations, mobile.
+limiting, mobile.
 
 ## 2. Phase 0 endpoint catalogue
 
 Auth: **partner** endpoints use `Authorization: Bearer cvk_…` (partner API key).
 **SDK** endpoints use `Authorization: Bearer skt_…` (per-session token returned by session start).
+Keys carry scopes, tokens expire, and requests are rate limited and size limited: see
+`docs/spec/base/01` and `02`. The access matrix in `base/02` is the authoritative list of endpoints.
 
 | Method + path | Auth | Purpose |
 |---|---|---|
 | `POST /v1/devices` | partner | Register a device signing key (`public_key`, Ed25519, base64url). Tier is always `software_only` in Phase 0. |
 | `GET /v1/devices/{id}` | partner | Read a device. |
-| `POST /v1/sessions/continuous` | partner | Start. Body: `use_case`, optional `call_session_reference`, `participant_count` (positive int, default 1). Returns `id`, `status`, `re_evaluation_interval_ms`, `sdk_token` (shown once). |
+| `POST /v1/sessions/continuous` | partner | Start. Body: `use_case`, optional `call_session_reference`, `participant_count` (positive int, default 1). Returns `id`, `status`, `re_evaluation_interval_ms`, `sdk_token` (shown once) and `sdk_token_expires_at_ms`. |
 | `POST /internal/v1/sessions/continuous/{id}/score-events` | SDK | Submit one signed packet (section 4). Returns `accepted`, `seq`, `current_policy_outcome`, `duplicate`. |
 | `POST /internal/v1/sessions/continuous/{id}/pause` | SDK | Declare verification unavailable. Body `{reason}`: `connectivity` \| `sdk_error` \| `model_unavailable` \| `other`. Opens a coverage gap. 204. |
 | `POST /internal/v1/sessions/continuous/{id}/resume` | SDK | Close the gap. 204. |
@@ -46,7 +49,8 @@ Errors use one envelope: `{"error": {"code", "message", "request_id", "details?"
 `invalid_device_signature` (401); `session_not_found`, `policy_not_found`, `device_not_found`
 (404); `session_not_active`, `seq_conflict`, `seq_out_of_order`, `non_monotonic_interval` (409);
 `validation_error`, `non_canonical_payload`, `invalid_interval`, `timestamp_in_future`,
-`invalid_public_key` (422). **[reconcile]** with Doc 6's v1 error-code reference.
+`invalid_public_key` (422). The full catalogue, including planned codes, is
+`docs/spec/base/01-api-conventions-and-errors.md`.
 
 ## 3. Deviations from Doc 6 §10 (deliberate, please confirm)
 
@@ -57,7 +61,7 @@ Errors use one envelope: `{"error": {"code", "message", "request_id", "details?"
 | `explanation`: "structured object" | `{reason_codes: [≥1 code], signal_milli: {name: 0..1000}}` | Enforces "never a bare score". Free text is not allowed (it breaks canonicalisation and can leak data). |
 | `device_signature`: "signature over this packet" | Defined in section 4 | Doc leaves the algorithm and byte format open. |
 | 409 when `reported_at` is inconsistent | `session_not_active`, `seq_out_of_order`, `non_monotonic_interval` | `interval_end_ms` plays the role of `reported_at`. |
-| SDK auth not defined in the part reviewed | Partner API key for `/v1`, per-session token for `/internal` | SDK code ships to end users and must never hold the partner secret. |
+| SDK auth not defined in the suite (defined in `base/02`) | Partner API key for `/v1`, per-session token for `/internal` | SDK code ships to end users and must never hold the partner secret. |
 | (none) | New: `POST /v1/devices`, `GET /v1/devices/{id}`, `/pause`, `/resume`, `/.well-known/certivo-keys` | Doc 6 refers to a "provisioned signing key" but defines no provisioning endpoint; pause/resume feed `coverage_summary`. |
 
 Doc 6 §11 (Trusted Devices) and §12 webhook catalogue are **not** implemented beyond recording
@@ -145,9 +149,19 @@ Tables: `partners`, `api_keys` (SHA-256 hash only), `policies` (partner NULL = g
 `default_video_call`), `devices`, `continuous_sessions`, `continuous_score_events` (unique on
 session+participant+seq), `coverage_gaps`, `webhook_outbox`, `session_attestations`.
 
-Dev uses SQLite; production target is Postgres (written to be portable but **only SQLite is
-tested**). Doc 12's daily partitioning of the score-events table is a later migration. Schema
-changes should move to Alembic before any deployment (tables are auto-created in dev only).
+The schema is defined **only** by Alembic migrations in `platform/migrations/` (baseline `0001`).
+No code creates tables directly. Constraints and indexes have fixed names (a naming convention),
+so later migrations can change them safely. Rules:
+
+* `CERTIVO_ENV=dev`: the app applies migrations automatically at startup.
+* Any other environment: the app never changes the database. Migrations are run explicitly
+  (`alembic upgrade head`) and the app refuses to start if the database is not at the latest revision.
+* CI runs the whole test suite on SQLite **and** on Postgres 16, and runs `alembic check`, which
+  fails if `app/models.py` and the migrations disagree.
+* On Postgres, JSON columns are `JSONB`; elsewhere plain JSON. Global policies (no partner) are
+  protected by a partial unique index, because a plain UNIQUE constraint does not treat NULLs as equal.
+
+Doc 12's daily partitioning of the score-events table is still a later migration.
 
 Privacy posture carried over from the docs: no raw video or audio ever reaches this service;
 explanations are code lists and 0..1000 numbers only. Per-interval events are intended to have
@@ -215,15 +229,16 @@ What it does **not** give, and we must not claim:
    SDK hardens.
 3. **Identity binding.** Is "same person as the verified profile" in or out of scope for the
    flagship? Out of scope means the dating-persona claim must be reworded.
-4. **v1 documents.** Send them (policy engine, error codes, auth) so **[reconcile]** items
-   can be closed.
+4. ~~**v1 documents.**~~ Resolved in P0-05: they never existed. The base specifications are in
+   `docs/spec/base/`. One new decision came out of it: **D-17**, how participants' apps receive each
+   other's status (`base/03`, section 5).
 5. **Who gets the SDK token?** Today the partner backend starts the session and hands the
    token to its client. Confirm that matches how design partners would integrate.
 
 ## 12. Next build tasks (in order)
 
 1. Push, confirm CI is green on GitHub.
-2. Alembic migrations + Postgres in CI (retire "SQLite only").
+2. ~~Alembic migrations + Postgres in CI.~~ Done (P0-03, P0-04).
 3. Web SDK spike: reproduce the test vector in the browser (settles open decision 1).
 4. `demo-call/`: two-person WebRTC call using the sandbox flow, then the real SDK.
 5. Webhook delivery worker (HMAC-signed, retries) reading `webhook_outbox`.

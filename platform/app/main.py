@@ -7,25 +7,43 @@ from fastapi import FastAPI
 from app.admin import ensure_default_policy
 from app.attestation import load_signer
 from app.config import Settings
-from app.db import make_engine, make_session_factory
+from app.db import assert_schema_current, make_engine, make_session_factory, upgrade_to_head
 from app.errors import install_error_handling
-from app.models import Base
-from app.routers import devices, meta, sessions
+from app.hardening import (
+    CORS_ALLOW_HEADERS,
+    CORS_EXPOSE_HEADERS,
+    BodyLimitMiddleware,
+    PathScopedCORS,
+    RequestContextMiddleware,
+)
+from app.ratelimit import RateLimiter
+from app.routers import api_keys, devices, meta, sessions
 from app.timeutil import now_ms
 
 
 def create_app(settings: Settings | None = None, clock: Callable[[], int] | None = None) -> FastAPI:
     settings = settings or Settings()
-    engine = make_engine(settings.database_url)
-    app = FastAPI(title="Certivo Platform", version="0.1.0")
+    engine = make_engine(settings.database_url, settings.db_statement_timeout_ms)
+    docs = settings.docs_enabled
+    app = FastAPI(
+        title="Certivo Platform", version="0.1.0",
+        docs_url="/docs" if docs else None,
+        redoc_url="/redoc" if docs else None,
+        openapi_url="/openapi.json" if docs else None,
+    )
     app.state.settings = settings
     app.state.engine = engine
     app.state.session_factory = make_session_factory(engine)
     app.state.clock = clock or now_ms
+    app.state.limiter = RateLimiter(app.state.clock)
     app.state.signer = load_signer(settings)
 
-    if settings.auto_create_tables:
-        Base.metadata.create_all(engine)
+    # The schema comes from migrations only. Dev may apply them automatically; every other
+    # environment must have run `alembic upgrade head` already, or the app refuses to start.
+    if settings.env == "dev" and settings.auto_migrate:
+        upgrade_to_head(settings.database_url)
+    assert_schema_current(engine)
+
     with app.state.session_factory() as db:
         ensure_default_policy(db)
         db.commit()
@@ -33,5 +51,22 @@ def create_app(settings: Settings | None = None, clock: Callable[[], int] | None
     install_error_handling(app)
     app.include_router(meta.router)
     app.include_router(devices.router)
+    app.include_router(api_keys.router)
     app.include_router(sessions.router)
+
+    # Middleware: the LAST one added is the OUTERMOST. Order seen by a request:
+    # RequestContext (ID + security headers) -> CORS (SDK paths only) -> BodyLimit -> the app.
+    app.add_middleware(BodyLimitMiddleware, max_bytes=settings.max_body_bytes,
+                       read_timeout_s=settings.body_read_timeout_s)
+    if settings.cors_origins:
+        app.add_middleware(
+            PathScopedCORS,
+            allow_origins=settings.cors_origins,
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=CORS_ALLOW_HEADERS,
+            expose_headers=CORS_EXPOSE_HEADERS,
+            allow_credentials=False,
+            max_age=600,
+        )
+    app.add_middleware(RequestContextMiddleware, settings=settings)
     return app

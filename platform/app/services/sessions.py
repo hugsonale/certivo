@@ -29,7 +29,7 @@ def _emit(db: Session, partner_id: str, event_type: str, payload: dict, now: int
                          payload=payload, created_at_ms=now))
 
 
-def start_session(db: Session, partner: Partner, req: SessionStartIn, now: int):
+def start_session(db: Session, partner: Partner, req: SessionStartIn, now: int, ttl_ms: int):
     policy = db.scalar(
         select(Policy)
         .where(Policy.use_case == req.use_case,
@@ -47,6 +47,7 @@ def start_session(db: Session, partner: Partner, req: SessionStartIn, now: int):
         call_session_reference=req.call_session_reference,
         participant_count=req.participant_count, status="active",
         started_at_ms=now, sdk_token_hash=sha256_hex(token),
+        sdk_token_expires_at_ms=now + ttl_ms,
     )
     db.add(session)
     db.commit()

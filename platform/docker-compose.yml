@@ -1,6 +1,6 @@
-# NOT YET TESTED (written without Docker available). Local dev only.
-# Needs CERTIVO_ATTESTATION_SIGNING_KEY exported in your shell:
-#   export CERTIVO_ATTESTATION_SIGNING_KEY=$(python scripts/gen_signing_key.py)
+# Local stack: Postgres + the API. See platform/README.md for how to run it.
+# It needs CERTIVO_ATTESTATION_SIGNING_KEY: either in platform/.env (docker compose reads that
+# file automatically) or exported in your shell.
 services:
   db:
     image: postgres:16
@@ -8,14 +8,36 @@ services:
       POSTGRES_USER: certivo
       POSTGRES_PASSWORD: certivo_dev_only
       POSTGRES_DB: certivo
-    ports: ["5432:5432"]
-    volumes: [pgdata:/var/lib/postgresql/data]
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U certivo -d certivo"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
   api:
     build: .
-    depends_on: [db]
-    ports: ["8000:8000"]
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8000"
     environment:
+      # Anything other than "dev" means the app never migrates by itself; the command below does it.
+      CERTIVO_ENV: staging
+      CERTIVO_ENABLE_DOCS: "true"   # local convenience: the /docs page is off outside dev unless asked for
       CERTIVO_DATABASE_URL: postgresql+psycopg://certivo:certivo_dev_only@db:5432/certivo
-      CERTIVO_ATTESTATION_SIGNING_KEY: ${CERTIVO_ATTESTATION_SIGNING_KEY}
+      CERTIVO_ATTESTATION_SIGNING_KEY: ${CERTIVO_ATTESTATION_SIGNING_KEY:?Set CERTIVO_ATTESTATION_SIGNING_KEY first (see platform/README.md)}
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --no-server-header"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
 volumes:
   pgdata:

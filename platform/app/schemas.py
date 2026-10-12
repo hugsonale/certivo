@@ -5,6 +5,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StringConstraints, field_validator
 
+from app.scopes import Scope
+
 Ref = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9_.:-]{1,64}$")]
 Code = Annotated[str, StringConstraints(pattern=r"^[a-z0-9_]{1,48}$")]
 _SIGNAL_KEY = re.compile(r"^[a-z0-9_]{1,48}$")
@@ -23,6 +25,7 @@ class SessionStartOut(BaseModel):
     status: str
     re_evaluation_interval_ms: int
     sdk_token: str  # shown once; give to the SDK, never log it
+    sdk_token_expires_at_ms: int
 
 
 class ExplanationIn(BaseModel):
@@ -83,3 +86,31 @@ class DeviceOut(BaseModel):
     trust_tier: str
     status: str
     created_at_ms: int
+
+
+class ApiKeyCreateIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9 _.:-]{1,100}$")]
+    scopes: list[Scope] = Field(min_length=1, max_length=13)
+
+    @field_validator("scopes")
+    @classmethod
+    def _unique(cls, v: list[str]) -> list[str]:
+        if len(set(v)) != len(v):
+            raise ValueError("scopes must not repeat")
+        return v
+
+
+class ApiKeyOut(BaseModel):
+    id: str
+    name: str
+    scopes: list[str]
+    key_prefix: str
+    active: bool
+    created_at_ms: int
+    last_used_at_ms: int | None = None
+    revoked_at_ms: int | None = None
+
+
+class ApiKeyCreatedOut(ApiKeyOut):
+    key: str  # the full key: shown once, never again
