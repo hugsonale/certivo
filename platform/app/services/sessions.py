@@ -25,7 +25,7 @@ from app.security import new_sdk_token, sha256_hex
 
 
 def _emit(db: Session, partner_id: str, event_type: str, payload: dict, now: int) -> None:
-    db.add(WebhookOutbox(partner_id=partner_id, event_type=event_type,
+    db.add(WebhookOutbox(event_id=new_id("evt"), partner_id=partner_id, event_type=event_type,
                          payload=payload, created_at_ms=now))
 
 

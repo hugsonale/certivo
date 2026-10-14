@@ -20,3 +20,4 @@ An ADR is a short note recording one significant decision: what we faced, what w
 | [0010](0010-webhook-delivery-contract.md) | Webhook delivery contract | Accepted |
 | [0011](0011-audit-log-and-analytics.md) | Audit log and analytics are separate | Accepted |
 | [0012](0012-abuse-hardening-choices.md) | Abuse hardening: what we chose, and what we knowingly left for later | Accepted |
+| [0013](0013-webhook-delivery-design.md) | Webhook delivery design | Accepted; two extra events Proposed |

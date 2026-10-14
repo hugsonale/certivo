@@ -18,6 +18,14 @@ services:
       timeout: 3s
       retries: 20
 
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
   api:
     build: .
     depends_on:
@@ -31,6 +39,7 @@ services:
       CERTIVO_ENABLE_DOCS: "true"   # local convenience: the /docs page is off outside dev unless asked for
       CERTIVO_DATABASE_URL: postgresql+psycopg://certivo:certivo_dev_only@db:5432/certivo
       CERTIVO_ATTESTATION_SIGNING_KEY: ${CERTIVO_ATTESTATION_SIGNING_KEY:?Set CERTIVO_ATTESTATION_SIGNING_KEY first (see platform/README.md)}
+      CERTIVO_WEBHOOK_SECRET_KEY: ${CERTIVO_WEBHOOK_SECRET_KEY:?Set CERTIVO_WEBHOOK_SECRET_KEY first (python scripts/gen_webhook_key.py)}
     command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --no-server-header"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
@@ -38,6 +47,22 @@ services:
       timeout: 3s
       retries: 20
       start_period: 10s
+
+  worker:
+    # Delivers webhooks. It starts after the API is healthy, because the API applies the migrations.
+    build: .
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      CERTIVO_ENV: staging
+      CERTIVO_DATABASE_URL: postgresql+psycopg://certivo:certivo_dev_only@db:5432/certivo
+      CERTIVO_REDIS_URL: redis://redis:6379/0
+      CERTIVO_WEBHOOK_SECRET_KEY: ${CERTIVO_WEBHOOK_SECRET_KEY:?Set CERTIVO_WEBHOOK_SECRET_KEY first (python scripts/gen_webhook_key.py)}
+    # "--beat" embeds the timer: run exactly ONE worker with it until the timer is split out.
+    command: ["celery", "-A", "app.worker", "worker", "--beat", "-Q", "webhooks", "--concurrency", "2", "--loglevel", "info", "--schedule", "/tmp/celerybeat-schedule"]
 
 volumes:
   pgdata:

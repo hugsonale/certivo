@@ -1,3 +1,4 @@
+import base64
 import os
 
 import pytest
@@ -14,6 +15,7 @@ from app.models import Base
 
 T0 = 1_760_000_000_000
 SIGNING_KEY = b64u_encode(bytes(range(100, 132)))
+WEBHOOK_KEY = base64.urlsafe_b64encode(bytes(range(32))).decode()  # a valid Fernet key, test only
 
 
 class FakeClock:
@@ -77,8 +79,9 @@ def make_app(db_url, clock):
     def factory(**overrides):
         clear_all_tables(db_url)
         upgrade_to_head(db_url)
+        options = {"webhook_secret_key": WEBHOOK_KEY, **overrides}
         settings = Settings(database_url=db_url, attestation_signing_key=SIGNING_KEY,
-                            attestation_key_id="att-test-1", _env_file=None, **overrides)
+                            attestation_key_id="att-test-1", _env_file=None, **options)
         application = create_app(settings, clock=clock)
         created.append(application)
         return application

@@ -145,17 +145,77 @@ class CoverageGap(Base):
     reason: Mapped[str] = mapped_column(String(32))
 
 
+class WebhookEndpoint(Base):
+    """A URL a partner wants events sent to. The signing secret is stored encrypted, never in clear."""
+
+    __tablename__ = "webhook_endpoints"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)  # whe_...
+    partner_id: Mapped[str] = mapped_column(ForeignKey("partners.id"), index=True)
+    url: Mapped[str] = mapped_column(String(2048))
+    event_types: Mapped[list] = mapped_column(JSONType)  # names from app/webhook_events.py, or ["*"]
+    description: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="active")  # active | deleted
+    secret_encrypted: Mapped[str] = mapped_column(String(512))
+    previous_secret_encrypted: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    previous_secret_expires_at_ms: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    created_at_ms: Mapped[int] = mapped_column(BigInteger)
+    deleted_at_ms: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+
 class WebhookOutbox(Base):
-    """Phase 0 records events only. A delivery worker is a later task."""
+    """Every event that happened, written in the same transaction as the change that caused it
+    (the "outbox" pattern), so an event is never lost and never sent for a change that rolled back."""
 
     __tablename__ = "webhook_outbox"
+    __table_args__ = (Index("ix_webhook_outbox_fanned_out_at_ms", "fanned_out_at_ms"),)
     id: Mapped[int] = mapped_column(BigIntId, primary_key=True, autoincrement=True)
+    event_id: Mapped[str] = mapped_column(String(64), unique=True)  # evt_..., what partners see
     partner_id: Mapped[str] = mapped_column(ForeignKey("partners.id"), index=True)
     event_type: Mapped[str] = mapped_column(String(64))
     payload: Mapped[dict] = mapped_column(JSONType)
     created_at_ms: Mapped[int] = mapped_column(BigInteger)
+    # NULL until the worker has turned this event into deliveries (one per subscribed endpoint).
+    fanned_out_at_ms: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # Set only for "send test" events: deliver to this one endpoint regardless of subscriptions.
+    target_endpoint_id: Mapped[str | None] = mapped_column(
+        ForeignKey("webhook_endpoints.id"), nullable=True)
+
+
+class WebhookDelivery(Base):
+    """One event headed for one endpoint, with its retry state."""
+
+    __tablename__ = "webhook_deliveries"
+    __table_args__ = (
+        UniqueConstraint("outbox_id", "endpoint_id", name="uq_webhook_deliveries_outbox_endpoint"),
+        Index("ix_webhook_deliveries_due", "status", "next_attempt_at_ms"),
+        Index("ix_webhook_deliveries_partner_created", "partner_id", "created_at_ms"),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)  # dlv_...
+    outbox_id: Mapped[int] = mapped_column(BigIntId, ForeignKey("webhook_outbox.id"))
+    endpoint_id: Mapped[str] = mapped_column(ForeignKey("webhook_endpoints.id"))
+    partner_id: Mapped[str] = mapped_column(ForeignKey("partners.id"))
+    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending|delivered|retrying|dead
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)       # attempts ever made
+    failures_in_round: Mapped[int] = mapped_column(Integer, default=0)   # reset by a manual retry
+    next_attempt_at_ms: Mapped[int] = mapped_column(BigInteger)
+    locked_until_ms: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  # being sent now
+    claim_token: Mapped[str | None] = mapped_column(String(32), nullable=True)  # who holds the lock
+    last_status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_error: Mapped[str | None] = mapped_column(String(40), nullable=True)  # a short code, never text
+    created_at_ms: Mapped[int] = mapped_column(BigInteger)
     delivered_at_ms: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    attempts: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class WebhookAttempt(Base):
+    """The delivery log: one row per try, with what happened. Never the partner's reply body."""
+
+    __tablename__ = "webhook_attempts"
+    id: Mapped[int] = mapped_column(BigIntId, primary_key=True, autoincrement=True)
+    delivery_id: Mapped[str] = mapped_column(ForeignKey("webhook_deliveries.id"), index=True)
+    attempted_at_ms: Mapped[int] = mapped_column(BigInteger)
+    status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    duration_ms: Mapped[int] = mapped_column(Integer)
 
 
 class SessionAttestation(Base):

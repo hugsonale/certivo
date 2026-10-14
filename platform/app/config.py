@@ -34,6 +34,22 @@ class Settings(BaseSettings):
     db_statement_timeout_ms: int = 5_000         # no single database statement may run longer
     max_api_keys_per_partner: int = 50           # active keys per partner
 
+    # --- Webhook delivery (P0-07). Numbers are PLACEHOLDERS (docs/spec/base/05).
+    redis_url: str = "redis://localhost:6379/0"      # the Celery broker
+    # Key that encrypts webhook signing secrets in the database (a Fernet key; see
+    # scripts/gen_webhook_key.py). Required outside dev; dev falls back to a fixed, INSECURE key.
+    webhook_secret_key: str | None = None
+    # Dev only: let webhooks go to localhost / private addresses (for testing against your own PC).
+    webhook_allow_private_targets: bool = False
+    webhook_retry_delays_s: str = "30,300,1800,7200,21600,43200"  # waits between attempts, seconds
+    webhook_timeout_s: float = 10.0                  # how long we wait for a partner's reply
+    webhook_poll_interval_s: float = 5.0             # how often the worker looks for work
+    webhook_batch_size: int = 100                    # deliveries picked up per look
+    webhook_lease_s: int = 60                        # a delivery being sent is locked this long
+    webhook_replay_tolerance_s: int = 300            # advice to receivers: reject older timestamps
+    webhook_secret_overlap_s: int = 86_400           # an old secret keeps signing this long after rotation
+    webhook_max_endpoints_per_partner: int = 10
+
     # Browser origins allowed to call the SDK endpoints, comma separated. Empty = none.
     cors_allowed_origins: str = ""
     # None = on in dev, off elsewhere
@@ -47,8 +63,29 @@ class Settings(BaseSettings):
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
 
+    @property
+    def retry_delays_s(self) -> list[int]:
+        return [int(x) for x in self.webhook_retry_delays_s.split(",") if x.strip()]
+
     @model_validator(mode="after")
     def _check_values(self) -> Settings:
+        if self.webhook_allow_private_targets and self.env != "dev":
+            raise ValueError("CERTIVO_WEBHOOK_ALLOW_PRIVATE_TARGETS may only be true when "
+                             "CERTIVO_ENV=dev: outside dev, webhooks must never reach private addresses.")
+        try:
+            delays = self.retry_delays_s
+        except ValueError:
+            delays = []
+        if not 1 <= len(delays) <= 12 or any(d < 1 for d in delays):
+            raise ValueError("CERTIVO_WEBHOOK_RETRY_DELAYS_S must be 1 to 12 whole numbers of seconds, "
+                             "comma separated, each at least 1 (for example 30,300,1800).")
+        if self.webhook_timeout_s <= 0 or self.webhook_lease_s <= self.webhook_timeout_s:
+            raise ValueError("webhook_timeout_s must be above 0 and webhook_lease_s must be longer "
+                             "than it, or a delivery could be sent twice at once.")
+        for name in ("webhook_poll_interval_s", "webhook_batch_size", "webhook_replay_tolerance_s",
+                     "webhook_secret_overlap_s", "webhook_max_endpoints_per_partner"):
+            if getattr(self, name) <= 0:
+                raise ValueError(f"{name} must be above 0")
         for origin in self.cors_origins:
             if self.env == "dev" and origin == "*":
                 continue

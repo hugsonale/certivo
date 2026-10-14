@@ -37,6 +37,9 @@ If your plan supports it:
 | Check name (exactly as shown on the PR) | Workflow |
 |---|---|
 | Test and lint (platform) | platform-ci |
+| Tests and migration check on Postgres | platform-ci |
+| Docker compose smoke test | platform-ci |
+| Webhook delivery end to end (Redis and worker) | platform-ci |
 | PR title is a Conventional Commit | governance |
 | Secret scan (gitleaks) | security-scan |
 | Dependency audit (pip-audit) | security-scan |
