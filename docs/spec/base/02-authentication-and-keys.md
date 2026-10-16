@@ -128,7 +128,7 @@ One row per endpoint. "Implemented" rows are checked against the running code by
 | GET | `/v1/sessions/continuous/{session_id}/status` | API key | `sessions:read` | Implemented |
 | GET | `/v1/sessions/continuous/{session_id}/attestation` | API key | `sessions:read` | Planned (P0-10) |
 | POST | `/internal/v1/sessions/continuous/{session_id}/score-events` | SDK token and device signature | none | Implemented |
-| POST | `/internal/v1/sessions/continuous/{session_id}/score-events/batch` | SDK token and device signature | none | Planned (P0-08) |
+| POST | `/internal/v1/sessions/continuous/{session_id}/score-events/batch` | SDK token and device signature | none | Implemented |
 | POST | `/internal/v1/sessions/continuous/{session_id}/pause` | SDK token | none | Implemented |
 | POST | `/internal/v1/sessions/continuous/{session_id}/resume` | SDK token | none | Implemented |
 | POST | `/internal/v1/sessions/continuous/{session_id}/consents` | SDK token and device signature | none | Planned (P0-51) |

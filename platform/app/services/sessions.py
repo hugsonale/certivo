@@ -20,7 +20,14 @@ from app.models import (
     new_id,
 )
 from app.policy import evaluate
-from app.schemas import ScoreEventIn, ScoreEventOut, SessionStartIn
+from app.schemas import (
+    BatchItemError,
+    BatchItemOut,
+    ScoreBatchOut,
+    ScoreEventIn,
+    ScoreEventOut,
+    SessionStartIn,
+)
 from app.security import new_sdk_token, sha256_hex
 
 
@@ -66,8 +73,13 @@ def _close_open_gap(db: Session, session: ContinuousSession, now: int) -> None:
         gap.end_ms = now
 
 
-def ingest_score_event(db: Session, settings: Settings, session: ContinuousSession,
-                       req: ScoreEventIn, now: int) -> ScoreEventOut:
+def _ingest(db: Session, settings: Settings, session: ContinuousSession, req: ScoreEventIn,
+            now: int) -> tuple[ScoreEventOut, ScoreEvent, ScoreEvent | None]:
+    """Validate one packet and add it to the database session, WITHOUT committing.
+
+    Every refusal is raised before anything is written, so a refused packet leaves no trace.
+    Returns (result, the stored event, the participant's previous event or None).
+    """
     if session.status == "ended":
         raise ApiError(409, "session_not_active", "Session has ended")
 
@@ -100,7 +112,7 @@ def ingest_score_event(db: Session, settings: Settings, session: ContinuousSessi
         ScoreEvent.seq == req.seq))
     if existing:
         if existing.signature == req.device_signature:
-            return _outcome_out(existing, duplicate=True)
+            return _outcome_out(existing, duplicate=True), existing, None
         raise ApiError(409, "seq_conflict", "A different packet already used this seq")
     recent = list(db.scalars(select(ScoreEvent).where(
         ScoreEvent.session_id == session.id, ScoreEvent.participant_ref == ref)
@@ -131,12 +143,99 @@ def ingest_score_event(db: Session, settings: Settings, session: ContinuousSessi
             "session_id": session.id, "participant_reference": ref, "seq": req.seq,
             "confidence_milli": req.confidence_milli, "occurred_at_ms": req.interval_end_ms,
         }, now)
+    return _outcome_out(event, duplicate=False), event, last
+
+
+def ingest_score_event(db: Session, settings: Settings, session: ContinuousSession,
+                       req: ScoreEventIn, now: int) -> ScoreEventOut:
+    out, _, _ = _ingest(db, settings, session, req, now)
     try:
         db.commit()
     except IntegrityError as exc:  # concurrent duplicate
         db.rollback()
         raise ApiError(409, "seq_conflict", "A packet with this seq was just recorded") from exc
-    return _outcome_out(event, duplicate=False)
+    return out
+
+
+def _already_disclosed(db: Session, session_id: str, start_ms: int, end_ms: int) -> bool:
+    """True if one existing gap (for example an explicit pause) already covers this whole span."""
+    return db.scalar(select(CoverageGap.id).where(
+        CoverageGap.session_id == session_id, CoverageGap.start_ms <= start_ms,
+        or_(CoverageGap.end_ms.is_(None), CoverageGap.end_ms >= end_ms)).limit(1)) is not None
+
+
+def ingest_score_batch(db: Session, settings: Settings, session: ContinuousSession,
+                       packets: list[ScoreEventIn], now: int) -> ScoreBatchOut:
+    """Packets the SDK buffered during an outage, oldest first (docs/adr/0014).
+
+    Each packet is checked on its own, exactly as a single packet is, so one bad packet is
+    reported without losing the good ones. Everything that is accepted, and every coverage gap it
+    reveals, is saved in one transaction: a crash can never leave the packets without their gap.
+    """
+    if session.status == "ended":
+        raise ApiError(409, "session_not_active", "Session has ended")
+    threshold = settings.gap_disclosure_threshold_ms
+    results: list[BatchItemOut] = []
+    newly_stored: list[ScoreEvent] = []
+    holes: list[tuple[int, int]] = []
+    try:
+        for index, req in enumerate(packets):
+            try:
+                out, event, last = _ingest(db, settings, session, req, now)
+            except ApiError as exc:
+                results.append(BatchItemOut(index=index, accepted=False, seq=req.seq,
+                                            error=BatchItemError(code=exc.code, message=exc.message)))
+                continue
+            results.append(BatchItemOut(
+                index=index, accepted=True, seq=out.seq, duplicate=out.duplicate,
+                current_policy_outcome=out.current_policy_outcome))
+            if out.duplicate:
+                continue
+            newly_stored.append(event)
+            if last is not None and event.interval_start_ms - last.interval_end_ms > threshold:
+                holes.append((last.interval_end_ms, event.interval_start_ms))
+
+        gaps: list[CoverageGap] = []
+        for start, end in holes:  # packets that never arrived (the SDK's buffer overflowed)
+            if not _already_disclosed(db, session.id, start, end):
+                gaps.append(CoverageGap(session_id=session.id, start_ms=start, end_ms=end,
+                                        reason="missing_packets"))
+        late = [e for e in newly_stored if now - e.interval_end_ms > threshold]
+        if late:  # packets that arrived, but long after the moment they describe
+            start = min(e.interval_start_ms for e in late)
+            if not _already_disclosed(db, session.id, start, now):
+                gaps.append(CoverageGap(session_id=session.id, start_ms=start, end_ms=now,
+                                        reason="delayed_upload"))
+        db.add_all(gaps)
+        db.commit()
+    except IntegrityError as exc:  # a concurrent upload recorded the same seq; retry is safe
+        db.rollback()
+        raise ApiError(409, "seq_conflict", "A packet with this seq was just recorded") from exc
+
+    return ScoreBatchOut(
+        results=results,
+        accepted_count=sum(1 for r in results if r.accepted and not r.duplicate),
+        duplicate_count=sum(1 for r in results if r.duplicate),
+        rejected_count=sum(1 for r in results if not r.accepted),
+        gaps_recorded=len(gaps))
+
+
+def _uncovered_ms(gaps: list[CoverageGap], started_ms: int, now: int) -> int:
+    """Total time inside the session covered by at least one gap. Gaps can overlap (a pause that
+    contains a late upload, say), and overlapping time is counted once."""
+    spans = sorted((max(g.start_ms, started_ms), min(g.end_ms if g.end_ms is not None else now, now))
+                   for g in gaps)
+    total, current_end = 0, None
+    for start, end in spans:
+        if end <= start:
+            continue
+        if current_end is None or start > current_end:
+            total += end - start
+            current_end = end
+        elif end > current_end:
+            total += end - current_end
+            current_end = end
+    return total
 
 
 def pause_session(db: Session, session: ContinuousSession, reason: str, now: int) -> None:
@@ -196,7 +295,7 @@ def end_session(db: Session, signer: Signer, session: ContinuousSession, now: in
         })
 
     duration = max(now - session.started_at_ms, 0)
-    paused_ms = sum((g.end_ms or now) - g.start_ms for g in gaps)
+    paused_ms = _uncovered_ms(gaps, session.started_at_ms, now)
     coverage = {
         "session_duration_ms": duration,
         "paused_ms": paused_ms,

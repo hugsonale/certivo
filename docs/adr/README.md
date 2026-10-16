@@ -21,3 +21,4 @@ An ADR is a short note recording one significant decision: what we faced, what w
 | [0011](0011-audit-log-and-analytics.md) | Audit log and analytics are separate | Accepted |
 | [0012](0012-abuse-hardening-choices.md) | Abuse hardening: what we chose, and what we knowingly left for later | Accepted |
 | [0013](0013-webhook-delivery-design.md) | Webhook delivery design | Accepted; two extra events Proposed |
+| [0014](0014-buffered-upload-and-gap-disclosure.md) | Buffered upload and honest gap disclosure | Proposed |
