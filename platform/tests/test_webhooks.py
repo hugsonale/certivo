@@ -437,7 +437,10 @@ def free_port() -> int:
 
 
 def test_a_connection_that_is_refused_is_recorded_and_retried(make_world):
-    w = make_world()
+    # Linux refuses a closed port instantly; Windows retries for about two seconds first. A short
+    # timeout would make Windows report "timeout" instead, so give it room: this test is about a
+    # REFUSED connection, and the timeout case has its own test below.
+    w = make_world(webhook_timeout_s=15.0, webhook_lease_s=60)
     w.add_endpoint(f"http://127.0.0.1:{free_port()}/hook")
     w.trigger_pause()
     assert w.engine.run_once()["retrying"] == 1
