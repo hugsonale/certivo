@@ -17,7 +17,8 @@ from app.hardening import (
     RequestContextMiddleware,
 )
 from app.ratelimit import RateLimiter
-from app.routers import api_keys, devices, meta, sessions
+from app.routers import api_keys, devices, meta, sessions, webhooks
+from app.secretbox import load_secretbox
 from app.timeutil import now_ms
 
 
@@ -37,6 +38,7 @@ def create_app(settings: Settings | None = None, clock: Callable[[], int] | None
     app.state.clock = clock or now_ms
     app.state.limiter = RateLimiter(app.state.clock)
     app.state.signer = load_signer(settings)
+    app.state.secretbox = load_secretbox(settings)  # fails at startup if the key is missing outside dev
 
     # The schema comes from migrations only. Dev may apply them automatically; every other
     # environment must have run `alembic upgrade head` already, or the app refuses to start.
@@ -53,6 +55,7 @@ def create_app(settings: Settings | None = None, clock: Callable[[], int] | None
     app.include_router(devices.router)
     app.include_router(api_keys.router)
     app.include_router(sessions.router)
+    app.include_router(webhooks.router)
 
     # Middleware: the LAST one added is the OUTERMOST. Order seen by a request:
     # RequestContext (ID + security headers) -> CORS (SDK paths only) -> BodyLimit -> the app.

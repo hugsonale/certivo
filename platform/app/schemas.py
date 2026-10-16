@@ -114,3 +114,63 @@ class ApiKeyOut(BaseModel):
 
 class ApiKeyCreatedOut(ApiKeyOut):
     key: str  # the full key: shown once, never again
+
+
+EventName = Literal["*", "session.confidence_dropped", "session.paused", "consent.withdrawn",
+                    "device_switch.detected", "trusted_device.revoked"]
+DeliveryStatus = Literal["pending", "delivered", "retrying", "dead"]
+
+
+class WebhookEndpointCreateIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    url: Annotated[str, StringConstraints(min_length=8, max_length=2048)]
+    event_types: list[EventName] = Field(min_length=1, max_length=6)
+    description: Annotated[str, StringConstraints(pattern=r"^[\x20-\x7e]{1,200}$")] | None = None
+
+    @field_validator("event_types")
+    @classmethod
+    def _tidy(cls, v: list[str]) -> list[str]:
+        if len(set(v)) != len(v):
+            raise ValueError("event_types must not repeat")
+        return ["*"] if "*" in v else v  # "everything" makes any other choice redundant
+
+
+class WebhookEndpointOut(BaseModel):
+    id: str
+    url: str
+    event_types: list[str]
+    description: str | None = None
+    status: str
+    created_at_ms: int
+
+
+class WebhookEndpointCreatedOut(WebhookEndpointOut):
+    secret: str  # the signing secret: shown once, never again
+
+
+class WebhookSecretRotatedOut(BaseModel):
+    id: str
+    secret: str  # shown once
+    previous_secret_valid_until_ms: int
+
+
+class WebhookAttemptOut(BaseModel):
+    attempted_at_ms: int
+    status_code: int | None = None
+    error: str | None = None
+    duration_ms: int
+
+
+class WebhookDeliveryOut(BaseModel):
+    id: str
+    event_id: str
+    event_type: str
+    endpoint_id: str
+    status: DeliveryStatus
+    attempt_count: int
+    next_attempt_at_ms: int | None = None  # only while pending or retrying
+    last_status_code: int | None = None
+    last_error: str | None = None
+    created_at_ms: int
+    delivered_at_ms: int | None = None
+    attempts: list[WebhookAttemptOut] = []  # the most recent tries, newest first

@@ -26,7 +26,7 @@ them and never have to parse our human-readable messages.
 | Browser access (CORS) | Only the SDK endpoints (`/internal/v1/`) and the public-keys endpoint accept calls from browser origins, and only origins listed in `CERTIVO_CORS_ALLOWED_ORIGINS`, exact `https://host[:port]` values with no wildcards (plain `http://localhost` and `*` only in dev). The partner API (`/v1/`) is never opened to browsers. Credentials (cookies) are never allowed. Refused cross-origin preflights get a short plain-text reply from the CORS layer rather than the error envelope. | Implemented |
 | Interactive docs | `/docs`, `/redoc` and `/openapi.json` exist only in dev (or when `CERTIVO_ENABLE_DOCS=true`). | Implemented |
 | Idempotency | Callers may send `Idempotency-Key` (up to 64 printable ASCII characters) on `POST /v1/sessions/continuous` and `POST /v1/devices`. The same key with the same body within 24 hours returns the original response; the same key with a different body returns `422 idempotency_key_reuse`. Score events are already idempotent by `seq` (Build Spec 0, section 4). | Proposed |
-| Lists | Cursor paging: `?limit=` (1 to 100, default 25) and `?cursor=`. Response: `{"data": [...], "next_cursor": "..." or omitted}`. | Planned (P0-13) |
+| Lists | Cursor paging: `?limit=` (1 to 100, default 25) and `?cursor=`. Response: `{"data": [...], "next_cursor": "..."}`, where `next_cursor` is present only when there is more. A bad cursor is a `validation_error`. Built for the webhook delivery log; the other lists (audit log and so on) adopt it as they are built (P0-13). | Implemented |
 | SDK version | The SDK sends `Certivo-SDK-Version: <semver>` and `Certivo-SDK-Platform: web\|ios\|android` on every request. The server accepts several SDK versions at once. | Planned (P1-14) |
 
 ## 2. The error envelope
@@ -81,6 +81,10 @@ Rules:
 | `invalid_public_key` | 422 | Implemented | Not a 32-byte Ed25519 key | No |
 | `api_key_not_found` | 404 | Implemented | No such API key for this partner | No |
 | `api_key_limit_reached` | 409 | Implemented | The partner already has the maximum number of active keys | After revoking one |
+| `webhook_endpoint_not_found` | 404 | Implemented | No such webhook endpoint for this partner (or it was deleted) | No |
+| `webhook_delivery_not_found` | 404 | Implemented | No such webhook delivery for this partner | No |
+| `webhook_endpoint_limit_reached` | 409 | Implemented | The partner already has the maximum number of webhook endpoints | After deleting one |
+| `delivery_not_retryable` | 409 | Implemented | Only `dead` or `retrying` deliveries to an existing endpoint can be retried by hand | No |
 | `http_<status>` | as given | Implemented | Framework-level errors with no Certivo code, for example `http_404` for an unknown URL and `http_405` for a wrong method | Depends |
 | `internal_error` | 500 | Implemented | Something unexpected broke on our side | Yes, with backoff |
 | `forbidden_scope` | 403 | Implemented | The key is valid but lacks the scope this endpoint needs | No |
@@ -91,7 +95,7 @@ Rules:
 | `policy_invalid` | 422 | Planned (P0-11) | A submitted policy breaks the rules in document 03 | No |
 | `consent_required` | 409 | Planned (P0-51) | No current granted consent for this participant (document 04) | After consent is recorded |
 | `peers_not_permitted` | 403 | Planned (P1-10) | The session's policy does not let participants see each other's status | No |
-| `webhook_url_invalid` | 422 | Planned (P0-07) | Webhook URL is not allowed (document 05) | No |
+| `webhook_url_invalid` | 422 | Implemented | Webhook URL is not allowed (document 05) | No |
 | `idempotency_key_reuse` | 422 | Proposed | Same `Idempotency-Key` with a different body | No |
 
 ## 4. How partners should handle errors

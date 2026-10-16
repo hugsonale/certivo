@@ -69,8 +69,8 @@ def test_auto_increment_ids_are_assigned_and_increase(app, partner_key):
     partner, _ = partner_key
     with app.state.session_factory() as db:
         for i in range(3):
-            db.add(WebhookOutbox(partner_id=partner.id, event_type="t", payload={"i": i},
-                                 created_at_ms=1))
+            db.add(WebhookOutbox(event_id=new_id("evt"), partner_id=partner.id, event_type="t",
+                                 payload={"i": i}, created_at_ms=1))
         db.commit()
         ids = list(db.scalars(select(WebhookOutbox.id).order_by(WebhookOutbox.id)))
     assert len(ids) == 3 and ids == sorted(set(ids))

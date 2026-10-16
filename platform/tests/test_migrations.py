@@ -20,7 +20,7 @@ from app.db import (
 )
 from app.main import create_app
 from app.models import Base
-from tests.conftest import SIGNING_KEY
+from tests.conftest import SIGNING_KEY, WEBHOOK_KEY
 
 
 @pytest.fixture
@@ -43,7 +43,8 @@ def scratch_url(tmp_path, db_url):
 
 
 def settings_for(url: str, **kw) -> Settings:
-    return Settings(database_url=url, attestation_signing_key=SIGNING_KEY, _env_file=None, **kw)
+    return Settings(database_url=url, attestation_signing_key=SIGNING_KEY,
+                    webhook_secret_key=WEBHOOK_KEY, _env_file=None, **kw)
 
 
 def test_there_is_exactly_one_migration_head(scratch_url):

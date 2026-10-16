@@ -3,16 +3,18 @@
 Anything a spec marks "Implemented" has to exist in the code, and anything the code does in these areas
 has to be written down. If one of these tests fails, either the code or the spec is out of date.
 """
-import hashlib
-import hmac
 import importlib.util
 import json
 import re
+import typing
 from pathlib import Path
 
 import pytest
 
 from app.policy import DEFAULT_POLICY_CONFIG
+from app.schemas import EventName
+from app.webhook_events import ALL_EVENT_TYPES, EVENT_TYPES, TEST_EVENT
+from app.webhook_verify import verify_signature
 
 PLATFORM = Path(__file__).resolve().parents[1]
 BASE = PLATFORM.parent / "docs" / "spec" / "base"
@@ -123,7 +125,15 @@ def test_webhook_events_match_the_code():
     rows = table("05-webhooks.md", "Event")
     documented = {unticked(r["Event"]) for r in rows if r["Status"].startswith("Implemented")}
     emitted = set(re.findall(r'_emit\(\s*db,\s*[^,]+,\s*"([a-z_]+\.[a-z_]+)"', app_source()))
-    assert emitted == documented, f"in code: {sorted(emitted)}; documented: {sorted(documented)}"
+    assert emitted | {TEST_EVENT} == documented, f"in code: {sorted(emitted)}; documented: {sorted(documented)}"
+
+
+def test_the_webhook_catalogue_matches_the_spec():
+    """Everything a partner can subscribe to is documented, and nothing merely Proposed is offered."""
+    rows = table("05-webhooks.md", "Event")
+    offered = {unticked(r["Event"]) for r in rows if not r["Status"].startswith("Proposed")}
+    assert set(ALL_EVENT_TYPES) == offered
+    assert set(typing.get_args(EventName)) == {"*", *EVENT_TYPES}
 
 
 def test_policy_settings_match_the_code():
@@ -134,27 +144,16 @@ def test_policy_settings_match_the_code():
         assert int(default_text.split()[0]) == DEFAULT_POLICY_CONFIG[key], key
 
 
-def verify_webhook(secret: str, header: str, raw_body: str, now_ms: int, tolerance_s: int = 300) -> bool:
-    """Reference implementation of the receiver's check in docs/spec/base/05-webhooks.md section 3."""
-    parts = [p.split("=", 1) for p in header.split(",")]
-    t = next(int(v) for k, v in parts if k == "t")
-    candidates = [v for k, v in parts if k == "v1"]
-    if abs(now_ms - t) > tolerance_s * 1000:
-        return False
-    expected = hmac.new(secret.encode(), f"{t}.{raw_body}".encode(), hashlib.sha256).hexdigest()
-    return any(hmac.compare_digest(expected, c) for c in candidates)
-
-
 def test_webhook_signature_vector_and_reference_check():
     v = json.loads((VECTORS / "webhook-signature-v1.json").read_text())
     now = v["t_ms"] + 5_000
     assert v["header"] == f"t={v['t_ms']},v1={v['signature_hex']}"
-    assert verify_webhook(v["test_only_secret"], v["header"], v["raw_body"], now)
-    assert not verify_webhook(v["test_only_secret"], v["header"], v["raw_body"] + " ", now)  # tampered
-    assert not verify_webhook("whsec_wrong", v["header"], v["raw_body"], now)  # wrong secret
-    assert not verify_webhook(v["test_only_secret"], v["header"], v["raw_body"], v["t_ms"] + 301_000)  # replay
+    assert verify_signature(v["test_only_secret"], v["header"], v["raw_body"], now)
+    assert not verify_signature(v["test_only_secret"], v["header"], v["raw_body"] + " ", now)  # tampered
+    assert not verify_signature("whsec_wrong", v["header"], v["raw_body"], now)  # wrong secret
+    assert not verify_signature(v["test_only_secret"], v["header"], v["raw_body"], v["t_ms"] + 301_000)  # replay
     rotating = f"t={v['t_ms']},v1={'0' * 64},v1={v['signature_hex']}"  # two values during rotation
-    assert verify_webhook(v["test_only_secret"], rotating, v["raw_body"], now)
+    assert verify_signature(v["test_only_secret"], rotating, v["raw_body"], now)
 
 
 def test_webhook_vector_file_is_current():

@@ -1,7 +1,7 @@
 # Certivo Build Spec 0
 
 **Status:** draft for Jesutofunmi's review. **Scope:** Phase 0, the continuous-session backbone.
-**Code that implements it:** `platform/` (128 passing tests, on SQLite and on Postgres).
+**Code that implements it:** `platform/` (197 tests, on SQLite and on Postgres).
 **Derived from:** the v2 suite (chiefly Doc 6 API Specification §10, plus Docs 2, 4, 5, 12).
 Where this spec departs from a document it says so in section 3. The suite's "Version 1.0"
 documents were never written, so the base parts they were meant to supply (error codes,

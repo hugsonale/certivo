@@ -15,7 +15,7 @@ rules for creating, rotating and revoking each one.
 | Partner API key | The partner's server | `cvk_` + 43 characters | Everything under `/v1/` | Implemented |
 | SDK session token | The SDK for one call | `skt_` + 43 characters | SDK endpoints for exactly one session | Implemented |
 | Device signing key | One SDK installation on one device | Ed25519 key pair; only the public half reaches us | Signing score packets and consent records | Implemented (packets); Planned (consent, P0-51) |
-| Webhook signing secret | The partner's server | `whsec_` + 43 characters | Checking that a webhook really came from Certivo (document 05) | Planned (P0-07) |
+| Webhook signing secret | The partner's server | `whsec_` + 43 characters | Checking that a webhook really came from Certivo (document 05) | Implemented |
 | Platform signing key | Certivo | Ed25519 key pair; public half published | Signing session attestations | Implemented (basic); Planned (rotation, P0-10) |
 | Dashboard login | A human at a partner | Email plus single sign-on and a second factor | The partner dashboard only | Planned (P1-11), not part of this plane |
 
@@ -140,13 +140,13 @@ One row per endpoint. "Implemented" rows are checked against the running code by
 | POST | `/v1/policies` | API key | `policies:write` | Planned (P0-11) |
 | GET | `/v1/policies` | API key | `policies:read` | Planned (P0-11) |
 | GET | `/v1/policies/{policy_id}` | API key | `policies:read` | Planned (P0-11) |
-| POST | `/v1/webhook-endpoints` | API key | `webhooks:write` | Planned (P0-07) |
-| GET | `/v1/webhook-endpoints` | API key | `webhooks:read` | Planned (P0-07) |
-| DELETE | `/v1/webhook-endpoints/{endpoint_id}` | API key | `webhooks:write` | Planned (P0-07) |
-| POST | `/v1/webhook-endpoints/{endpoint_id}/rotate-secret` | API key | `webhooks:write` | Planned (P0-07) |
-| POST | `/v1/webhook-endpoints/{endpoint_id}/test` | API key | `webhooks:write` | Planned (P0-07) |
-| GET | `/v1/webhook-deliveries` | API key | `webhooks:read` | Planned (P0-07) |
-| POST | `/v1/webhook-deliveries/{delivery_id}/retry` | API key | `webhooks:write` | Planned (P0-07) |
+| POST | `/v1/webhook-endpoints` | API key | `webhooks:write` | Implemented |
+| GET | `/v1/webhook-endpoints` | API key | `webhooks:read` | Implemented |
+| DELETE | `/v1/webhook-endpoints/{endpoint_id}` | API key | `webhooks:write` | Implemented |
+| POST | `/v1/webhook-endpoints/{endpoint_id}/rotate-secret` | API key | `webhooks:write` | Implemented |
+| POST | `/v1/webhook-endpoints/{endpoint_id}/test` | API key | `webhooks:write` | Implemented |
+| GET | `/v1/webhook-deliveries` | API key | `webhooks:read` | Implemented |
+| POST | `/v1/webhook-deliveries/{delivery_id}/retry` | API key | `webhooks:write` | Implemented |
 | GET | `/v1/consents` | API key | `consents:read` | Planned (P0-51) |
 | POST | `/v1/consents/withdrawals` | API key | `consents:write` | Planned (P0-51) |
 | GET | `/v1/audit-logs` | API key | `audit:read` | Planned (P0-13) |
