@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     db_statement_timeout_ms: int = 5_000         # no single database statement may run longer
     max_api_keys_per_partner: int = 50           # active keys per partner
 
+    # --- Outage tolerance (P0-08). PLACEHOLDER (docs/adr/0014): to be set from measured outages.
+    # A packet that reaches us later than this after its interval ended, or a hole this long between
+    # two of a participant's packets, is disclosed as a coverage gap in the attestation.
+    gap_disclosure_threshold_ms: int = 10_000
+
     # --- Webhook delivery (P0-07). Numbers are PLACEHOLDERS (docs/spec/base/05).
     redis_url: str = "redis://localhost:6379/0"      # the Celery broker
     # Key that encrypts webhook signing secrets in the database (a Fernet key; see
@@ -99,7 +104,8 @@ class Settings(BaseSettings):
                 "and '*' are allowed only when CERTIVO_ENV=dev.")
         positive = ("sdk_token_ttl_seconds", "rate_limit_key_per_minute", "max_body_bytes",
                     "rate_limit_session_per_minute", "rate_limit_auth_failures_per_minute",
-                    "db_statement_timeout_ms", "max_api_keys_per_partner")
+                    "db_statement_timeout_ms", "max_api_keys_per_partner",
+                    "gap_disclosure_threshold_ms")
         for name in positive:
             if getattr(self, name) < 1:
                 raise ValueError(f"{name} must be at least 1")

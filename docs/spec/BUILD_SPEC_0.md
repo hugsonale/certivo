@@ -37,6 +37,7 @@ Keys carry scopes, tokens expire, and requests are rate limited and size limited
 | `GET /v1/devices/{id}` | partner | Read a device. |
 | `POST /v1/sessions/continuous` | partner | Start. Body: `use_case`, optional `call_session_reference`, `participant_count` (positive int, default 1). Returns `id`, `status`, `re_evaluation_interval_ms`, `sdk_token` (shown once) and `sdk_token_expires_at_ms`. |
 | `POST /internal/v1/sessions/continuous/{id}/score-events` | SDK | Submit one signed packet (section 4). Returns `accepted`, `seq`, `current_policy_outcome`, `duplicate`. |
+| `POST /internal/v1/sessions/continuous/{id}/score-events/batch` | SDK | Upload packets the SDK buffered during an outage (P0-08). Body `{packets: [1 to 25 packets, oldest first]}`. Each packet is checked on its own; returns `results[]` (`index`, `accepted`, `seq`, `current_policy_outcome`, `duplicate`, or `error {code, message}`) and counts. Re-sending a batch is safe. Late or missing packets are disclosed as coverage gaps (section 8). |
 | `POST /internal/v1/sessions/continuous/{id}/pause` | SDK | Declare verification unavailable. Body `{reason}`: `connectivity` \| `sdk_error` \| `model_unavailable` \| `other`. Opens a coverage gap. 204. |
 | `POST /internal/v1/sessions/continuous/{id}/resume` | SDK | Close the gap. 204. |
 | `POST /v1/sessions/continuous/{id}/end` | partner | End. Returns the signed attestation and `coverage_summary`. Idempotent. |
@@ -185,6 +186,8 @@ Gaps are always disclosed in `coverage`; a session with no gaps says so explicit
 (`gap_count: 0`), it is never omitted.
 
 `missed_intervals` = `last_seq + 1 − events_accepted` (assumes SDKs start at seq 0).
+
+**Gap reasons and what `paused_ms` means.** `paused_ms` is the time in the session with no live verification. A gap's `reason` is one of: `connectivity`, `sdk_error`, `model_unavailable`, `other` (the SDK paused), `delayed_upload` (scores arrived, but long after the moment they describe, so the partner had no live signal meanwhile) or `missing_packets` (scores for that time never arrived). Overlapping gaps are counted once. The cut-off for "long after" is `CERTIVO_GAP_DISCLOSURE_THRESHOLD_MS` (placeholder, ADR 0014).
 
 **Key handling:** the platform signing seed is read from `CERTIVO_ATTESTATION_SIGNING_KEY`. In
 `prod` the service refuses to start without it; in dev it makes an ephemeral key and warns.

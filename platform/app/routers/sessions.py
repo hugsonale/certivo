@@ -6,7 +6,15 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.errors import ApiError
 from app.models import ContinuousSession, Partner
-from app.schemas import PauseIn, ScoreEventIn, ScoreEventOut, SessionStartIn, SessionStartOut
+from app.schemas import (
+    PauseIn,
+    ScoreBatchIn,
+    ScoreBatchOut,
+    ScoreEventIn,
+    ScoreEventOut,
+    SessionStartIn,
+    SessionStartOut,
+)
 from app.security import AuthContext, require_scope, require_sdk_session
 from app.services import sessions as svc
 
@@ -42,6 +50,15 @@ def score_event(body: ScoreEventIn, request: Request,
                 session: ContinuousSession = Depends(require_sdk_session),
                 db: Session = Depends(get_db)):
     return svc.ingest_score_event(db, request.app.state.settings, session, body, _now(request))
+
+
+@router.post("/internal/v1/sessions/continuous/{session_id}/score-events/batch",
+             response_model=ScoreBatchOut)
+def score_event_batch(body: ScoreBatchIn, request: Request,
+                      session: ContinuousSession = Depends(require_sdk_session),
+                      db: Session = Depends(get_db)):
+    return svc.ingest_score_batch(db, request.app.state.settings, session, body.packets,
+                                  _now(request))
 
 
 @router.post("/internal/v1/sessions/continuous/{session_id}/pause", status_code=204)

@@ -71,6 +71,38 @@ class ScoreEventOut(BaseModel):
     duplicate: bool = False
 
 
+MAX_BATCH_PACKETS = 25  # even 25 maximum-size packets (about 1.8 KB each) fit the 64 KiB body limit
+
+
+class ScoreBatchIn(BaseModel):
+    """Packets the SDK buffered while it could not reach us, oldest first."""
+
+    model_config = ConfigDict(extra="forbid")
+    packets: list[ScoreEventIn] = Field(min_length=1, max_length=MAX_BATCH_PACKETS)
+
+
+class BatchItemError(BaseModel):
+    code: str
+    message: str
+
+
+class BatchItemOut(BaseModel):
+    index: int  # position in the request, starting at 0
+    accepted: bool
+    seq: int
+    current_policy_outcome: str | None = None
+    duplicate: bool = False
+    error: BatchItemError | None = None  # set only when accepted is false
+
+
+class ScoreBatchOut(BaseModel):
+    results: list[BatchItemOut]
+    accepted_count: int  # newly recorded
+    duplicate_count: int  # already recorded earlier (a safe retry)
+    rejected_count: int
+    gaps_recorded: int  # coverage gaps this batch added to the session
+
+
 class PauseIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     reason: Literal["connectivity", "sdk_error", "model_unavailable", "other"] = "other"
