@@ -16,6 +16,7 @@ from app.db import (
     SchemaNotCurrent,
     alembic_config,
     assert_schema_current,
+    include_object,
     upgrade_to_head,
 )
 from app.main import create_app
@@ -56,7 +57,8 @@ def test_fresh_database_builds_from_migrations_only(scratch_url):
     upgrade_to_head(scratch_url)
     engine = create_engine(scratch_url)
     try:
-        tables = set(inspect(engine).get_table_names())
+        tables = {t for t in inspect(engine).get_table_names()
+                  if include_object(None, t, "table", True, None)}  # not the daily partitions
     finally:
         engine.dispose()
     expected = {t.name for t in Base.metadata.sorted_tables} | {"alembic_version"}
@@ -69,7 +71,8 @@ def test_models_and_migrations_agree(scratch_url):
     engine = create_engine(scratch_url)
     try:
         with engine.connect() as conn:
-            context = MigrationContext.configure(conn, opts={"compare_type": True})
+            context = MigrationContext.configure(
+                conn, opts={"compare_type": True, "include_object": include_object})
             diff = compare_metadata(context, Base.metadata)
     finally:
         engine.dispose()
@@ -160,3 +163,64 @@ def test_migration_0002_keeps_existing_rows_working(scratch_url):
     scopes = key.scopes if isinstance(key.scopes, list) else json.loads(key.scopes)
     assert key.name == "initial key" and set(scopes) == set(ALL_SCOPES)
     assert session.sdk_token_expires_at_ms == session.started_at_ms + 6 * 60 * 60 * 1000
+
+
+def test_migration_0004_keeps_score_events_and_their_ids(scratch_url):
+    """Rows that existed before partitioning survive with the same IDs, get their session's start
+    time as the partition key, and new rows carry on numbering after them. Going back also works."""
+    import sqlalchemy as sa
+    from sqlalchemy.dialects import postgresql
+
+    cfg = alembic_config(scratch_url)
+    command.upgrade(cfg, "0003")
+    started = 1_760_000_000_000
+    json_type = sa.JSON().with_variant(postgresql.JSONB(), "postgresql")
+    engine = create_engine(scratch_url)
+    row = dict(participant_ref="alice", device_id="dev", interval_start_ms=1, interval_end_ms=2,
+               confidence_milli=900, model_version="m", explanation={"reason_codes": [], "signal_milli": {}},
+               signature="s", outcome="accept", received_at_ms=started + 5)
+    events = sa.table("continuous_score_events", sa.column("id", sa.Integer), sa.column("session_id", sa.String),
+                      sa.column("participant_ref", sa.String), sa.column("seq", sa.Integer),
+                      sa.column("device_id", sa.String), sa.column("interval_start_ms", sa.BigInteger),
+                      sa.column("interval_end_ms", sa.BigInteger), sa.column("confidence_milli", sa.Integer),
+                      sa.column("model_version", sa.String), sa.column("explanation", json_type),
+                      sa.column("signature", sa.String), sa.column("outcome", sa.String),
+                      sa.column("received_at_ms", sa.BigInteger))
+    try:
+        with engine.begin() as conn:
+            conn.execute(sa.text("INSERT INTO partners (id, name, created_at_ms) VALUES ('p', 'P', 1)"))
+            conn.execute(sa.text(
+                "INSERT INTO continuous_sessions (id, partner_id, use_case, policy_id, policy_version, "
+                "policy_config, participant_count, status, started_at_ms, sdk_token_hash, "
+                "sdk_token_expires_at_ms) VALUES ('cs', 'p', 'u', 'pol', 1, '{}', 1, 'active', "
+                f"{started}, 'h', {started + 1})"))
+            for event_id, seq in ((10, 0), (11, 1), (12, 2)):
+                conn.execute(events.insert().values(id=event_id, session_id="cs", seq=seq, **row))
+        command.upgrade(cfg, "head")
+        with engine.connect() as conn:
+            kept = conn.execute(sa.text(
+                "SELECT id, seq, session_started_at_ms FROM continuous_score_events ORDER BY id")).all()
+            assert [(r.id, r.seq) for r in kept] == [(10, 0), (11, 1), (12, 2)]
+            assert {r.session_started_at_ms for r in kept} == {started}
+        with engine.begin() as conn:  # a new row gets the next number, not a clash with 10 to 12
+            conn.execute(sa.text(
+                "INSERT INTO continuous_score_events (session_id, participant_ref, seq, device_id, "
+                "interval_start_ms, interval_end_ms, confidence_milli, model_version, explanation, "
+                "signature, outcome, received_at_ms, session_started_at_ms) VALUES "
+                f"('cs', 'alice', 3, 'dev', 1, 2, 900, 'm', '{{}}', 's', 'accept', {started}, {started})"))
+        with engine.connect() as conn:
+            assert conn.execute(sa.text("SELECT MAX(id) FROM continuous_score_events")).scalar() == 13
+            if engine.dialect.name == "postgresql":
+                partitioned = conn.execute(sa.text(
+                    "SELECT COUNT(*) FROM pg_partitioned_table WHERE partrelid = "
+                    "to_regclass('continuous_score_events')")).scalar()
+                where = conn.execute(sa.text(
+                    "SELECT DISTINCT tableoid::regclass::text FROM continuous_score_events")).scalars().all()
+                assert partitioned == 1 and where == ["continuous_score_events_p20251009"]
+                assert conn.execute(sa.text("SELECT to_regclass('continuous_score_events_default')")).scalar()
+        command.downgrade(cfg, "0003")
+        with engine.connect() as conn:
+            assert conn.execute(sa.text("SELECT COUNT(*) FROM continuous_score_events")).scalar() == 4
+            assert conn.execute(sa.text("SELECT MAX(id) FROM continuous_score_events")).scalar() == 13
+    finally:
+        engine.dispose()

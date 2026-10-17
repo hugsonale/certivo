@@ -227,3 +227,12 @@ pytest
 - Any change to the packet format must update `docs/spec/test-vectors/` via
   `python scripts/gen_test_vectors.py`; a test fails if they drift.
 - Any change to `app/models.py` needs a migration in the same pull request; a test and CI fail if not.
+
+## Daily maintenance (partitions and retention)
+
+```bash
+python scripts/run_maintenance.py --dry-run   # show what would be removed, change nothing
+python scripts/run_maintenance.py             # make upcoming partitions, apply retention
+```
+
+The Celery worker runs the same job every day at 03:15. Until `CERTIVO_SCORE_EVENT_RETENTION_DAYS` is set it deletes nothing: the retention period is a privacy decision (ADR 0015).

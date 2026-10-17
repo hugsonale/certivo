@@ -148,7 +148,7 @@ guessing now.
 
 Tables: `partners`, `api_keys` (SHA-256 hash only), `policies` (partner NULL = global default
 `default_video_call`), `devices`, `continuous_sessions`, `continuous_score_events` (unique on
-session+participant+seq), `coverage_gaps`, `webhook_outbox`, `session_attestations`.
+session+participant+seq; split into one partition per day on Postgres, see below), `coverage_gaps`, `webhook_outbox`, `session_attestations`.
 
 The schema is defined **only** by Alembic migrations in `platform/migrations/` (baseline `0001`).
 No code creates tables directly. Constraints and indexes have fixed names (a naming convention),
@@ -162,7 +162,7 @@ so later migrations can change them safely. Rules:
 * On Postgres, JSON columns are `JSONB`; elsewhere plain JSON. Global policies (no partner) are
   protected by a partial unique index, because a plain UNIQUE constraint does not treat NULLs as equal.
 
-Doc 12's daily partitioning of the score-events table is still a later migration.
+**Daily partitions and retention (P0-09, ADR 0015).** On Postgres `continuous_score_events` is split into one partition per day of `session_started_at_ms`, a copy of the start time of the call the row belongs to (set by the server, never changed). Every query names the session and that day, so Postgres reads one partition. Partitions are made ahead of time by the daily maintenance job (`python scripts/run_maintenance.py`, also run by the Celery worker at 03:15); a catch-all partition takes a row if one is ever missing. Retention drops whole days that are older than `CERTIVO_SCORE_EVENT_RETENTION_DAYS`, never a day that still has an unfinished call. **That setting has no default: how long to keep data is the privacy review's decision (P0-52), and until it is set nothing is deleted.** SQLite (development) keeps one plain table and the same rule deletes rows.
 
 Privacy posture carried over from the docs: no raw video or audio ever reaches this service;
 explanations are code lists and 0..1000 numbers only. Per-interval events are intended to have

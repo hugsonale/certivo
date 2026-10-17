@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -42,6 +43,14 @@ def get_db(request: Request) -> Iterator[Session]:
 # else: no code path creates tables directly.
 # ---------------------------------------------------------------------------------------------
 PLATFORM_DIR = Path(__file__).resolve().parents[1]
+
+# The daily partitions of continuous_score_events are managed by app/retention.py, not by migrations
+# or models, so Alembic must not mistake them for tables the models forgot.
+_PARTITION_CHILD = re.compile(r"^continuous_score_events_(p\d{8}|default)$")
+
+
+def include_object(obj, name, type_, reflected, compare_to) -> bool:
+    return not (type_ == "table" and reflected and _PARTITION_CHILD.match(name or ""))
 
 
 class SchemaNotCurrent(RuntimeError):

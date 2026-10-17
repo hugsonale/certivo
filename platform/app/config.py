@@ -39,6 +39,15 @@ class Settings(BaseSettings):
     # two of a participant's packets, is disclosed as a coverage gap in the attestation.
     gap_disclosure_threshold_ms: int = 10_000
 
+    # --- Retention and partitions (P0-09, docs/adr/0015).
+    # NO DEFAULT for how long score events are kept: that is a privacy and legal decision (P0-52) and
+    # no number has been chosen. While it is unset the maintenance job deletes nothing.
+    score_event_retention_days: int | None = None
+    # How long attestations are kept. Nothing deletes attestations yet. Set it only so that the rule
+    # "score events are kept for less time than the attestation" is checked the moment both exist.
+    attestation_retention_days: int | None = None
+    partition_days_ahead: int = 7  # daily partitions made in advance (Postgres)
+
     # --- Webhook delivery (P0-07). Numbers are PLACEHOLDERS (docs/spec/base/05).
     redis_url: str = "redis://localhost:6379/0"      # the Celery broker
     # Key that encrypts webhook signing secrets in the database (a Fernet key; see
@@ -105,10 +114,21 @@ class Settings(BaseSettings):
         positive = ("sdk_token_ttl_seconds", "rate_limit_key_per_minute", "max_body_bytes",
                     "rate_limit_session_per_minute", "rate_limit_auth_failures_per_minute",
                     "db_statement_timeout_ms", "max_api_keys_per_partner",
-                    "gap_disclosure_threshold_ms")
+                    "gap_disclosure_threshold_ms", "partition_days_ahead")
         for name in positive:
             if getattr(self, name) < 1:
                 raise ValueError(f"{name} must be at least 1")
+        for name in ("score_event_retention_days", "attestation_retention_days"):
+            value = getattr(self, name)
+            if value is not None and value < 1:
+                raise ValueError(f"{name} must be at least 1 when it is set")
+        if (self.score_event_retention_days is not None
+                and self.attestation_retention_days is not None
+                and self.score_event_retention_days >= self.attestation_retention_days):
+            raise ValueError(
+                "score_event_retention_days must be shorter than attestation_retention_days: the "
+                "attestation is the lasting record and the per-interval scores must not outlive it "
+                "(Privacy Architecture 2.2, Database Design 4.2)")
         if self.trusted_proxy_hops < 0 or self.body_read_timeout_s <= 0:
             raise ValueError("trusted_proxy_hops must be >= 0 and body_read_timeout_s > 0")
         return self

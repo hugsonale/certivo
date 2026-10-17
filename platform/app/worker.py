@@ -8,9 +8,11 @@ nothing is lost: deliveries stay in the database and are picked up again afterwa
 from __future__ import annotations
 
 from celery import Celery
+from celery.schedules import crontab
 
 from app.config import Settings
 from app.db import assert_schema_current, make_engine, make_session_factory
+from app.retention import run_maintenance
 from app.secretbox import load_secretbox
 from app.timeutil import now_ms
 from app.webhook_engine import WebhookEngine
@@ -31,6 +33,9 @@ celery_app.conf.update(
     beat_schedule={
         "certivo-webhook-poll": {"task": "certivo.webhooks.poll",
                                  "schedule": _settings.webhook_poll_interval_s},
+        # Daily, at a quiet hour: tomorrow's partitions, then retention (app/retention.py).
+        "certivo-daily-maintenance": {"task": "certivo.maintenance.run",
+                                      "schedule": crontab(hour=3, minute=15)},
     },
 )
 
@@ -67,3 +72,16 @@ def poll() -> int:
 @celery_app.task(name="certivo.webhooks.deliver", soft_time_limit=120)
 def deliver(delivery_id: str, claim_token: str) -> str:
     return get_engine().attempt(delivery_id, claim_token)
+
+
+@celery_app.task(name="certivo.maintenance.run", soft_time_limit=600)
+def maintenance() -> dict:
+    """Partitions ahead of the clock, and retention if a period is configured."""
+    settings = Settings()
+    db_engine = make_engine(settings.database_url, settings.db_statement_timeout_ms)
+    try:
+        assert_schema_current(db_engine)
+        with make_session_factory(db_engine)() as db:
+            return run_maintenance(db, settings, now_ms()).as_dict()
+    finally:
+        db_engine.dispose()
