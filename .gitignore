@@ -67,3 +67,8 @@ node_modules/
 __pycache__/
 *.db
 backups/
+
+.venv/
+.pytest_cache/
+.ruff_cache/
+certivo_dev.db

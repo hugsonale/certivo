@@ -1,0 +1,46 @@
+name: governance
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  pr-title:
+    name: PR title is a Conventional Commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check the pull request title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|docs|chore|test|refactor|perf|ci|build|revert)(\([A-Za-z0-9._-]+\))?!?: [^ ].*$'
+          if [ "${#PR_TITLE}" -gt 100 ]; then
+            echo "::error::The PR title is longer than 100 characters."
+            exit 1
+          fi
+          if printf '%s' "$PR_TITLE" | grep -Eq "$pattern"; then
+            echo "OK: $PR_TITLE"
+          else
+            echo "::error::PR title must look like 'type(scope): summary', for example 'feat(platform): add webhook worker'. Allowed types: feat, fix, docs, chore, test, refactor, perf, ci, build, revert."
+            exit 1
+          fi
+
+  pr-step-id:
+    name: PR names a build step (warning only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Look for a step ID such as P0-03
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" | grep -Eq '\bP[0-3]-[0-9]{2}\b'; then
+            echo "Step ID found."
+          else
+            echo "::warning::No build step ID (for example P0-03) found in the PR title or description. Add one so the tracker stays in sync."
+          fi

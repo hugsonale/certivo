@@ -1,0 +1,167 @@
+[
+  {
+    "name": "ws:platform-backend",
+    "color": "1d76db",
+    "description": "WS-A Platform backend: sessions, policy, webhooks, API"
+  },
+  {
+    "name": "ws:crypto-attestation",
+    "color": "1d76db",
+    "description": "WS-B Cryptography and attestation"
+  },
+  {
+    "name": "ws:web-sdk",
+    "color": "1d76db",
+    "description": "WS-C Web SDK and demo call app"
+  },
+  {
+    "name": "ws:edge-ml",
+    "color": "1d76db",
+    "description": "WS-D Edge ML models and evaluation"
+  },
+  {
+    "name": "ws:mobile-sdk",
+    "color": "1d76db",
+    "description": "WS-E Native iOS and Android SDKs"
+  },
+  {
+    "name": "ws:trusted-device",
+    "color": "1d76db",
+    "description": "WS-F Trusted Device Layer"
+  },
+  {
+    "name": "ws:security",
+    "color": "1d76db",
+    "description": "WS-G Security"
+  },
+  {
+    "name": "ws:privacy-legal",
+    "color": "1d76db",
+    "description": "WS-H Privacy, consent, legal, compliance"
+  },
+  {
+    "name": "ws:devops",
+    "color": "1d76db",
+    "description": "WS-I DevOps and infrastructure"
+  },
+  {
+    "name": "ws:data-db",
+    "color": "1d76db",
+    "description": "WS-J Data and database"
+  },
+  {
+    "name": "ws:design-ux",
+    "color": "1d76db",
+    "description": "WS-K Design system and UX"
+  },
+  {
+    "name": "ws:partner-dx",
+    "color": "1d76db",
+    "description": "WS-L Partner dashboard and developer experience"
+  },
+  {
+    "name": "ws:research-eval",
+    "color": "1d76db",
+    "description": "WS-M Research, benchmarks, fairness"
+  },
+  {
+    "name": "ws:partners-gtm",
+    "color": "1d76db",
+    "description": "WS-N Partners, go-to-market, sales"
+  },
+  {
+    "name": "ws:business-finance",
+    "color": "1d76db",
+    "description": "WS-O Business, finance, investors"
+  },
+  {
+    "name": "ws:quality-release",
+    "color": "1d76db",
+    "description": "WS-P Quality and release"
+  },
+  {
+    "name": "ws:verticals",
+    "color": "1d76db",
+    "description": "WS-Q Point-in-time verticals"
+  },
+  {
+    "name": "ws:standards",
+    "color": "1d76db",
+    "description": "WS-R Standardisation and portability research"
+  },
+  {
+    "name": "phase:0",
+    "color": "0e8a16",
+    "description": "Phase 0: Flagship proof"
+  },
+  {
+    "name": "phase:1",
+    "color": "0e8a16",
+    "description": "Phase 1: Design partners and Trusted Device Layer"
+  },
+  {
+    "name": "phase:2",
+    "color": "0e8a16",
+    "description": "Phase 2: Partner expansion and point-in-time verticals"
+  },
+  {
+    "name": "phase:3",
+    "color": "0e8a16",
+    "description": "Phase 3: Hardening and standardisation"
+  },
+  {
+    "name": "type:feature",
+    "color": "a2eeef",
+    "description": "New capability"
+  },
+  {
+    "name": "type:bug",
+    "color": "d73a4a",
+    "description": "Something is broken"
+  },
+  {
+    "name": "type:docs",
+    "color": "0075ca",
+    "description": "Documentation only"
+  },
+  {
+    "name": "type:chore",
+    "color": "cfd3d7",
+    "description": "Maintenance, tooling, dependencies"
+  },
+  {
+    "name": "type:security",
+    "color": "b60205",
+    "description": "Security fix or hardening"
+  },
+  {
+    "name": "type:decision",
+    "color": "5319e7",
+    "description": "Needs or records an architecture decision (ADR)"
+  },
+  {
+    "name": "blocked",
+    "color": "000000",
+    "description": "Waiting on something outside this change"
+  },
+  {
+    "name": "needs-decision",
+    "color": "fbca04",
+    "description": "A decision from Jesutofunmi is needed first"
+  },
+  {
+    "name": "claims-impact",
+    "color": "fef2c0",
+    "description": "Changes or needs evidence for a public claim"
+  },
+  {
+    "name": "privacy-impact",
+    "color": "f9d0c4",
+    "description": "Touches personal data, consent or retention"
+  },
+  {
+    "name": "security-review",
+    "color": "e99695",
+    "description": "Needs a written security note before merge"
+  }
+]
