@@ -45,6 +45,14 @@ def clear_all_tables(url: str) -> None:
             if engine.dialect.name == "postgresql":
                 names = ", ".join(f'"{t.name}"' for t in tables)
                 conn.execute(text(f"TRUNCATE {names} RESTART IDENTITY CASCADE"))
+                # Daily partitions made by one test must not leak into the next one. Only the
+                # catch-all partition stays, which is where the tests' fixed clock puts its rows.
+                leftovers = conn.execute(text(
+                    "SELECT c.relname FROM pg_inherits i JOIN pg_class c ON c.oid = i.inhrelid "
+                    "WHERE i.inhparent = to_regclass('continuous_score_events') "
+                    "AND c.relname <> 'continuous_score_events_default'")).scalars().all()
+                for name in leftovers:
+                    conn.execute(text(f'DROP TABLE "{name}"'))
             else:
                 for table in tables:
                     conn.execute(table.delete())

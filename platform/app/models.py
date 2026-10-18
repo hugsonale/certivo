@@ -113,12 +113,16 @@ class ContinuousSession(Base):
 
 
 class ScoreEvent(Base):
-    """Phase 0 plain table. Daily partitioning (Database Design doc) is a later migration."""
+    """One scored interval. On Postgres this table is split into one partition per day by
+    `session_started_at_ms` (migration 0004, docs/adr/0015); on SQLite it stays one plain table."""
 
     __tablename__ = "continuous_score_events"
-    # This unique index also serves every lookup by session_id (it is the leading column).
+    # The unique index also serves every lookup by session_id (it is the leading column).
+    # Postgres only allows a unique rule on a partitioned table if it includes the partition column.
+    # That column is a copy of the session's start, so every row of a session has the same value and
+    # the rule still means exactly "one row per session, participant and seq".
     __table_args__ = (
-        UniqueConstraint("session_id", "participant_ref", "seq",
+        UniqueConstraint("session_id", "participant_ref", "seq", "session_started_at_ms",
                          name="uq_score_events_session_participant_seq"),
     )
     id: Mapped[int] = mapped_column(BigIntId, primary_key=True, autoincrement=True)
@@ -134,6 +138,8 @@ class ScoreEvent(Base):
     signature: Mapped[str] = mapped_column(String(100))
     outcome: Mapped[str] = mapped_column(String(16))
     received_at_ms: Mapped[int] = mapped_column(BigInteger)
+    # Copy of the session's started_at_ms. The partition key: never changes, set by the server.
+    session_started_at_ms: Mapped[int] = mapped_column(BigInteger)
 
 
 class CoverageGap(Base):

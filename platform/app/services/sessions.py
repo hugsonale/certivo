@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -61,6 +61,37 @@ def start_session(db: Session, partner: Partner, req: SessionStartIn, now: int, 
     return session, token
 
 
+def _of_session(session: ContinuousSession):
+    """Every score-event query names the session AND the day it started. The second condition is
+    the partition key, so Postgres reads one daily partition instead of all of them."""
+    return (ScoreEvent.session_id == session.id,
+            ScoreEvent.session_started_at_ms == session.started_at_ms)
+
+
+def event_lookup_stmt(session: ContinuousSession, participant_ref: str, seq: int):
+    return select(ScoreEvent).where(*_of_session(session), ScoreEvent.participant_ref == participant_ref,
+                                    ScoreEvent.seq == seq)
+
+
+def recent_events_stmt(session: ContinuousSession, participant_ref: str, limit: int):
+    return (select(ScoreEvent).where(*_of_session(session), ScoreEvent.participant_ref == participant_ref)
+            .order_by(ScoreEvent.seq.desc()).limit(limit))
+
+
+def session_events_stmt(session: ContinuousSession):
+    return (select(ScoreEvent).where(*_of_session(session))
+            .order_by(ScoreEvent.participant_ref, ScoreEvent.seq))
+
+
+def participant_refs_stmt(session: ContinuousSession):
+    return select(ScoreEvent.participant_ref).where(*_of_session(session)).distinct()
+
+
+def event_count_stmt(session: ContinuousSession, participant_ref: str):
+    return select(func.count()).select_from(ScoreEvent).where(
+        *_of_session(session), ScoreEvent.participant_ref == participant_ref)
+
+
 def _outcome_out(event: ScoreEvent, duplicate: bool) -> ScoreEventOut:
     return ScoreEventOut(accepted=True, seq=event.seq,
                          current_policy_outcome=event.outcome, duplicate=duplicate)
@@ -107,16 +138,13 @@ def _ingest(db: Session, settings: Settings, session: ContinuousSession, req: Sc
 
     # 3. Idempotency / ordering per participant.
     ref = req.participant_reference
-    existing = db.scalar(select(ScoreEvent).where(
-        ScoreEvent.session_id == session.id, ScoreEvent.participant_ref == ref,
-        ScoreEvent.seq == req.seq))
+    existing = db.scalar(event_lookup_stmt(session, ref, req.seq))
     if existing:
         if existing.signature == req.device_signature:
             return _outcome_out(existing, duplicate=True), existing, None
         raise ApiError(409, "seq_conflict", "A different packet already used this seq")
-    recent = list(db.scalars(select(ScoreEvent).where(
-        ScoreEvent.session_id == session.id, ScoreEvent.participant_ref == ref)
-        .order_by(ScoreEvent.seq.desc()).limit(max(session.policy_config["drop_consecutive"], 1))))
+    recent = list(db.scalars(recent_events_stmt(
+        session, ref, max(session.policy_config["drop_consecutive"], 1))))
     last = recent[0] if recent else None
     if last and req.seq < last.seq:
         raise ApiError(409, "seq_out_of_order", "seq must increase per participant")
@@ -135,7 +163,7 @@ def _ingest(db: Session, settings: Settings, session: ContinuousSession, req: Sc
         interval_start_ms=req.interval_start_ms, interval_end_ms=req.interval_end_ms,
         confidence_milli=req.confidence_milli, model_version=req.model_version,
         explanation=req.explanation.model_dump(), signature=req.device_signature,
-        outcome=outcome, received_at_ms=now,
+        outcome=outcome, received_at_ms=now, session_started_at_ms=session.started_at_ms,
     )
     db.add(event)
     if outcome == "reject" and (last is None or last.outcome != "reject"):
@@ -267,8 +295,7 @@ def end_session(db: Session, signer: Signer, session: ContinuousSession, now: in
     _close_open_gap(db, session, now)
     session.status = "ended"
     session.ended_at_ms = now
-    events = list(db.scalars(select(ScoreEvent).where(ScoreEvent.session_id == session.id)
-                             .order_by(ScoreEvent.participant_ref, ScoreEvent.seq)))
+    events = list(db.scalars(session_events_stmt(session)))
     gaps = list(db.scalars(select(CoverageGap).where(CoverageGap.session_id == session.id)
                            .order_by(CoverageGap.start_ms)))
 
@@ -331,21 +358,19 @@ def end_session(db: Session, signer: Signer, session: ContinuousSession, now: in
 
 
 def session_status(db: Session, session: ContinuousSession) -> dict:
-    refs = list(db.scalars(select(ScoreEvent.participant_ref)
-                           .where(ScoreEvent.session_id == session.id).distinct()))
+    refs = list(db.scalars(participant_refs_stmt(session)))
     participants = []
     for ref in sorted(refs):
-        evs = list(db.scalars(select(ScoreEvent).where(
-            ScoreEvent.session_id == session.id, ScoreEvent.participant_ref == ref)
-            .order_by(ScoreEvent.seq.desc())))
-        latest = evs[0]
+        # Partners poll this endpoint, so read the newest row and a count, not every row.
+        latest = db.scalar(recent_events_stmt(session, ref, 1))
+        accepted = db.scalar(event_count_stmt(session, ref))
         participants.append({
             "participant_reference": ref,
             "confidence_milli": latest.confidence_milli,
             "outcome": latest.outcome,
             "explanation": latest.explanation,
             "last_seq": latest.seq,
-            "events_accepted": len(evs),
+            "events_accepted": accepted,
         })
     return {"session_id": session.id, "session_status": session.status,
             "participants": participants}
