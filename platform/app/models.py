@@ -225,9 +225,32 @@ class WebhookAttempt(Base):
 
 
 class SessionAttestation(Base):
+    """The record of a finished call. It is created the moment the call ends. If the signer cannot be
+    reached it waits here as `pending`, with its payload frozen, until it can be signed (ADR 0016)."""
+
     __tablename__ = "session_attestations"
+    __table_args__ = (Index("ix_session_attestations_status_next", "status", "next_attempt_at_ms"),)
     session_id: Mapped[str] = mapped_column(
         ForeignKey("continuous_sessions.id"), primary_key=True
     )
-    attestation: Mapped[dict] = mapped_column(JSONType)  # {payload, signature, key_id, alg}
+    attestation: Mapped[dict | None] = mapped_column(JSONType, nullable=True)  # {payload, signature, key_id, alg}
     issued_at_ms: Mapped[int] = mapped_column(BigInteger)
+    status: Mapped[str] = mapped_column(String(16), default="signed", server_default="signed")  # signed|pending
+    payload: Mapped[dict | None] = mapped_column(JSONType, nullable=True)  # unsigned, kept while pending
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    next_attempt_at_ms: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    last_error: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    signed_at_ms: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+
+class AttestationKey(Base):
+    """Every public key the platform has ever signed with. Rows are never deleted: an attestation
+    must verify for as long as it exists, long after its key was retired."""
+
+    __tablename__ = "attestation_keys"
+    key_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    alg: Mapped[str] = mapped_column(String(16), default="Ed25519")
+    public_key: Mapped[str] = mapped_column(String(64))  # base64url of the raw 32 bytes
+    status: Mapped[str] = mapped_column(String(16))  # active | retired
+    created_at_ms: Mapped[int] = mapped_column(BigInteger)
+    retired_at_ms: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

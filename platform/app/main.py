@@ -16,6 +16,7 @@ from app.hardening import (
     PathScopedCORS,
     RequestContextMiddleware,
 )
+from app.keyregistry import register_signing_key
 from app.ratelimit import RateLimiter
 from app.routers import api_keys, devices, meta, sessions, webhooks
 from app.secretbox import load_secretbox
@@ -49,6 +50,7 @@ def create_app(settings: Settings | None = None, clock: Callable[[], int] | None
     with app.state.session_factory() as db:
         ensure_default_policy(db)
         db.commit()
+        register_signing_key(db, app.state.signer, app.state.clock())
 
     install_error_handling(app)
     app.include_router(meta.router)

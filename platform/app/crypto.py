@@ -11,6 +11,7 @@ SDK can reproduce the exact same bytes without a JSON-canonicalization library:
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import re
 from typing import Any
@@ -24,6 +25,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 
 SCORE_DOMAIN = b"certivo.score.v1\n"
 ATTESTATION_DOMAIN = b"certivo.attestation.v1\n"
+ATTESTATION_DOMAIN_V2 = b"certivo.attestation.v2\n"
 
 _KEY_RE = re.compile(r"^[a-z0-9_]{1,64}$")
 _MAX_INT = 2**53 - 1
@@ -74,8 +76,31 @@ def public_key_b64u(private_key: Ed25519PrivateKey) -> str:
     return b64u_encode(raw)
 
 
+def attestation_message(payload: dict) -> bytes:
+    """Exactly the bytes an attestation signature covers.
+
+    v1 (Phase 0): the domain plus the whole canonical payload.
+    v2: the domain plus the SHA-256 of the canonical payload. The signer is sent 55 bytes however
+    large the attestation grows, which every managed key service accepts (AWS KMS, for one, signs at
+    most 4096 bytes per call). The partner checks it the same way: hash the canonical payload, then
+    verify an ordinary Ed25519 signature. The payload's own `v` says which form was used.
+    """
+    if payload.get("v") == 1:
+        return ATTESTATION_DOMAIN + canonical_json(payload)
+    return ATTESTATION_DOMAIN_V2 + hashlib.sha256(canonical_json(payload)).digest()
+
+
 def sign_message(private_key: Ed25519PrivateKey, domain: bytes, value: Any) -> str:
     return b64u_encode(private_key.sign(domain + canonical_json(value)))
+
+
+def verify_raw(public_key: str, message: bytes, signature: str) -> bool:
+    try:
+        Ed25519PublicKey.from_public_bytes(b64u_decode(public_key)).verify(
+            b64u_decode(signature), message)
+        return True
+    except (InvalidSignature, ValueError):
+        return False
 
 
 def verify_message(public_key: str, domain: bytes, value: Any, signature: str) -> bool:

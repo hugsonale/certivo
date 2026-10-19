@@ -1,10 +1,19 @@
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.attestation import MAX_GAPS_LISTED, Signer, config_sha256
+from app.attestation import (
+    ATTESTATION_VERSION,
+    MAX_GAPS_LISTED,
+    Signer,
+    config_sha256,
+    history_digest,
+    history_root,
+)
 from app.config import Settings
 from app.crypto import SCORE_DOMAIN, CanonicalizationError, verify_message
 from app.errors import ApiError
@@ -29,6 +38,9 @@ from app.schemas import (
     SessionStartIn,
 )
 from app.security import new_sdk_token, sha256_hex
+from app.signing import SignerUnavailable
+
+log = logging.getLogger("certivo.sessions")
 
 
 def _emit(db: Session, partner_id: str, event_type: str, payload: dict, now: int) -> None:
@@ -287,10 +299,51 @@ def resume_session(db: Session, session: ContinuousSession, now: int) -> None:
         db.commit()
 
 
-def end_session(db: Session, signer: Signer, session: ContinuousSession, now: int) -> dict:
-    stored = db.get(SessionAttestation, session.id)
-    if session.status == "ended" and stored:
-        return stored.attestation
+def retry_delay_ms(attempts: int, max_wait_s: int) -> int:
+    """Wait before signing attempt number `attempts + 1`: 5 s, 10 s, 20 s... never more than the cap."""
+    return min(5 * 2 ** max(attempts - 1, 0), max_wait_s) * 1000
+
+
+def _try_to_sign(rec: SessionAttestation, signer: Signer, now: int, max_wait_s: int) -> bool:
+    """Sign a pending record. On success it becomes `signed`. If the signer is unreachable it stays
+    queued, with the next attempt scheduled. Returns True if it was signed."""
+    try:
+        rec.attestation = signer.sign_attestation(rec.payload)
+    except SignerUnavailable as exc:
+        rec.attempts += 1
+        rec.next_attempt_at_ms = now + retry_delay_ms(rec.attempts, max_wait_s)
+        rec.last_error = str(exc)[:200]
+        log.error("Attestation for %s is queued (attempt %d): %s", rec.session_id, rec.attempts, exc)
+        return False
+    rec.status, rec.signed_at_ms = "signed", now
+    rec.payload, rec.next_attempt_at_ms, rec.last_error = None, None, None
+    return True
+
+
+def sign_pending(db: Session, signer: Signer, settings: Settings, now: int, limit: int = 100) -> dict:
+    """Sign the attestations that were queued while the signer was unreachable. Stops at the first
+    failure, because if the signer is down every later attempt would fail too."""
+    due = list(db.scalars(select(SessionAttestation).where(
+        SessionAttestation.status == "pending", SessionAttestation.next_attempt_at_ms <= now)
+        .order_by(SessionAttestation.next_attempt_at_ms).limit(limit)))
+    signed = 0
+    for rec in due:
+        if not _try_to_sign(rec, signer, now, settings.attestation_retry_max_wait_s):
+            break
+        signed += 1
+    db.commit()
+    waiting = db.scalar(select(func.count()).select_from(SessionAttestation)
+                        .where(SessionAttestation.status == "pending")) or 0
+    return {"signed": signed, "still_pending": waiting}
+
+
+def end_session(db: Session, signer: Signer, settings: Settings, session: ContinuousSession,
+                now: int) -> SessionAttestation:
+    """End the call and produce its record. The record always exists once this returns: if the signer
+    is unreachable the attestation is queued with its payload frozen and signed later (SDD 7.2)."""
+    rec = db.get(SessionAttestation, session.id)
+    if session.status == "ended" and rec:
+        return rec
 
     _close_open_gap(db, session, now)
     session.status = "ended"
@@ -302,15 +355,18 @@ def end_session(db: Session, signer: Signer, session: ContinuousSession, now: in
     by_ref: dict[str, list[ScoreEvent]] = {}
     for e in events:
         by_ref.setdefault(e.participant_ref, []).append(e)
-    participants = []
+    participants, digests = [], {}
     for ref in sorted(by_ref):
         evs = by_ref[ref]
         drops, prev = 0, None
+        counts = {"accept": 0, "fallback": 0, "reject": 0}
         for e in evs:
             if e.outcome == "reject" and prev != "reject":
                 drops += 1
             prev = e.outcome
+            counts[e.outcome] = counts.get(e.outcome, 0) + 1
         confs = [e.confidence_milli for e in evs]
+        digests[ref] = history_digest(evs)
         participants.append({
             "participant_reference": ref,
             "events_accepted": len(evs),
@@ -319,6 +375,8 @@ def end_session(db: Session, signer: Signer, session: ContinuousSession, now: in
             "mean_confidence_milli": sum(confs) // len(confs),
             "final_outcome": evs[-1].outcome,
             "reject_transitions": drops,
+            "outcome_counts": counts,
+            "history_sha256": digests[ref],
         })
 
     duration = max(now - session.started_at_ms, 0)
@@ -335,7 +393,7 @@ def end_session(db: Session, signer: Signer, session: ContinuousSession, now: in
         "gaps_truncated": 1 if len(gaps) > MAX_GAPS_LISTED else 0,
     }
     payload = {
-        "v": 1,
+        "v": ATTESTATION_VERSION,
         "type": "certivo_session_attestation",
         "session_id": session.id,
         "partner_id": session.partner_id,
@@ -348,13 +406,18 @@ def end_session(db: Session, signer: Signer, session: ContinuousSession, now: in
                    "config_sha256": config_sha256(session.policy_config)},
         "participants": participants,
         "coverage": coverage,
+        # The whole scored history, as one fingerprint (FR-4.1 extended). See history_digest.
+        "history": {"events_total": len(events), "root_sha256": history_root(digests)},
     }
     if session.call_session_reference:
         payload["call_session_reference"] = session.call_session_reference
-    attestation = signer.sign_attestation(payload)
-    db.add(SessionAttestation(session_id=session.id, attestation=attestation, issued_at_ms=now))
+
+    rec = SessionAttestation(session_id=session.id, status="pending", payload=payload, issued_at_ms=now,
+                             attempts=0, next_attempt_at_ms=now)
+    db.add(rec)
+    _try_to_sign(rec, signer, now, settings.attestation_retry_max_wait_s)
     db.commit()
-    return attestation
+    return rec
 
 
 def session_status(db: Session, session: ContinuousSession) -> dict:
