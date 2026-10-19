@@ -40,7 +40,9 @@ Keys carry scopes, tokens expire, and requests are rate limited and size limited
 | `POST /internal/v1/sessions/continuous/{id}/score-events/batch` | SDK | Upload packets the SDK buffered during an outage (P0-08). Body `{packets: [1 to 25 packets, oldest first]}`. Each packet is checked on its own; returns `results[]` (`index`, `accepted`, `seq`, `current_policy_outcome`, `duplicate`, or `error {code, message}`) and counts. Re-sending a batch is safe. Late or missing packets are disclosed as coverage gaps (section 8). |
 | `POST /internal/v1/sessions/continuous/{id}/pause` | SDK | Declare verification unavailable. Body `{reason}`: `connectivity` \| `sdk_error` \| `model_unavailable` \| `other`. Opens a coverage gap. 204. |
 | `POST /internal/v1/sessions/continuous/{id}/resume` | SDK | Close the gap. 204. |
-| `POST /v1/sessions/continuous/{id}/end` | partner | End. Returns the signed attestation and `coverage_summary`. Idempotent. |
+| `POST /v1/sessions/continuous/{id}/end` | partner | End. Returns the signed attestation and `coverage_summary` (200). If the signing service is unreachable the call still ends and the attestation is queued: 202 with `attestation_status: "pending"`, the `coverage_summary`, and `retry_after_s`. Idempotent. |
+| `POST /v1/policies`, `GET /v1/policies`, `GET /v1/policies/{id}` | partner | Create the next immutable version of your policy for a use case; list yours and the built-in default; fetch one. See `docs/spec/base/03-policy-engine.md`. |
+| `GET /v1/sessions/continuous/{id}/attestation` | partner | The attestation: 200 when signed, 202 while queued, 409 `attestation_not_ready` if the call has not ended. |
 | `GET /v1/sessions/continuous/{id}/status` | partner | Latest confidence, outcome and explanation per participant, plus `session_status`. |
 | `GET /.well-known/certivo-keys` | none | Public attestation verification keys. |
 | `GET /healthz` | none | Liveness. |
@@ -176,12 +178,23 @@ Returned by `end` and stored. Shape: `{payload, signature, key_id, alg: "Ed25519
 `session_id`, `partner_id`, `use_case`, optional `call_session_reference`, `started_at_ms`,
 `ended_at_ms`, `issued_at_ms`, `key_id`, `policy {policy_id, version, config_sha256}`,
 `participants[] {participant_reference, events_accepted, missed_intervals,
-min_confidence_milli, mean_confidence_milli, final_outcome, reject_transitions}`,
+min_confidence_milli, mean_confidence_milli, final_outcome, reject_transitions, outcome_counts
+{accept, fallback, reject}, history_sha256}`, `history {events_total, root_sha256}`,
 `coverage {session_duration_ms, paused_ms, gap_count, coverage_milli, participants_declared,
 participants_observed, gaps[], gaps_truncated}`.
 
-**Verification (what a partner does):** fetch `/.well-known/certivo-keys`, pick the key with
-`key_id`, then check Ed25519 over `b"certivo.attestation.v1\n" + canonical_json(payload)`.
+**Verification (what a partner does):** fetch `/.well-known/certivo-keys` (it lists every key ever used, retired
+ones included), pick the key with `key_id`, then check Ed25519 over the message the payload's `v` names:
+`v` 2 (current): `b"certivo.attestation.v2\n" + sha256(canonical_json(payload))` (the raw 32-byte digest).
+`v` 1 (Phase 0, still valid): `b"certivo.attestation.v1\n" + canonical_json(payload)`.
+v2 signs a short fingerprint because managed key services limit the size of what they will sign.
+
+**Full session history (FR-4.1 extended).** The payload commits to every scored interval without containing
+it: `participants[].history_sha256` is the SHA-256 of the canonical list of `[seq, interval_start_ms,
+interval_end_ms, confidence_milli, outcome, device_signature]` for that participant in `seq` order, and
+`history.root_sha256` is the SHA-256 of the canonical list of `[participant_reference, history_sha256]` sorted
+by reference. The per-interval rows are deleted earlier than the attestation (ADR 0015); the fingerprint
+lets anyone who still holds the signed packets prove the attestation covers exactly them.
 Gaps are always disclosed in `coverage`; a session with no gaps says so explicitly
 (`gap_count: 0`), it is never omitted.
 
@@ -189,9 +202,14 @@ Gaps are always disclosed in `coverage`; a session with no gaps says so explicit
 
 **Gap reasons and what `paused_ms` means.** `paused_ms` is the time in the session with no live verification. A gap's `reason` is one of: `connectivity`, `sdk_error`, `model_unavailable`, `other` (the SDK paused), `delayed_upload` (scores arrived, but long after the moment they describe, so the partner had no live signal meanwhile) or `missing_packets` (scores for that time never arrived). Overlapping gaps are counted once. The cut-off for "long after" is `CERTIVO_GAP_DISCLOSURE_THRESHOLD_MS` (placeholder, ADR 0014).
 
-**Key handling:** the platform signing seed is read from `CERTIVO_ATTESTATION_SIGNING_KEY`. In
-`prod` the service refuses to start without it; in dev it makes an ephemeral key and warns.
-Rotation = new `key_id` + keep old public keys published (not built yet).
+**Key handling (ADR 0016).** Signing goes through a `SigningBackend` interface (`app/signing.py`). In `prod`
+the key lives in a managed key service (`CERTIVO_ATTESTATION_SIGNER=aws_kms`, with
+`CERTIVO_ATTESTATION_KMS_KEY_ID`) and the service **refuses to start** if a private key is given in its
+environment. In dev, `CERTIVO_ATTESTATION_SIGNING_KEY` (or an ephemeral key, with a warning) is allowed. Every
+key ever used stays published with `status` `active` or `retired`; a `key_id` is never reused for a different
+key, and the service refuses to start if that is attempted. **If the signer is unreachable when a call ends,**
+the attestation is queued with its payload frozen and retried (5 s, 10 s, 20 s ... at most
+`CERTIVO_ATTESTATION_RETRY_MAX_WAIT_S`, never abandoned) until it is signed. Rotation steps: `docs/engineering/KEY_ROTATION.md`.
 
 ## 9. Security model and what Phase 0 does **not** prove
 

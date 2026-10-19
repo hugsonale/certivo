@@ -206,8 +206,8 @@ def test_migration_0004_keeps_score_events_and_their_ids(scratch_url):
             conn.execute(sa.text(
                 "INSERT INTO continuous_score_events (session_id, participant_ref, seq, device_id, "
                 "interval_start_ms, interval_end_ms, confidence_milli, model_version, explanation, "
-                "signature, outcome, received_at_ms, session_started_at_ms) VALUES "
-                f"('cs', 'alice', 3, 'dev', 1, 2, 900, 'm', '{{}}', 's', 'accept', {started}, {started})"))
+                "signature, outcome, received_at_ms, session_started_at_ms, effective_confidence_milli) "
+                f"VALUES ('cs', 'alice', 3, 'dev', 1, 2, 900, 'm', '{{}}', 's', 'accept', {started}, {started}, 900)"))
         with engine.connect() as conn:
             assert conn.execute(sa.text("SELECT MAX(id) FROM continuous_score_events")).scalar() == 13
             if engine.dialect.name == "postgresql":
@@ -222,5 +222,89 @@ def test_migration_0004_keeps_score_events_and_their_ids(scratch_url):
         with engine.connect() as conn:
             assert conn.execute(sa.text("SELECT COUNT(*) FROM continuous_score_events")).scalar() == 4
             assert conn.execute(sa.text("SELECT MAX(id) FROM continuous_score_events")).scalar() == 13
+    finally:
+        engine.dispose()
+
+
+def test_migration_0005_keeps_existing_attestations_and_protects_queued_ones(scratch_url):
+    """Attestations that already exist count as signed and are untouched. Going back is refused while
+    a finished call is still waiting to be signed, because it would be lost."""
+    import json
+
+    import sqlalchemy as sa
+
+    cfg = alembic_config(scratch_url)
+    command.upgrade(cfg, "0004")
+    engine = create_engine(scratch_url)
+    stored = {"payload": {"v": 1, "session_id": "cs"}, "signature": "sig", "key_id": "att-old", "alg": "Ed25519"}
+    try:
+        with engine.begin() as conn:
+            conn.execute(sa.text("INSERT INTO partners (id, name, created_at_ms) VALUES ('p', 'P', 1)"))
+            conn.execute(sa.text(
+                "INSERT INTO continuous_sessions (id, partner_id, use_case, policy_id, policy_version, "
+                "policy_config, participant_count, status, started_at_ms, sdk_token_hash, "
+                "sdk_token_expires_at_ms) VALUES ('cs', 'p', 'u', 'pol', 1, '{}', 1, 'ended', 5, 'h', 6)"))
+            conn.execute(sa.text("INSERT INTO session_attestations (session_id, attestation, issued_at_ms) "
+                                 "VALUES ('cs', :a, 77)"), {"a": json.dumps(stored)})
+        command.upgrade(cfg, "head")
+        with engine.connect() as conn:
+            row = conn.execute(sa.text(
+                "SELECT status, attempts, signed_at_ms, attestation FROM session_attestations")).one()
+            assert (row.status, row.attempts, row.signed_at_ms) == ("signed", 0, 77)
+            assert (row.attestation if isinstance(row.attestation, dict) else json.loads(row.attestation)) == stored
+        with engine.begin() as conn:  # a call that ended while the signer was down
+            conn.execute(sa.text(
+                "INSERT INTO continuous_sessions (id, partner_id, use_case, policy_id, policy_version, "
+                "policy_config, participant_count, status, started_at_ms, sdk_token_hash, "
+                "sdk_token_expires_at_ms) VALUES ('cs2', 'p', 'u', 'pol', 1, '{}', 1, 'ended', 5, 'h', 6)"))
+            conn.execute(sa.text("INSERT INTO session_attestations (session_id, issued_at_ms, status, payload) "
+                                 "VALUES ('cs2', 88, 'pending', '{}')"))
+        with pytest.raises(RuntimeError, match="still waiting to be signed"):
+            command.downgrade(cfg, "0004")
+        with engine.begin() as conn:
+            conn.execute(sa.text("DELETE FROM session_attestations WHERE session_id = 'cs2'"))
+        command.downgrade(cfg, "0004")  # nothing waiting: going back is allowed
+        with engine.connect() as conn:
+            assert conn.execute(sa.text("SELECT COUNT(*) FROM session_attestations")).scalar() == 1
+    finally:
+        engine.dispose()
+
+
+def test_migration_0006_gives_existing_score_events_an_effective_confidence_equal_to_the_reported_one(
+        scratch_url):
+    """Scores recorded before the policy engine had penalties were judged on the reported value, so their
+    effective confidence is that same value. Going back removes the column and keeps the rows."""
+    import sqlalchemy as sa
+
+    cfg = alembic_config(scratch_url)
+    command.upgrade(cfg, "0005")
+    engine = create_engine(scratch_url)
+    started = 1_760_000_000_000
+    try:
+        with engine.begin() as conn:
+            conn.execute(sa.text("INSERT INTO partners (id, name, created_at_ms) VALUES ('p', 'P', 1)"))
+            conn.execute(sa.text(
+                "INSERT INTO continuous_sessions (id, partner_id, use_case, policy_id, policy_version, "
+                "policy_config, participant_count, status, started_at_ms, sdk_token_hash, "
+                "sdk_token_expires_at_ms) VALUES ('cs', 'p', 'u', 'pol', 1, '{}', 1, 'active', "
+                f"{started}, 'h', {started + 1})"))
+            for seq, conf in enumerate((912, 455, 80)):
+                conn.execute(sa.text(
+                    "INSERT INTO continuous_score_events (session_id, participant_ref, seq, device_id, "
+                    "interval_start_ms, interval_end_ms, confidence_milli, model_version, explanation, "
+                    "signature, outcome, received_at_ms, session_started_at_ms) VALUES "
+                    f"('cs', 'alice', {seq}, 'dev', 1, 2, {conf}, 'm', '{{}}', 's', 'accept', {started}, {started})"))
+        command.upgrade(cfg, "head")
+        with engine.connect() as conn:
+            rows = conn.execute(sa.text(
+                "SELECT confidence_milli, effective_confidence_milli FROM continuous_score_events "
+                "ORDER BY seq")).all()
+            assert [tuple(r) for r in rows] == [(912, 912), (455, 455), (80, 80)]
+        command.downgrade(cfg, "0005")
+        with engine.connect() as conn:
+            assert conn.execute(sa.text("SELECT COUNT(*) FROM continuous_score_events")).scalar() == 3
+            columns = {c["name"] for c in sa.inspect(conn).get_columns("continuous_score_events")}
+            assert "effective_confidence_milli" not in columns
+        command.upgrade(cfg, "head")  # and forward again
     finally:
         engine.dispose()

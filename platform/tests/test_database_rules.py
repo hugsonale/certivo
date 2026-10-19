@@ -54,7 +54,7 @@ def test_policy_config_survives_a_database_round_trip(app):
 def test_database_rejects_a_duplicate_score_event_sequence(app, device, session):
     sess, _ = session
     row = dict(session_id=sess["id"], participant_ref="alice", seq=7, device_id=device[1],
-               interval_start_ms=1, interval_end_ms=2, confidence_milli=900,
+               interval_start_ms=1, interval_end_ms=2, confidence_milli=900, effective_confidence_milli=900,
                model_version="m", explanation={"reason_codes": ["a"], "signal_milli": {}},
                signature="s", outcome="accept", received_at_ms=3, session_started_at_ms=4)
     with app.state.session_factory() as db:

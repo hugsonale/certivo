@@ -70,6 +70,7 @@ Rules:
 | `policy_not_found` | 404 | Implemented | No policy configured for the requested use case | No |
 | `device_not_found` | 404 | Implemented | No such device for this partner | No |
 | `session_not_active` | 409 | Implemented | The session has already ended | No |
+| `attestation_not_ready` | 409 | Implemented | The session has not ended, so it has no attestation yet | Yes, after the call ends |
 | `seq_conflict` | 409 | Implemented | A different packet already used this `seq` | No |
 | `seq_out_of_order` | 409 | Implemented | `seq` is lower than one already accepted for that participant | No |
 | `non_monotonic_interval` | 409 | Implemented | `interval_end_ms` went backwards for that participant | No |
@@ -92,7 +93,9 @@ Rules:
 | `rate_limited` | 429 | Implemented | Too many requests; obey `Retry-After` | Yes, after the delay |
 | `payload_too_large` | 413 | Implemented | Body exceeds the size limit | No |
 | `service_unavailable` | 503 | Planned (P0-13) | Temporarily cannot serve (for example database down) | Yes, with backoff |
-| `policy_invalid` | 422 | Planned (P0-11) | A submitted policy breaks the rules in document 03 | No |
+| `policy_invalid` | 422 | Implemented | A submitted policy breaks the rules in document 03; `details` lists each problem | No |
+| `policy_version_conflict` | 409 | Implemented | Two policies were created at the same moment | Yes |
+| `model_version_unsupported` | 422 | Implemented | The session's policy does not accept scores from this model version | No, until the SDK is updated |
 | `consent_required` | 409 | Planned (P0-51) | No current granted consent for this participant (document 04) | After consent is recorded |
 | `peers_not_permitted` | 403 | Planned (P1-10) | The session's policy does not let participants see each other's status | No |
 | `webhook_url_invalid` | 422 | Implemented | Webhook URL is not allowed (document 05) | No |
