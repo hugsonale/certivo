@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from typing import Literal
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -14,8 +15,15 @@ class Settings(BaseSettings):
 
     env: str = "dev"
     database_url: str = "sqlite:///./certivo_dev.db"
-    attestation_signing_key: str | None = None  # base64url, 32-byte Ed25519 seed
-    attestation_key_id: str = "att-dev-1"
+    attestation_signing_key: str | None = None  # base64url, 32-byte Ed25519 seed. DEV AND TESTS ONLY
+    attestation_key_id: str = "att-dev-1"  # the name partners see; never reuse one for a different key
+    # Where the private key lives. "local" holds it in this process (dev/tests); "aws_kms" keeps it
+    # in AWS KMS, where it never leaves. Production must use a managed key service (ADR 0016).
+    attestation_signer: Literal["local", "aws_kms"] = "local"
+    attestation_kms_key_id: str | None = None  # the KMS key ARN or alias, when signer is aws_kms
+    attestation_kms_region: str | None = None
+    # A signing request that failed is retried with growing waits, never longer than this (SDD 7.2).
+    attestation_retry_max_wait_s: int = 60
     max_clock_skew_ms: int = 30_000
     max_interval_ms: int = 60_000
     # Only honoured when env == "dev": the app then runs `alembic upgrade head` at startup.
@@ -114,10 +122,21 @@ class Settings(BaseSettings):
         positive = ("sdk_token_ttl_seconds", "rate_limit_key_per_minute", "max_body_bytes",
                     "rate_limit_session_per_minute", "rate_limit_auth_failures_per_minute",
                     "db_statement_timeout_ms", "max_api_keys_per_partner",
-                    "gap_disclosure_threshold_ms", "partition_days_ahead")
+                    "gap_disclosure_threshold_ms", "partition_days_ahead",
+                    "attestation_retry_max_wait_s")
         for name in positive:
             if getattr(self, name) < 1:
                 raise ValueError(f"{name} must be at least 1")
+        if self.attestation_signer == "aws_kms" and not self.attestation_kms_key_id:
+            raise ValueError("CERTIVO_ATTESTATION_KMS_KEY_ID is required when the signer is aws_kms")
+        if self.env == "prod":
+            if self.attestation_signing_key:
+                raise ValueError(
+                    "CERTIVO_ATTESTATION_SIGNING_KEY must not be set in production: signing keys "
+                    "come from a managed key service, never from environment files (ADR 0016)")
+            if self.attestation_signer == "local":
+                raise ValueError("Production needs CERTIVO_ATTESTATION_SIGNER=aws_kms: the signing "
+                                 "key must live in a managed key service (ADR 0016)")
         for name in ("score_event_retention_days", "attestation_retention_days"):
             value = getattr(self, name)
             if value is not None and value < 1:

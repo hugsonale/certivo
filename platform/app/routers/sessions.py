@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.errors import ApiError
-from app.models import ContinuousSession, Partner
+from app.models import ContinuousSession, Partner, SessionAttestation
 from app.schemas import (
     PauseIn,
     ScoreBatchIn,
@@ -79,9 +80,33 @@ def end(session_id: str, request: Request,
         ctx: AuthContext = Depends(require_scope("sessions:write")),
         db: Session = Depends(get_db)):
     session = _partner_session(db, ctx.partner, session_id)
-    attestation = svc.end_session(db, request.app.state.signer, session, _now(request))
-    return {"id": session.id, "status": "ended", "attestation": attestation,
-            "coverage_summary": attestation["payload"]["coverage"]}
+    rec = svc.end_session(db, request.app.state.signer, request.app.state.settings, session,
+                          _now(request))
+    return _attestation_response(session, rec, request.app.state.settings)
+
+
+def _attestation_response(session: ContinuousSession, rec, settings):
+    """200 with the signed attestation, or 202 if the signer is unreachable and it is queued. In both
+    cases the call has ended and its record exists; the coverage summary is always included."""
+    if rec.status == "signed":
+        return {"id": session.id, "status": "ended", "attestation_status": "signed",
+                "attestation": rec.attestation, "coverage_summary": rec.attestation["payload"]["coverage"]}
+    return JSONResponse(status_code=202, content={
+        "id": session.id, "status": "ended", "attestation_status": "pending", "attestation": None,
+        "coverage_summary": rec.payload["coverage"],
+        "retry_after_s": settings.attestation_retry_max_wait_s})
+
+
+@router.get("/v1/sessions/continuous/{session_id}/attestation")
+def get_attestation(session_id: str, request: Request,
+                    ctx: AuthContext = Depends(require_scope("sessions:read")),
+                    db: Session = Depends(get_db)):
+    """The signed attestation for a finished call. 202 while it is still waiting to be signed."""
+    session = _partner_session(db, ctx.partner, session_id)
+    rec = db.get(SessionAttestation, session.id)
+    if rec is None:
+        raise ApiError(409, "attestation_not_ready", "The session has not ended, so it has no attestation yet")
+    return _attestation_response(session, rec, request.app.state.settings)
 
 
 @router.get("/v1/sessions/continuous/{session_id}/status")

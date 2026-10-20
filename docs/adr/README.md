@@ -23,3 +23,5 @@ An ADR is a short note recording one significant decision: what we faced, what w
 | [0013](0013-webhook-delivery-design.md) | Webhook delivery design | Accepted; two extra events Proposed |
 | [0014](0014-buffered-upload-and-gap-disclosure.md) | Buffered upload and honest gap disclosure | Proposed |
 | [0015](0015-daily-partitions-and-retention.md) | Daily partitions of the score-events table, and retention | Proposed |
+| [0016](0016-attestation-signing-hardening.md) | Attestation signing hardening: signer boundary, key rotation, queued signing | Proposed |
+| [0017](0017-policy-engine-v1.md) | Policy engine v1: partner policies, tier and model weighting, the fallback path | Proposed |

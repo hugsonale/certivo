@@ -1,61 +1,81 @@
-"""Platform signer + session-length attestation (BUILD_SPEC_0 section 8)."""
+"""The platform signer and session-length attestations (BUILD_SPEC_0 section 8, ADR 0016)."""
 from __future__ import annotations
 
 import hashlib
 import logging
-from dataclasses import dataclass
-
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from collections.abc import Iterable
 
 from app.config import Settings
-from app.crypto import (
-    ATTESTATION_DOMAIN,
-    b64u_decode,
-    canonical_json,
-    public_key_b64u,
-    sign_message,
-    verify_message,
-)
+from app.crypto import attestation_message, b64u_encode, canonical_json, verify_raw
+from app.signing import LocalKeyBackend, SigningBackend, build_backend
 
 log = logging.getLogger("certivo.attestation")
 MAX_GAPS_LISTED = 100
+ATTESTATION_VERSION = 2
 
 
-@dataclass
 class Signer:
-    private_key: Ed25519PrivateKey
-    key_id: str
+    """What the rest of the platform holds: ask it to sign an attestation payload. It knows nothing
+    about where the private key lives; that is the backend's business."""
+
+    def __init__(self, backend: SigningBackend):
+        self._backend = backend
+
+    @property
+    def key_id(self) -> str:
+        return self._backend.key_id
 
     @property
     def public_key(self) -> str:
-        return public_key_b64u(self.private_key)
+        return b64u_encode(self._backend.public_key())
 
     def sign_attestation(self, payload: dict) -> dict:
-        return {
-            "payload": payload,
-            "signature": sign_message(self.private_key, ATTESTATION_DOMAIN, payload),
-            "key_id": self.key_id,
-            "alg": "Ed25519",
-        }
+        # The payload always names the key that really signed it, even if the signing was queued
+        # and the key was rotated in the meantime.
+        payload = {**payload, "key_id": self.key_id}
+        signature = self._backend.sign(attestation_message(payload))
+        return {"payload": payload, "signature": b64u_encode(signature),
+                "key_id": self.key_id, "alg": "Ed25519"}
 
 
 def load_signer(settings: Settings) -> Signer:
-    if settings.attestation_signing_key:
-        key = Ed25519PrivateKey.from_private_bytes(b64u_decode(settings.attestation_signing_key))
-    elif settings.env == "prod":
-        raise RuntimeError("CERTIVO_ATTESTATION_SIGNING_KEY is required when CERTIVO_ENV=prod")
-    else:
-        log.warning("No signing key configured: using an EPHEMERAL key (dev only). "
-                    "Attestations will not verify after a restart.")
-        key = Ed25519PrivateKey.generate()
-    return Signer(key, settings.attestation_key_id)
+    backend = build_backend(settings)
+    if settings.env == "prod" and isinstance(backend, LocalKeyBackend):
+        raise RuntimeError("Production must sign with a managed key service, never a key held by "
+                           "the application (CERTIVO_ATTESTATION_SIGNER=aws_kms).")
+    return Signer(backend)
 
 
 def config_sha256(config: dict) -> str:
     return hashlib.sha256(canonical_json(config)).hexdigest()
 
 
+def history_digest(events: Iterable) -> str:
+    """SHA-256 over every scored interval of one participant, in order: seq, start, end, confidence,
+    outcome and the device's own signature on that packet. The attestation keeps this fingerprint
+    after the per-interval rows are deleted by retention: it proves, for as long as anyone holds the
+    packets, exactly which history the attestation covers, without putting any of it in the record."""
+    rows = [[e.seq, e.interval_start_ms, e.interval_end_ms, e.confidence_milli, e.outcome, e.signature]
+            for e in events]
+    return hashlib.sha256(canonical_json(rows)).hexdigest()
+
+
+def history_root(digests_by_participant: dict[str, str]) -> str:
+    return hashlib.sha256(canonical_json(
+        [[ref, digest] for ref, digest in sorted(digests_by_participant.items())])).hexdigest()
+
+
 def verify_attestation(attestation: dict, public_key: str) -> bool:
-    """What a partner does: verify signature over the domain-separated canonical payload."""
-    return verify_message(public_key, ATTESTATION_DOMAIN, attestation["payload"],
-                          attestation["signature"])
+    """What a partner does: hash and verify the signature over the attestation's canonical payload."""
+    return verify_raw(public_key, attestation_message(attestation["payload"]), attestation["signature"])
+
+
+def verify_with_published_keys(attestation: dict, published_keys: list[dict]) -> bool:
+    """Pick the key the attestation names from the published list (retired keys included) and verify."""
+    key_id = attestation.get("key_id")
+    if key_id != attestation["payload"].get("key_id"):
+        return False
+    for key in published_keys:
+        if key["key_id"] == key_id and key.get("alg", "Ed25519") == attestation.get("alg", "Ed25519"):
+            return verify_attestation(attestation, key["public_key"])
+    return False
