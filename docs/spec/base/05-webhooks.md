@@ -116,7 +116,7 @@ replaced and does nothing. Deleting an endpoint marks everything still waiting f
 
 | Event | Sent when | Data fields | Status |
 |---|---|---|---|
-| `session.confidence_dropped` | A participant enters `reject` (always), or `fallback` when the policy sets `flag_for_review` | `session_id`, `participant_reference`, `seq`, `confidence_milli`, `occurred_at_ms`; `outcome` is added in P0-11 | Implemented |
+| `session.confidence_dropped` | A participant enters `reject` (always), or `fallback` when the policy sets `flag_for_review` | `session_id`, `participant_reference`, `seq`, `confidence_milli` (as reported), `outcome` (`reject` or `fallback`), `occurred_at_ms` | Implemented |
 | `session.paused` | Verification became unavailable for a session | `session_id`, `reason`, `occurred_at_ms` | Implemented |
 | `session.resumed` | Verification came back after a pause | `session_id`, `occurred_at_ms` | Proposed |
 | `session.confidence_recovered` | A participant returned to `accept` after `reject` | `session_id`, `participant_reference`, `seq`, `occurred_at_ms` | Proposed |

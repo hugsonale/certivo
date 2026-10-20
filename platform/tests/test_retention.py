@@ -62,7 +62,7 @@ def seed(db, partner_id, sid, days_ago, status="ended", events=3):
     for seq in range(events):
         db.add(ScoreEvent(
             session_id=sid, participant_ref="alice", seq=seq, device_id="dev", interval_start_ms=started,
-            interval_end_ms=started + 1000, confidence_milli=900, model_version="m",
+            interval_end_ms=started + 1000, confidence_milli=900, effective_confidence_milli=900, model_version="m",
             explanation={"reason_codes": ["a"], "signal_milli": {}}, signature="s", outcome="accept",
             received_at_ms=started, session_started_at_ms=started))
     db.commit()
@@ -215,7 +215,7 @@ def test_the_database_still_refuses_a_duplicate_seq_in_a_partitioned_table(
         row = db.scalar(select(ScoreEvent))
         db.add(ScoreEvent(
             session_id=row.session_id, participant_ref=row.participant_ref, seq=row.seq, device_id="d",
-            interval_start_ms=1, interval_end_ms=2, confidence_milli=1, model_version="m",
+            interval_start_ms=1, interval_end_ms=2, confidence_milli=1, effective_confidence_milli=1, model_version="m",
             explanation={}, signature="other", outcome="accept", received_at_ms=1,
             session_started_at_ms=row.session_started_at_ms))
         with pytest.raises(IntegrityError):

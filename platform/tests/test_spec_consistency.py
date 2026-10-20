@@ -140,8 +140,17 @@ def test_policy_settings_match_the_code():
     rows = table("03-policy-engine.md", "Setting")
     implemented = {unticked(r["Setting"]): r["Default"] for r in rows if r["Status"].startswith("Implemented")}
     assert set(implemented) == set(DEFAULT_POLICY_CONFIG)
+    spoken = {"fallback_behavior": "indicator_only", "tier_penalty_milli": "all 0",
+              "model_penalties": "empty list", "unsupported_model_versions": "empty list"}
     for key, default_text in implemented.items():
-        assert int(default_text.split()[0]) == DEFAULT_POLICY_CONFIG[key], key
+        default = DEFAULT_POLICY_CONFIG[key]
+        if isinstance(default, int):  # the whole-number settings: the table's number is the default
+            assert int(default_text.split()[0]) == default, key
+        else:  # the others: the table says it in words, and the words must describe the real default
+            assert unticked(default_text) == spoken[key], key
+    assert DEFAULT_POLICY_CONFIG["fallback_behavior"] == "indicator_only"
+    assert set(DEFAULT_POLICY_CONFIG["tier_penalty_milli"].values()) == {0}
+    assert DEFAULT_POLICY_CONFIG["model_penalties"] == [] == DEFAULT_POLICY_CONFIG["unsupported_model_versions"]
 
 
 def test_webhook_signature_vector_and_reference_check():

@@ -34,6 +34,8 @@ celery_app.conf.update(
         "certivo-webhook-poll": {"task": "certivo.webhooks.poll",
                                  "schedule": _settings.webhook_poll_interval_s},
         # Daily, at a quiet hour: tomorrow's partitions, then retention (app/retention.py).
+        # Sign attestations that were queued while the signing service was unreachable.
+        "certivo-sign-pending-attestations": {"task": "certivo.attestation.sign_pending", "schedule": 30.0},
         "certivo-daily-maintenance": {"task": "certivo.maintenance.run",
                                       "schedule": crontab(hour=3, minute=15)},
     },
@@ -83,5 +85,21 @@ def maintenance() -> dict:
         assert_schema_current(db_engine)
         with make_session_factory(db_engine)() as db:
             return run_maintenance(db, settings, now_ms()).as_dict()
+    finally:
+        db_engine.dispose()
+
+
+@celery_app.task(name="certivo.attestation.sign_pending", soft_time_limit=120)
+def sign_pending_attestations() -> dict:
+    """Finish the attestations that could not be signed when their call ended (SDD 7.2)."""
+    from app.attestation import load_signer
+    from app.services.sessions import sign_pending
+
+    settings = Settings()
+    db_engine = make_engine(settings.database_url, settings.db_statement_timeout_ms)
+    try:
+        assert_schema_current(db_engine)
+        with make_session_factory(db_engine)() as db:
+            return sign_pending(db, load_signer(settings), settings, now_ms())
     finally:
         db_engine.dispose()

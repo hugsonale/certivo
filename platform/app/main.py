@@ -16,8 +16,9 @@ from app.hardening import (
     PathScopedCORS,
     RequestContextMiddleware,
 )
+from app.keyregistry import register_signing_key
 from app.ratelimit import RateLimiter
-from app.routers import api_keys, devices, meta, sessions, webhooks
+from app.routers import api_keys, devices, meta, policies, sessions, webhooks
 from app.secretbox import load_secretbox
 from app.timeutil import now_ms
 
@@ -49,11 +50,13 @@ def create_app(settings: Settings | None = None, clock: Callable[[], int] | None
     with app.state.session_factory() as db:
         ensure_default_policy(db)
         db.commit()
+        register_signing_key(db, app.state.signer, app.state.clock())
 
     install_error_handling(app)
     app.include_router(meta.router)
     app.include_router(devices.router)
     app.include_router(api_keys.router)
+    app.include_router(policies.router)
     app.include_router(sessions.router)
     app.include_router(webhooks.router)
 

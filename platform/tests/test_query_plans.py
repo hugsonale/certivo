@@ -43,7 +43,7 @@ def busy_table(app, partner_key):
                         rows.append(dict(
                             session_id=f"cs_{day}_{n}", participant_ref=f"p{ref}", seq=seq, device_id="d",
                             interval_start_ms=started, interval_end_ms=started + 1000,
-                            confidence_milli=900, model_version="m", explanation={"reason_codes": []},
+                            confidence_milli=900, effective_confidence_milli=900, model_version="m", explanation={"reason_codes": []},
                             signature="s", outcome="accept", received_at_ms=started,
                             session_started_at_ms=started))
         db.commit()

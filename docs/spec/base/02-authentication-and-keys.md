@@ -126,7 +126,7 @@ One row per endpoint. "Implemented" rows are checked against the running code by
 | POST | `/v1/sessions/continuous` | API key | `sessions:write` | Implemented |
 | POST | `/v1/sessions/continuous/{session_id}/end` | API key | `sessions:write` | Implemented |
 | GET | `/v1/sessions/continuous/{session_id}/status` | API key | `sessions:read` | Implemented |
-| GET | `/v1/sessions/continuous/{session_id}/attestation` | API key | `sessions:read` | Planned (P0-10) |
+| GET | `/v1/sessions/continuous/{session_id}/attestation` | API key | `sessions:read` | Implemented |
 | POST | `/internal/v1/sessions/continuous/{session_id}/score-events` | SDK token and device signature | none | Implemented |
 | POST | `/internal/v1/sessions/continuous/{session_id}/score-events/batch` | SDK token and device signature | none | Implemented |
 | POST | `/internal/v1/sessions/continuous/{session_id}/pause` | SDK token | none | Implemented |
@@ -137,9 +137,9 @@ One row per endpoint. "Implemented" rows are checked against the running code by
 | POST | `/v1/api-keys` | API key | `keys:admin` | Implemented |
 | GET | `/v1/api-keys` | API key | `keys:admin` | Implemented |
 | DELETE | `/v1/api-keys/{key_id}` | API key | `keys:admin` | Implemented |
-| POST | `/v1/policies` | API key | `policies:write` | Planned (P0-11) |
-| GET | `/v1/policies` | API key | `policies:read` | Planned (P0-11) |
-| GET | `/v1/policies/{policy_id}` | API key | `policies:read` | Planned (P0-11) |
+| POST | `/v1/policies` | API key | `policies:write` | Implemented |
+| GET | `/v1/policies` | API key | `policies:read` | Implemented |
+| GET | `/v1/policies/{policy_id}` | API key | `policies:read` | Implemented |
 | POST | `/v1/webhook-endpoints` | API key | `webhooks:write` | Implemented |
 | GET | `/v1/webhook-endpoints` | API key | `webhooks:read` | Implemented |
 | DELETE | `/v1/webhook-endpoints/{endpoint_id}` | API key | `webhooks:write` | Implemented |

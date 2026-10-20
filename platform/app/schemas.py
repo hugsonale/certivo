@@ -206,3 +206,22 @@ class WebhookDeliveryOut(BaseModel):
     created_at_ms: int
     delivered_at_ms: int | None = None
     attempts: list[WebhookAttemptOut] = []  # the most recent tries, newest first
+
+
+class PolicyCreateIn(BaseModel):
+    """Settings left out take their defaults (docs/spec/base/03-policy-engine.md). They are checked by the
+    policy engine rather than here, so that every problem is reported at once in `policy_invalid`."""
+
+    model_config = ConfigDict(extra="forbid")
+    use_case: Annotated[str, StringConstraints(pattern=r"^[a-z0-9_]{1,64}$")]
+    settings: dict = Field(default_factory=dict)
+
+
+class PolicyOut(BaseModel):
+    id: str
+    use_case: str
+    version: int
+    owner: str  # "partner" for your own policies, "certivo" for the built-in default
+    settings: dict  # every setting, explicit
+    settings_sha256: str  # the fingerprint written into an attestation, so you can match them up
+    created_at_ms: int
