@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     attestation_retention_days: int | None = None
     partition_days_ahead: int = 7  # daily partitions made in advance (Postgres)
 
+    # Implausible-pattern detection (P0-12, ADR 0018): flags only, never blocks. A switch for emergencies.
+    anomaly_detection_enabled: bool = True
+
     # --- Webhook delivery (P0-07). Numbers are PLACEHOLDERS (docs/spec/base/05).
     redis_url: str = "redis://localhost:6379/0"      # the Celery broker
     # Key that encrypts webhook signing secrets in the database (a Fernet key; see

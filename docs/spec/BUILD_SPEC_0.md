@@ -164,6 +164,8 @@ so later migrations can change them safely. Rules:
 * On Postgres, JSON columns are `JSONB`; elsewhere plain JSON. Global policies (no partner) are
   protected by a partial unique index, because a plain UNIQUE constraint does not treat NULLs as equal.
 
+**Implausible-pattern detection (P0-12, ADR 0018).** The platform flags four suspicious score patterns (a flat maximum, repeated enormous jumps, packets arriving faster than real time, perfectly even timing) as internal security signals. A flag never changes a decision, never rejects a packet and is never shown to partners. See `docs/spec/base/07-implausible-patterns.md`; read flags with `python scripts/list_flags.py`.
+
 **Daily partitions and retention (P0-09, ADR 0015).** On Postgres `continuous_score_events` is split into one partition per day of `session_started_at_ms`, a copy of the start time of the call the row belongs to (set by the server, never changed). Every query names the session and that day, so Postgres reads one partition. Partitions are made ahead of time by the daily maintenance job (`python scripts/run_maintenance.py`, also run by the Celery worker at 03:15); a catch-all partition takes a row if one is ever missing. Retention drops whole days that are older than `CERTIVO_SCORE_EVENT_RETENTION_DAYS`, never a day that still has an unfinished call. **That setting has no default: how long to keep data is the privacy review's decision (P0-52), and until it is set nothing is deleted.** SQLite (development) keeps one plain table and the same rule deletes rows.
 
 Privacy posture carried over from the docs: no raw video or audio ever reaches this service;
