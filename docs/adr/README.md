@@ -25,3 +25,4 @@ An ADR is a short note recording one significant decision: what we faced, what w
 | [0015](0015-daily-partitions-and-retention.md) | Daily partitions of the score-events table, and retention | Proposed |
 | [0016](0016-attestation-signing-hardening.md) | Attestation signing hardening: signer boundary, key rotation, queued signing | Proposed |
 | [0017](0017-policy-engine-v1.md) | Policy engine v1: partner policies, tier and model weighting, the fallback path | Proposed |
+| [0018](0018-implausible-pattern-detection.md) | Implausible-pattern detection: flags only, never blocks | Proposed |
