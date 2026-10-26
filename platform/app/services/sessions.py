@@ -6,6 +6,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app import anomaly
 from app.attestation import (
     ATTESTATION_VERSION,
     MAX_GAPS_LISTED,
@@ -123,7 +124,7 @@ def _close_open_gap(db: Session, session: ContinuousSession, now: int) -> None:
 
 
 def _ingest(db: Session, settings: Settings, session: ContinuousSession, req: ScoreEventIn,
-            now: int) -> tuple[ScoreEventOut, ScoreEvent, ScoreEvent | None]:
+            now: int, live: bool = True) -> tuple[ScoreEventOut, ScoreEvent, ScoreEvent | None]:
     """Validate one packet and add it to the database session, WITHOUT committing.
 
     Every refusal is raised before anything is written, so a refused packet leaves no trace.
@@ -190,7 +191,7 @@ def _ingest(db: Session, settings: Settings, session: ContinuousSession, req: Sc
         confidence_milli=req.confidence_milli, effective_confidence_milli=effective,
         model_version=req.model_version, explanation=req.explanation.model_dump(),
         signature=req.device_signature, outcome=outcome, received_at_ms=now,
-        session_started_at_ms=session.started_at_ms,
+        session_started_at_ms=session.started_at_ms, received_via="live" if live else "batch",
     )
     db.add(event)
     reported = outcome_to_report(config, last.outcome if last else None, outcome)
@@ -205,13 +206,40 @@ def _ingest(db: Session, settings: Settings, session: ContinuousSession, req: Sc
 
 def ingest_score_event(db: Session, settings: Settings, session: ContinuousSession,
                        req: ScoreEventIn, now: int) -> ScoreEventOut:
-    out, _, _ = _ingest(db, settings, session, req, now)
+    out, event, _ = _ingest(db, settings, session, req, now)
     try:
         db.commit()
     except IntegrityError as exc:  # concurrent duplicate
         db.rollback()
         raise ApiError(409, "seq_conflict", "A packet with this seq was just recorded") from exc
+    if not out.duplicate:
+        _check_patterns(db, settings, session, [event], now, only_every_nth=True)
     return out
+
+
+def _check_patterns(db: Session, settings: Settings, session: ContinuousSession, events: list[ScoreEvent],
+                    now: int, *, only_every_nth: bool) -> None:
+    """Look for implausible score patterns (app/anomaly.py). This runs AFTER the packets are safely
+    committed and in its own transaction, so nothing that goes wrong in here can reject, delay or undo an
+    upload: Phase 0 only flags, it never blocks (TRD 9.4)."""
+    if not settings.anomaly_detection_enabled:
+        return
+    th = anomaly.DEFAULTS
+    try:
+        newest: dict[str, ScoreEvent] = {}
+        for event in events:
+            newest[event.participant_ref] = event
+        for ref, event in newest.items():
+            seen = event.seq + 1
+            if seen < th.window or (only_every_nth and seen % th.check_every != 0):
+                continue
+            rows = list(db.scalars(recent_events_stmt(session, ref, th.window)))
+            rows.reverse()  # oldest first
+            anomaly.record_flags(db, session, ref, event.device_id, rows, now, th)
+        db.commit()
+    except Exception:  # noqa: BLE001 - detection must never be able to break an upload
+        db.rollback()
+        log.exception("implausible-pattern check failed; the upload itself is unaffected")
 
 
 def _already_disclosed(db: Session, session_id: str, start_ms: int, end_ms: int) -> bool:
@@ -238,7 +266,7 @@ def ingest_score_batch(db: Session, settings: Settings, session: ContinuousSessi
     try:
         for index, req in enumerate(packets):
             try:
-                out, event, last = _ingest(db, settings, session, req, now)
+                out, event, last = _ingest(db, settings, session, req, now, live=False)
             except ApiError as exc:
                 results.append(BatchItemOut(index=index, accepted=False, seq=req.seq,
                                             error=BatchItemError(code=exc.code, message=exc.message)))
@@ -268,6 +296,7 @@ def ingest_score_batch(db: Session, settings: Settings, session: ContinuousSessi
     except IntegrityError as exc:  # a concurrent upload recorded the same seq; retry is safe
         db.rollback()
         raise ApiError(409, "seq_conflict", "A packet with this seq was just recorded") from exc
+    _check_patterns(db, settings, session, newly_stored, now, only_every_nth=False)
 
     return ScoreBatchOut(
         results=results,

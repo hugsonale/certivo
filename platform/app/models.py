@@ -142,6 +142,9 @@ class ScoreEvent(Base):
     received_at_ms: Mapped[int] = mapped_column(BigInteger)
     # Copy of the session's started_at_ms. The partition key: never changes, set by the server.
     session_started_at_ms: Mapped[int] = mapped_column(BigInteger)
+    # How it reached us: `live` (sent as it happened) or `batch` (uploaded after an outage). Only live
+    # packets are evidence for the timing checks in app/anomaly.py.
+    received_via: Mapped[str] = mapped_column(String(8), default="live", server_default="live")
 
 
 class CoverageGap(Base):
@@ -256,3 +259,23 @@ class AttestationKey(Base):
     status: Mapped[str] = mapped_column(String(16))  # active | retired
     created_at_ms: Mapped[int] = mapped_column(BigInteger)
     retired_at_ms: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+
+class SecurityFlag(Base):
+    """An implausible score pattern spotted by app/anomaly.py (ADR 0018). Internal: a signal for the
+    incident-response process, never shown to partners and never used to reject anything. There is
+    deliberately no unique rule here: recording a flag must never be able to fail an upload."""
+
+    __tablename__ = "security_flags"
+    __table_args__ = (Index("ix_security_flags_raised_at", "raised_at_ms"),
+                      Index("ix_security_flags_session", "session_id"))
+    id: Mapped[int] = mapped_column(BigIntId, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("continuous_sessions.id"))
+    partner_id: Mapped[str] = mapped_column(String(64))
+    participant_ref: Mapped[str] = mapped_column(String(64))
+    device_id: Mapped[str] = mapped_column(String(64))
+    flag_type: Mapped[str] = mapped_column(String(40))
+    detail: Mapped[dict] = mapped_column(JSONType)  # small facts only: counts and milliseconds
+    first_seq: Mapped[int] = mapped_column(Integer)
+    last_seq: Mapped[int] = mapped_column(Integer)
+    raised_at_ms: Mapped[int] = mapped_column(BigInteger)

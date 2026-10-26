@@ -308,3 +308,46 @@ def test_migration_0006_gives_existing_score_events_an_effective_confidence_equa
         command.upgrade(cfg, "head")  # and forward again
     finally:
         engine.dispose()
+
+
+def test_migration_0007_marks_existing_scores_live_and_adds_the_flags_table(scratch_url):
+    """Scores recorded before the detector existed were all sent live as far as we know. The flags table
+    appears on the way up and disappears on the way down, without losing any score."""
+    import sqlalchemy as sa
+
+    cfg = alembic_config(scratch_url)
+    command.upgrade(cfg, "0006")
+    engine = create_engine(scratch_url)
+    started = 1_760_000_000_000
+    try:
+        with engine.begin() as conn:
+            conn.execute(sa.text("INSERT INTO partners (id, name, created_at_ms) VALUES ('p', 'P', 1)"))
+            conn.execute(sa.text(
+                "INSERT INTO continuous_sessions (id, partner_id, use_case, policy_id, policy_version, "
+                "policy_config, participant_count, status, started_at_ms, sdk_token_hash, "
+                "sdk_token_expires_at_ms) VALUES ('cs', 'p', 'u', 'pol', 1, '{}', 1, 'active', "
+                f"{started}, 'h', {started + 1})"))
+            for seq in range(2):
+                conn.execute(sa.text(
+                    "INSERT INTO continuous_score_events (session_id, participant_ref, seq, device_id, "
+                    "interval_start_ms, interval_end_ms, confidence_milli, effective_confidence_milli, "
+                    "model_version, explanation, signature, outcome, received_at_ms, session_started_at_ms) "
+                    f"VALUES ('cs', 'alice', {seq}, 'dev', 1, 2, 900, 900, 'm', '{{}}', 's', 'accept', "
+                    f"{started}, {started})"))
+        command.upgrade(cfg, "head")
+        with engine.begin() as conn:
+            via = conn.execute(sa.text("SELECT DISTINCT received_via FROM continuous_score_events")).scalars().all()
+            assert via == ["live"]
+            conn.execute(sa.text(
+                "INSERT INTO security_flags (session_id, partner_id, participant_ref, device_id, flag_type, "
+                "detail, first_seq, last_seq, raised_at_ms) VALUES ('cs', 'p', 'alice', 'dev', "
+                "'flat_maximum_confidence', '{}', 0, 29, 5)"))
+            assert conn.execute(sa.text("SELECT COUNT(*) FROM security_flags")).scalar() == 1
+        command.downgrade(cfg, "0006")
+        with engine.connect() as conn:
+            assert conn.execute(sa.text("SELECT COUNT(*) FROM continuous_score_events")).scalar() == 2
+            assert "security_flags" not in sa.inspect(conn).get_table_names()
+            assert "received_via" not in {c["name"] for c in sa.inspect(conn).get_columns("continuous_score_events")}
+        command.upgrade(cfg, "head")
+    finally:
+        engine.dispose()
