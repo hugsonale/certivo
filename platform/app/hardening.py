@@ -14,6 +14,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from app.config import Settings
 from app.errors import HttpRejection, error_body
+from app.logging_setup import request_id_var
 
 DOCS_PATHS = ("/docs", "/redoc", "/openapi.json")
 # Browsers only ever call the SDK endpoints and the public-keys endpoint. The partner API (/v1/)
@@ -61,7 +62,11 @@ class RequestContextMiddleware:
                     headers[name] = value
             await send(message)
 
-        await self.app(scope, receive, send_with_headers)
+        token = request_id_var.set(request_id)  # every log line written while serving this request has it
+        try:
+            await self.app(scope, receive, send_with_headers)
+        finally:
+            request_id_var.reset(token)
 
 
 class BodyLimitMiddleware:

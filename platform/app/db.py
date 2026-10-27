@@ -12,6 +12,8 @@ from fastapi import Request
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from app import audit  # noqa: F401 - importing it switches on the audit-log listener (P0-13)
+
 
 def make_engine(url: str, statement_timeout_ms: int | None = None) -> Engine:
     """statement_timeout_ms stops any single database statement running longer than that
@@ -31,6 +33,8 @@ def make_session_factory(engine: Engine) -> sessionmaker[Session]:
 
 def get_db(request: Request) -> Iterator[Session]:
     with request.app.state.session_factory() as db:
+        audit.set_context(db, request_id=getattr(request.state, "request_id", None),
+                          clock=request.app.state.clock)
         try:
             yield db
         except Exception:

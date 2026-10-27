@@ -1,0 +1,57 @@
+# Alert rules (P0-13, docs/adr/0019). EVERY THRESHOLD BELOW IS A PLACEHOLDER: no real traffic has been
+# measured yet. Set them from measured data (and, for packet lag, with the first design partner).
+# Rules are tested by alerts_test.yml:   promtool test rules alerts_test.yml   (see platform/README.md)
+groups:
+  - name: certivo-platform
+    rules:
+      - alert: CertivoApiDown
+        # Prometheus could not reach the API's /metrics for two minutes: the platform may be down.
+        expr: up{job="certivo-api"} == 0
+        for: 2m
+        labels:
+          severity: page
+        annotations:
+          summary: "The Certivo API is not answering metric scrapes"
+          description: "Prometheus has failed to scrape {{ $labels.instance }} for 2 minutes. Check the service, then the logs (search by request_id)."
+
+      - alert: CertivoHighErrorRate
+        # More than 5% of requests failing with a server error (5xx), for 5 minutes, while there is
+        # real traffic (the second line stops one failed request in a quiet hour from alerting).
+        expr: |
+          (
+            sum(rate(certivo_http_requests_total{status=~"5.."}[5m]))
+            / sum(rate(certivo_http_requests_total[5m]))
+          ) > 0.05
+          and sum(rate(certivo_http_requests_total[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "More than 5% of API requests are failing with a server error"
+          description: "The 5xx share has been above 5% for 5 minutes. Open the dashboard panel 'Errors by endpoint' to see which route, then find the request_id in the logs. Threshold is a PLACEHOLDER."
+
+      - alert: CertivoPacketIngestLagHigh
+        # Live score packets are arriving more than 10 seconds after the moment they describe, for most
+        # of the traffic (95th percentile). Buffered uploads after an outage ("batch") are excluded:
+        # they are late by design and are disclosed as coverage gaps.
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(certivo_packet_ingest_lag_seconds_bucket{via="live"}[5m]))
+          ) > 10
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "Score packets are reaching us late (p95 lag above 10 seconds)"
+          description: "Verification results are lagging behind the call. Check API latency, the database, and the SDK's network conditions. Threshold is a PLACEHOLDER; it must be agreed with the first design partner."
+
+      - alert: CertivoAttestationSigningFailing
+        # The signer could not be reached: attestations are being queued instead of signed (SDD 7.2).
+        expr: increase(certivo_attestation_sign_failures_total[10m]) > 0
+        for: 1m
+        labels:
+          severity: ticket
+        annotations:
+          summary: "Attestations are being queued because the signing service is unreachable"
+          description: "Calls are still ending and records still exist, but their signatures are delayed. Check the key service. Queued attestations are signed automatically when it returns."

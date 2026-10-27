@@ -279,3 +279,30 @@ class SecurityFlag(Base):
     first_seq: Mapped[int] = mapped_column(Integer)
     last_seq: Mapped[int] = mapped_column(Integer)
     raised_at_ms: Mapped[int] = mapped_column(BigInteger)
+
+
+class AuditEvent(Base):
+    """An append-only record of who changed a key, policy or credential, and when (Doc 9 section 8,
+    docs/adr/0019). Rows are written by app/audit.py in the SAME transaction as the change they
+    describe, so a change can never exist without its record, nor a record without its change.
+
+    The database refuses UPDATE, DELETE and TRUNCATE on this table (migration 0008). The details hold
+    names, scopes and counts, never a secret, a key hash or a person's data. There is deliberately no
+    foreign key to `partners`: the record must outlive anything it refers to."""
+
+    __tablename__ = "audit_events"
+    __table_args__ = (
+        Index("ix_audit_events_at_ms", "at_ms"),
+        Index("ix_audit_events_partner_at", "partner_id", "at_ms"),
+        Index("ix_audit_events_target", "target_type", "target_id"),
+    )
+    id: Mapped[int] = mapped_column(BigIntId, primary_key=True, autoincrement=True)
+    at_ms: Mapped[int] = mapped_column(BigInteger)
+    action: Mapped[str] = mapped_column(String(64))  # e.g. api_key.created (app/audit.py lists them all)
+    partner_id: Mapped[str | None] = mapped_column(String(64), nullable=True)  # whose data changed
+    actor_type: Mapped[str] = mapped_column(String(16))  # api_key | system
+    actor_id: Mapped[str | None] = mapped_column(String(64), nullable=True)  # the API key's ID
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)  # ties it to the logs
+    target_type: Mapped[str] = mapped_column(String(32))
+    target_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    details: Mapped[dict] = mapped_column(JSONType)

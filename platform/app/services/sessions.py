@@ -6,7 +6,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app import anomaly
+from app import anomaly, metrics
 from app.attestation import (
     ATTESTATION_VERSION,
     MAX_GAPS_LISTED,
@@ -46,6 +46,7 @@ from app.schemas import (
 )
 from app.security import new_sdk_token, sha256_hex
 from app.signing import SignerUnavailable
+from app.tracing import span
 
 log = logging.getLogger("certivo.sessions")
 
@@ -206,15 +207,23 @@ def _ingest(db: Session, settings: Settings, session: ContinuousSession, req: Sc
 
 def ingest_score_event(db: Session, settings: Settings, session: ContinuousSession,
                        req: ScoreEventIn, now: int) -> ScoreEventOut:
-    out, event, _ = _ingest(db, settings, session, req, now)
-    try:
-        db.commit()
-    except IntegrityError as exc:  # concurrent duplicate
-        db.rollback()
-        raise ApiError(409, "seq_conflict", "A packet with this seq was just recorded") from exc
-    if not out.duplicate:
-        _check_patterns(db, settings, session, [event], now, only_every_nth=True)
-    return out
+    with span("sessions.ingest_score_event"):
+        try:
+            out, event, _ = _ingest(db, settings, session, req, now)
+        except ApiError as exc:
+            metrics.record_rejection("live", exc.code)
+            raise
+        try:
+            db.commit()
+        except IntegrityError as exc:  # concurrent duplicate
+            db.rollback()
+            metrics.record_rejection("live", "seq_conflict")
+            raise ApiError(409, "seq_conflict", "A packet with this seq was just recorded") from exc
+        # Packet ingestion lag: how long after the interval ended did we receive it (P0-13).
+        metrics.record_packet("live", now - event.interval_end_ms, duplicate=out.duplicate)
+        if not out.duplicate:
+            _check_patterns(db, settings, session, [event], now, only_every_nth=True)
+        return out
 
 
 def _check_patterns(db: Session, settings: Settings, session: ContinuousSession, events: list[ScoreEvent],
@@ -263,14 +272,18 @@ def ingest_score_batch(db: Session, settings: Settings, session: ContinuousSessi
     results: list[BatchItemOut] = []
     newly_stored: list[ScoreEvent] = []
     holes: list[tuple[int, int]] = []
+    rejected_codes: list[str] = []
+    seen: list[tuple[int, bool]] = []  # (lag in ms, was a duplicate) for each packet that was accepted
     try:
         for index, req in enumerate(packets):
             try:
                 out, event, last = _ingest(db, settings, session, req, now, live=False)
             except ApiError as exc:
+                rejected_codes.append(exc.code)
                 results.append(BatchItemOut(index=index, accepted=False, seq=req.seq,
                                             error=BatchItemError(code=exc.code, message=exc.message)))
                 continue
+            seen.append((now - event.interval_end_ms, out.duplicate))
             results.append(BatchItemOut(
                 index=index, accepted=True, seq=out.seq, duplicate=out.duplicate,
                 current_policy_outcome=out.current_policy_outcome))
@@ -296,6 +309,11 @@ def ingest_score_batch(db: Session, settings: Settings, session: ContinuousSessi
     except IntegrityError as exc:  # a concurrent upload recorded the same seq; retry is safe
         db.rollback()
         raise ApiError(409, "seq_conflict", "A packet with this seq was just recorded") from exc
+    # Counted only now that the batch is safely saved, so a rolled-back batch is never counted.
+    for lag_ms, duplicate in seen:
+        metrics.record_packet("batch", lag_ms, duplicate=duplicate)
+    for code in rejected_codes:
+        metrics.record_rejection("batch", code)
     _check_patterns(db, settings, session, newly_stored, now, only_every_nth=False)
 
     return ScoreBatchOut(
@@ -357,6 +375,7 @@ def _try_to_sign(rec: SessionAttestation, signer: Signer, now: int, max_wait_s: 
         rec.attestation = signer.sign_attestation(rec.payload)
     except SignerUnavailable as exc:
         rec.attempts += 1
+        metrics.record_signing_failure()
         rec.next_attempt_at_ms = now + retry_delay_ms(rec.attempts, max_wait_s)
         rec.last_error = str(exc)[:200]
         log.error("Attestation for %s is queued (attempt %d): %s", rec.session_id, rec.attempts, exc)
@@ -461,7 +480,8 @@ def end_session(db: Session, signer: Signer, settings: Settings, session: Contin
     rec = SessionAttestation(session_id=session.id, status="pending", payload=payload, issued_at_ms=now,
                              attempts=0, next_attempt_at_ms=now)
     db.add(rec)
-    _try_to_sign(rec, signer, now, settings.attestation_retry_max_wait_s)
+    with span("attestation.sign"):
+        _try_to_sign(rec, signer, now, settings.attestation_retry_max_wait_s)
     db.commit()
     return rec
 

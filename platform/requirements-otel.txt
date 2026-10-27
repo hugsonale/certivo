@@ -1,0 +1,7 @@
+# OPTIONAL: only needed when CERTIVO_TRACING_ENABLED=true (docs/adr/0019).
+# Install with:  pip install -r requirements-otel.txt
+-r requirements.txt
+opentelemetry-api>=1.25
+opentelemetry-sdk>=1.25
+opentelemetry-exporter-otlp-proto-http>=1.25
+opentelemetry-instrumentation-fastapi>=0.46b0

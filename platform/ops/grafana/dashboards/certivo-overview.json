@@ -1,0 +1,695 @@
+{
+  "uid": "certivo-overview",
+  "title": "Certivo platform overview",
+  "tags": [
+    "certivo",
+    "p0-13"
+  ],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "refresh": "10s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "description": "Request rates, errors, latency and packet ingestion lag. Every threshold shown is a placeholder until real traffic is measured.",
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Alerts firing now",
+      "description": "Number of alert rules currently firing. Rules live in ops/prometheus/alerts.yml.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "certivo-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "certivo-prometheus"
+          },
+          "expr": "sum(ALERTS{alertstate=\"firing\"}) or vector(0)",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Server error share (5xx)",
+      "description": "Share of requests that failed with a server error over 5 minutes. Alert threshold 5% (placeholder).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "certivo-prometheus"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "certivo-prometheus"
+          },
+          "expr": "sum(rate(certivo_http_requests_total{status=~\"5..\"}[5m])) / sum(rate(certivo_http_requests_total[5m]))",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.05
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Packet lag p95 (live)",
+      "description": "95th percentile of: time we received a live score packet minus the time its interval ended. Alert threshold 10 s (placeholder).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "certivo-prometheus"
+      },
+      "gridPos": {
+        "x": 9,
+        "y": 0,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "certivo-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(certivo_packet_ingest_lag_seconds_bucket{via=\"live\"}[5m])))",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Requests in progress",
+      "description": "Requests being served right now.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "certivo-prometheus"
+      },
+      "gridPos": {
+        "x": 14,
+        "y": 0,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "certivo-prometheus"
+          },
+          "expr": "sum(certivo_http_requests_in_progress)",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background"
+      }
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Running build",
+      "description": "Which version and environment is running.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "certivo-prometheus"
+      },
+      "gridPos": {
+        "x": 19,
+        "y": 0,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "certivo-prometheus"
+          },
+          "expr": "certivo_build_info",
+          "legendFormat": "",
+          "refId": "A",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Request rate by endpoint",
+      "description": "Requests per second, by route template (never the raw URL).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "certivo-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "certivo-prometheus"
+          },
+          "expr": "sum by (route) (rate(certivo_http_requests_total[5m]))",
+          "legendFormat": "{{route}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Errors by endpoint",
+      "description": "Server errors (5xx) per second, by route. Find the request_id in the logs to see the cause.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "certivo-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "certivo-prometheus"
+          },
+          "expr": "sum by (route) (rate(certivo_http_requests_total{status=~\"5..\"}[5m]))",
+          "legendFormat": "{{route}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Request latency",
+      "description": "Time to serve a request, all routes together. Target for non-ML endpoints: p95 under 500 ms (NFR-1.2).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "certivo-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "certivo-prometheus"
+          },
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(certivo_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "certivo-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(certivo_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "certivo-prometheus"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(certivo_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Packet ingestion lag (live)",
+      "description": "How long after an interval ended its packet reached us. Uploads buffered during an outage are excluded: they are late by design and disclosed as coverage gaps.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "certivo-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "certivo-prometheus"
+          },
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(certivo_packet_ingest_lag_seconds_bucket{via=\"live\"}[5m])))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "certivo-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(certivo_packet_ingest_lag_seconds_bucket{via=\"live\"}[5m])))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "certivo-prometheus"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(certivo_packet_ingest_lag_seconds_bucket{via=\"live\"}[5m])))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Score packets by result",
+      "description": "live = sent as it happened; batch = uploaded after an outage.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "certivo-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "certivo-prometheus"
+          },
+          "expr": "sum by (via, result) (rate(certivo_packets_total[5m]))",
+          "legendFormat": "{{via}} {{result}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Packets refused, by reason",
+      "description": "API error codes given to refused packets.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "certivo-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 20,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "certivo-prometheus"
+          },
+          "expr": "sum by (via, code) (rate(certivo_packets_rejected_total[5m]))",
+          "legendFormat": "{{via}} {{code}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Failed credential checks",
+      "description": "Wrong or missing API keys and session tokens, by reason. A sudden rise can mean someone is guessing credentials.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "certivo-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "certivo-prometheus"
+          },
+          "expr": "sum by (reason) (rate(certivo_auth_failures_total[5m]))",
+          "legendFormat": "{{reason}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Requests refused: rate limit",
+      "description": "Requests answered with 429, by which limit was hit.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "certivo-prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 28,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "certivo-prometheus"
+          },
+          "expr": "sum by (scope) (rate(certivo_rate_limited_total[5m]))",
+          "legendFormat": "{{scope}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Attestations queued (signer unreachable)",
+      "description": "Each failure means a call's attestation was queued instead of signed. Signing completes automatically when the signer returns.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "certivo-prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 28,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "certivo-prometheus"
+          },
+          "expr": "increase(certivo_attestation_sign_failures_total[10m])",
+          "legendFormat": "failures in 10 min",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    }
+  ]
+}

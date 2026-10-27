@@ -1,0 +1,131 @@
+# Proves the alert rules fire when they should, and stay quiet when they should.
+# Run:  promtool test rules alerts_test.yml
+rule_files:
+  - alerts.yml
+evaluation_interval: 1m
+
+tests:
+  # ---- error rate: 100 good and 20 bad requests a minute (a 16.7% error share) for 15 minutes
+  - interval: 1m
+    input_series:
+      - series: 'certivo_http_requests_total{method="POST",route="/v1/sessions/continuous",status="201"}'
+        values: '0+100x15'
+      - series: 'certivo_http_requests_total{method="POST",route="/v1/sessions/continuous",status="500"}'
+        values: '0+20x15'
+    alert_rule_test:
+      - eval_time: 3m          # not yet: the condition has not lasted 5 minutes
+        alertname: CertivoHighErrorRate
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: CertivoHighErrorRate
+        exp_alerts:
+          - exp_labels:
+              severity: page
+            exp_annotations:
+              summary: "More than 5% of API requests are failing with a server error"
+              description: "The 5xx share has been above 5% for 5 minutes. Open the dashboard panel 'Errors by endpoint' to see which route, then find the request_id in the logs. Threshold is a PLACEHOLDER."
+
+  # ---- error rate: a healthy service (1 error in 200 requests = 0.5%) must NOT alert
+  - interval: 1m
+    input_series:
+      - series: 'certivo_http_requests_total{method="GET",route="/v1/policies",status="200"}'
+        values: '0+199x15'
+      - series: 'certivo_http_requests_total{method="GET",route="/v1/policies",status="500"}'
+        values: '0+1x15'
+    alert_rule_test:
+      - eval_time: 14m
+        alertname: CertivoHighErrorRate
+        exp_alerts: []
+
+  # ---- error rate: a total outage with almost no traffic (one request a minute) must NOT alert
+  #      (that is the job of CertivoApiDown); this guards against alerting on a single failed call
+  - interval: 1m
+    input_series:
+      - series: 'certivo_http_requests_total{method="GET",route="/v1/policies",status="500"}'
+        values: '0+1x15'
+    alert_rule_test:
+      - eval_time: 14m
+        alertname: CertivoHighErrorRate
+        exp_alerts: []
+
+  # ---- packet lag: every live packet takes 15 to 20 seconds to arrive (all above the 10 s bucket)
+  - interval: 1m
+    input_series:
+      - series: 'certivo_packet_ingest_lag_seconds_bucket{via="live",le="5"}'
+        values: '0x15'
+      - series: 'certivo_packet_ingest_lag_seconds_bucket{via="live",le="10"}'
+        values: '0x15'
+      - series: 'certivo_packet_ingest_lag_seconds_bucket{via="live",le="20"}'
+        values: '0+60x15'
+      - series: 'certivo_packet_ingest_lag_seconds_bucket{via="live",le="+Inf"}'
+        values: '0+60x15'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: CertivoPacketIngestLagHigh
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: CertivoPacketIngestLagHigh
+        exp_alerts:
+          - exp_labels:
+              severity: page
+            exp_annotations:
+              summary: "Score packets are reaching us late (p95 lag above 10 seconds)"
+              description: "Verification results are lagging behind the call. Check API latency, the database, and the SDK's network conditions. Threshold is a PLACEHOLDER; it must be agreed with the first design partner."
+
+  # ---- packet lag: healthy live packets (all within 2 s) do not alert, AND a flood of very late
+  #      BATCH packets (an SDK uploading after an outage) does not alert either
+  - interval: 1m
+    input_series:
+      - series: 'certivo_packet_ingest_lag_seconds_bucket{via="live",le="2"}'
+        values: '0+60x15'
+      - series: 'certivo_packet_ingest_lag_seconds_bucket{via="live",le="10"}'
+        values: '0+60x15'
+      - series: 'certivo_packet_ingest_lag_seconds_bucket{via="live",le="600"}'
+        values: '0+60x15'
+      - series: 'certivo_packet_ingest_lag_seconds_bucket{via="live",le="+Inf"}'
+        values: '0+60x15'
+      - series: 'certivo_packet_ingest_lag_seconds_bucket{via="batch",le="10"}'
+        values: '0x15'
+      - series: 'certivo_packet_ingest_lag_seconds_bucket{via="batch",le="600"}'
+        values: '0+500x15'
+      - series: 'certivo_packet_ingest_lag_seconds_bucket{via="batch",le="+Inf"}'
+        values: '0+500x15'
+    alert_rule_test:
+      - eval_time: 14m
+        alertname: CertivoPacketIngestLagHigh
+        exp_alerts: []
+
+  # ---- the API stops answering scrapes
+  - interval: 1m
+    input_series:
+      - series: 'up{job="certivo-api",instance="api:8000"}'
+        values: '1 1 1 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: CertivoApiDown
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: CertivoApiDown
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              job: certivo-api
+              instance: "api:8000"
+            exp_annotations:
+              summary: "The Certivo API is not answering metric scrapes"
+              description: "Prometheus has failed to scrape api:8000 for 2 minutes. Check the service, then the logs (search by request_id)."
+
+  # ---- the signer is unreachable
+  - interval: 1m
+    input_series:
+      - series: 'certivo_attestation_sign_failures_total'
+        values: '0 0 0 1 2 3 4 5 6 7 8 9'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: CertivoAttestationSigningFailing
+        exp_alerts:
+          - exp_labels:
+              severity: ticket
+            exp_annotations:
+              summary: "Attestations are being queued because the signing service is unreachable"
+              description: "Calls are still ending and records still exist, but their signatures are delayed. Check the key service. Queued attestations are signed automatically when it returns."

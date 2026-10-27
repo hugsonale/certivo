@@ -17,6 +17,8 @@ from app.hardening import (
     RequestContextMiddleware,
 )
 from app.keyregistry import register_signing_key
+from app.logging_setup import configure_logging
+from app.observability import ObservabilityMiddleware, install_observability
 from app.ratelimit import RateLimiter
 from app.routers import api_keys, devices, meta, policies, sessions, webhooks
 from app.secretbox import load_secretbox
@@ -25,6 +27,7 @@ from app.timeutil import now_ms
 
 def create_app(settings: Settings | None = None, clock: Callable[[], int] | None = None) -> FastAPI:
     settings = settings or Settings()
+    configure_logging(settings.log_level, settings.log_format)  # first, so startup problems are logged too
     engine = make_engine(settings.database_url, settings.db_statement_timeout_ms)
     docs = settings.docs_enabled
     app = FastAPI(
@@ -59,9 +62,11 @@ def create_app(settings: Settings | None = None, clock: Callable[[], int] | None
     app.include_router(policies.router)
     app.include_router(sessions.router)
     app.include_router(webhooks.router)
+    install_observability(app, settings)  # /metrics, build info, tracing (when switched on)
 
     # Middleware: the LAST one added is the OUTERMOST. Order seen by a request:
-    # RequestContext (ID + security headers) -> CORS (SDK paths only) -> BodyLimit -> the app.
+    # RequestContext (ID + security headers) -> Observability (metrics + access log)
+    # -> CORS (SDK paths only) -> BodyLimit -> the app.
     app.add_middleware(BodyLimitMiddleware, max_bytes=settings.max_body_bytes,
                        read_timeout_s=settings.body_read_timeout_s)
     if settings.cors_origins:
@@ -74,5 +79,6 @@ def create_app(settings: Settings | None = None, clock: Callable[[], int] | None
             allow_credentials=False,
             max_age=600,
         )
+    app.add_middleware(ObservabilityMiddleware, settings=settings)
     app.add_middleware(RequestContextMiddleware, settings=settings)
     return app

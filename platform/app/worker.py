@@ -9,15 +9,24 @@ from __future__ import annotations
 
 from celery import Celery
 from celery.schedules import crontab
+from celery.signals import setup_logging
 
 from app.config import Settings
 from app.db import assert_schema_current, make_engine, make_session_factory
+from app.logging_setup import configure_logging
 from app.retention import run_maintenance
 from app.secretbox import load_secretbox
 from app.timeutil import now_ms
 from app.webhook_engine import WebhookEngine
 
 _settings = Settings()
+
+
+@setup_logging.connect
+def _structured_logging(**_kwargs) -> None:
+    """Connecting to this signal stops Celery installing its own plain-text logging (P0-13)."""
+    configure_logging(_settings.log_level, _settings.log_format)
+
 
 celery_app = Celery("certivo", broker=_settings.redis_url)
 celery_app.conf.update(

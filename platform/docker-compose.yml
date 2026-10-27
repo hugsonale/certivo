@@ -1,4 +1,6 @@
 # Local stack: Postgres + the API. See platform/README.md for how to run it.
+# Monitoring (Prometheus + Grafana) is OFF unless asked for:  docker compose --profile monitoring up
+#   Prometheus http://localhost:9090  (alerts: /alerts)      Grafana http://localhost:3000  (admin / certivo_dev_only)
 # It needs CERTIVO_ATTESTATION_SIGNING_KEY: either in platform/.env (docker compose reads that
 # file automatically) or exported in your shell.
 services:
@@ -40,7 +42,11 @@ services:
       CERTIVO_DATABASE_URL: postgresql+psycopg://certivo:certivo_dev_only@db:5432/certivo
       CERTIVO_ATTESTATION_SIGNING_KEY: ${CERTIVO_ATTESTATION_SIGNING_KEY:?Set CERTIVO_ATTESTATION_SIGNING_KEY first (see platform/README.md)}
       CERTIVO_WEBHOOK_SECRET_KEY: ${CERTIVO_WEBHOOK_SECRET_KEY:?Set CERTIVO_WEBHOOK_SECRET_KEY first (python scripts/gen_webhook_key.py)}
-    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --no-server-header"]
+      # Needed to read GET /metrics outside dev. LOCAL ONLY: this default is public. If you change it,
+      # put the same value in ops/prometheus/metrics_token.local (Prometheus reads it from there).
+      CERTIVO_METRICS_TOKEN: ${CERTIVO_METRICS_TOKEN:-local-dev-only-metrics-token-0001}
+    # --no-access-log: the app writes its own structured access line for every request.
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --no-server-header --no-access-log"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
       interval: 5s
@@ -63,6 +69,37 @@ services:
       CERTIVO_WEBHOOK_SECRET_KEY: ${CERTIVO_WEBHOOK_SECRET_KEY:?Set CERTIVO_WEBHOOK_SECRET_KEY first (python scripts/gen_webhook_key.py)}
     # "--beat" embeds the timer: run exactly ONE worker with it until the timer is split out.
     command: ["celery", "-A", "app.worker", "worker", "--beat", "-Q", "webhooks", "--concurrency", "2", "--loglevel", "info", "--schedule", "/tmp/celerybeat-schedule"]
+
+  prometheus:
+    image: prom/prometheus:v2.53.2
+    profiles: ["monitoring"]
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./ops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./ops/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./ops/prometheus/metrics_token.local:/etc/prometheus/metrics_token:ro
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    profiles: ["monitoring"]
+    depends_on:
+      - prometheus
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      # LOCAL ONLY: reachable from this computer alone (127.0.0.1). Never reuse this setup in production.
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-certivo_dev_only}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./ops/grafana/dashboards:/var/lib/grafana/dashboards:ro
 
 volumes:
   pgdata:

@@ -33,12 +33,19 @@ def db_url(tmp_path_factory):
     return url or f"sqlite:///{tmp_path_factory.mktemp('db') / 'test.db'}"
 
 
+# Tables the cleanup must NOT empty. The audit log is append-only: the database itself refuses to
+# delete from it (migration 0008), which is the point. It has no foreign keys, so rows left behind by
+# one test cannot affect another; tests that read it filter by IDs that only that test created.
+KEEP_BETWEEN_TESTS = frozenset({"audit_events"})
+
+
 def clear_all_tables(url: str) -> None:
     """Empty every table between tests. The schema itself always comes from migrations."""
     engine = create_engine(url)
     try:
         inspector = inspect(engine)
-        tables = [t for t in reversed(Base.metadata.sorted_tables) if inspector.has_table(t.name)]
+        tables = [t for t in reversed(Base.metadata.sorted_tables)
+                  if inspector.has_table(t.name) and t.name not in KEEP_BETWEEN_TESTS]
         if not tables:
             return
         with engine.begin() as conn:

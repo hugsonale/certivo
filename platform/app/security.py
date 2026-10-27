@@ -9,6 +9,7 @@ from fastapi import Depends, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app import audit, metrics
 from app.db import get_db
 from app.errors import ApiError
 from app.models import ApiKey, ContinuousSession, Partner
@@ -52,7 +53,8 @@ def _limiter(request: Request) -> RateLimiter:
     return request.app.state.limiter
 
 
-def _rate_limited(decision: Decision) -> ApiError:
+def _rate_limited(decision: Decision, scope: str) -> ApiError:
+    metrics.record_rate_limited(scope)  # scope: which limit was hit (fixed words, safe as a metric label)
     return ApiError(
         429, "rate_limited",
         f"Too many requests. Try again in {decision.retry_after_s} seconds.",
@@ -81,10 +83,11 @@ def _refuse_if_too_many_failures(request: Request, presented: str | None) -> Non
     for key in _failure_keys(request, presented):
         decision = _limiter(request).check(key, limit, consume=False)
         if not decision.allowed:
-            raise _rate_limited(decision)
+            raise _rate_limited(decision, "auth_failures")
 
 
-def _record_failure(request: Request, presented: str | None) -> None:
+def _record_failure(request: Request, presented: str | None, reason: str) -> None:
+    metrics.record_auth_failure(reason)  # a fixed code word; never the credential that was presented
     limit = request.app.state.settings.rate_limit_auth_failures_per_minute
     for key in _failure_keys(request, presented):
         _limiter(request).check(key, limit)
@@ -105,18 +108,22 @@ def require_scope(scope: Scope):
         token = _bearer(request)
         _refuse_if_too_many_failures(request, token)
         if not token:
-            _record_failure(request, None)
+            _record_failure(request, None, "missing_api_key")
             raise ApiError(401, "missing_api_key", "Authorization: Bearer <api key> is required")
         key = db.scalar(select(ApiKey).where(ApiKey.key_hash == sha256_hex(token),
                                              ApiKey.active.is_(True)))
         partner = db.get(Partner, key.partner_id) if key else None
         if key is None or partner is None:
-            _record_failure(request, token)
+            _record_failure(request, token, "invalid_api_key")
             raise ApiError(401, "invalid_api_key", "API key is not valid")
+
+        # From here on the request is authenticated: tell the access log and the audit log who it is.
+        request.state.partner_id, request.state.api_key_id = partner.id, key.id
+        audit.set_actor(db, "api_key", key.id)
 
         decision = _limiter(request).check(f"key:{key.id}", settings.rate_limit_key_per_minute)
         if not decision.allowed:
-            raise _rate_limited(decision)
+            raise _rate_limited(decision, "api_key")
         _set_rate_headers(response, decision)
 
         if scope not in (key.scopes or []):
@@ -138,21 +145,23 @@ def require_sdk_session(session_id: str, request: Request, response: Response,
     token = _bearer(request)
     _refuse_if_too_many_failures(request, token)
     if not token:
-        _record_failure(request, None)
+        _record_failure(request, None, "missing_session_token")
         raise ApiError(401, "missing_session_token", "Session token is required")
     session = db.get(ContinuousSession, session_id)
     if session is None:
-        _record_failure(request, token)
+        _record_failure(request, token, "session_not_found")
         raise ApiError(404, "session_not_found", "Session not found")
     if not hmac.compare_digest(session.sdk_token_hash, sha256_hex(token)):
-        _record_failure(request, token)
+        _record_failure(request, token, "invalid_session_token")
         raise ApiError(401, "invalid_session_token", "Session token is not valid for this session")
+    request.state.partner_id, request.state.session_id = session.partner_id, session.id
     if request.app.state.clock() >= session.sdk_token_expires_at_ms:
+        metrics.record_auth_failure("session_token_expired")
         raise ApiError(401, "session_token_expired", "Session token has expired")
 
     decision = _limiter(request).check(f"session:{session.id}",
                                        settings.rate_limit_session_per_minute)
     if not decision.allowed:
-        raise _rate_limited(decision)
+        raise _rate_limited(decision, "session")
     _set_rate_headers(response, decision)
     return session

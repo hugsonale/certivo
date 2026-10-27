@@ -45,11 +45,13 @@ def _request_id(request: Request) -> str | None:
 def install_error_handling(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     async def _api_error(request: Request, exc: ApiError):
+        request.state.error_code = exc.code  # read by the access log (app/observability.py)
         return JSONResponse(error_body(_request_id(request), exc.code, exc.message, exc.details),
                             status_code=exc.status, headers=exc.headers)
 
     @app.exception_handler(RequestValidationError)
     async def _validation(request: Request, exc: RequestValidationError):
+        request.state.error_code = "validation_error"
         details = [{"loc": [str(p) for p in e["loc"]], "msg": e["msg"], "type": e["type"]}
                    for e in exc.errors()]
         return JSONResponse(error_body(_request_id(request), "validation_error",
@@ -58,6 +60,7 @@ def install_error_handling(app: FastAPI) -> None:
     @app.exception_handler(StarletteHTTPException)
     async def _http(request: Request, exc: StarletteHTTPException):
         code = exc.code if isinstance(exc, HttpRejection) else f"http_{exc.status_code}"
+        request.state.error_code = code
         return JSONResponse(error_body(_request_id(request), code, str(exc.detail)),
                             status_code=exc.status_code, headers=getattr(exc, "headers", None))
 
@@ -67,7 +70,8 @@ def install_error_handling(app: FastAPI) -> None:
         from app.hardening import security_header_items  # local import: avoids a cycle
 
         request_id = _request_id(request)
-        log.error("Unhandled error (request_id=%s)", request_id, exc_info=exc)
+        request.state.error_code = "internal_error"
+        log.error("Unhandled error", extra={"request_id": request_id}, exc_info=exc)
         headers = dict(security_header_items(request.app.state.settings, request.url.path))
         if request_id:
             headers["X-Request-ID"] = request_id

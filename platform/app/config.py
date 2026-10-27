@@ -59,6 +59,18 @@ class Settings(BaseSettings):
     # Implausible-pattern detection (P0-12, ADR 0018): flags only, never blocks. A switch for emergencies.
     anomaly_detection_enabled: bool = True
 
+    # --- Observability (P0-13, docs/adr/0019).
+    log_format: Literal["json", "text"] = "json"      # "text" is only for reading logs on your own PC
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    metrics_enabled: bool = True
+    # GET /metrics needs "Authorization: Bearer <this>". Without a token it is served only when
+    # CERTIVO_ENV=dev, and never in any other environment.
+    metrics_token: str | None = None
+    # Tracing is OFF unless switched on. It needs the packages in requirements-otel.txt.
+    tracing_enabled: bool = False
+    tracing_otlp_endpoint: str | None = None          # e.g. http://collector:4318/v1/traces
+    tracing_service_name: str = "certivo-platform"
+
     # --- Webhook delivery (P0-07). Numbers are PLACEHOLDERS (docs/spec/base/05).
     redis_url: str = "redis://localhost:6379/0"      # the Celery broker
     # Key that encrypts webhook signing secrets in the database (a Fernet key; see
@@ -151,6 +163,8 @@ class Settings(BaseSettings):
                 "score_event_retention_days must be shorter than attestation_retention_days: the "
                 "attestation is the lasting record and the per-interval scores must not outlive it "
                 "(Privacy Architecture 2.2, Database Design 4.2)")
+        if self.metrics_token is not None and len(self.metrics_token) < 16:
+            raise ValueError("CERTIVO_METRICS_TOKEN must be at least 16 characters (or left unset)")
         if self.trusted_proxy_hops < 0 or self.body_read_timeout_s <= 0:
             raise ValueError("trusted_proxy_hops must be >= 0 and body_read_timeout_s > 0")
         return self
