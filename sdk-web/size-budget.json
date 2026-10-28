@@ -1,0 +1,9 @@
+{
+  "unit": "gzip bytes",
+  "note": "PLACEHOLDER budgets chosen in P0-21 before any real code exists. They are a ceiling we set ourselves, not a measured partner requirement: set the real numbers with the first design partner (P0-27, P1-01). The model and the ONNX runtime are loaded separately and later, with budgets of their own (P0-37).",
+  "files": {
+    "certivo-sdk.js": { "maxGzipBytes": 30000 },
+    "certivo-inference-worker.js": { "maxGzipBytes": 10000 }
+  },
+  "totalMaxGzipBytes": 36000
+}
