@@ -1,0 +1,2 @@
+# Keep these files with Unix line endings on every computer (Windows included): the formatter checks for it.
+* text=auto eol=lf

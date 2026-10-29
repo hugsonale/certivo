@@ -1,0 +1,29 @@
+{
+  "name": "certivo-sdk-web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Certivo Web SDK (P0-21 skeleton). See README.md.",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.12",
+    "npm": ">=11"
+  },
+  "scripts": {
+    "lint": "biome check .",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "build": "node scripts/build.mjs",
+    "size": "node scripts/check-size.mjs",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build && npm run size"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@types/node": "22.20.5",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2",
+    "vitest": "5.0.4"
+  }
+}

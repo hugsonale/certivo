@@ -1,0 +1,18 @@
+{
+  "name": "@certivo/sdk",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@certivo/sdk-capture": "*",
+    "@certivo/sdk-core": "*",
+    "@certivo/sdk-inference": "*",
+    "@certivo/sdk-types": "*",
+    "@certivo/sdk-ui": "*"
+  }
+}

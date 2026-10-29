@@ -1,0 +1,50 @@
+# Checks for the Web SDK (P0-21): lint, types, tests, build, bundle-size budget, dependency audit.
+# Runs only when something under sdk-web/ changes.
+name: sdk-web
+
+on:
+  pull_request:
+    paths:
+      - "sdk-web/**"
+      - ".github/workflows/sdk-web.yml"
+  push:
+    branches: [rebuild, main]
+    paths:
+      - "sdk-web/**"
+      - ".github/workflows/sdk-web.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  sdk-web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk-web
+    steps:
+      - uses: actions/checkout@v4
+      # Node 24 brings npm 11. npm 10 crashes on the pinned test runner (see sdk-web/README.md).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: sdk-web/package-lock.json
+      - name: Show versions
+        run: |
+          node --version
+          npm --version
+      - name: Install exactly what the lock file says
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Type check
+        run: npm run typecheck
+      - name: Tests (includes the architecture guards)
+        run: npm test
+      - name: Build
+        run: npm run build
+      - name: Bundle size budget
+        run: npm run size
+      - name: Dependency audit
+        run: npm audit --audit-level=high
