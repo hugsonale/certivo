@@ -26,7 +26,7 @@ class FakeWorker implements WorkerLike {
 }
 
 const image = () => ({ close: vi.fn() }) as unknown as ImageBitmap;
-const result = { confidence: 0.8, reasonCodes: ["consistent_face"], modelVersion: "t-0" };
+const result = { confidenceMilli: 800, reasonCodes: ["consistent_motion"], signalMilli: {}, modelVersion: "t-0" };
 
 describe("WorkerScorer", () => {
   it("moves (not copies) the picture to the worker and returns the score", async () => {
@@ -45,10 +45,10 @@ describe("WorkerScorer", () => {
     const scorer = new WorkerScorer(worker);
     const a = scorer.score(image());
     const b = scorer.score(image());
-    worker.reply({ type: "result", id: worker.sent[1]!.message.id, result: { ...result, confidence: 0.2 } });
-    worker.reply({ type: "result", id: worker.sent[0]!.message.id, result: { ...result, confidence: 0.9 } });
-    expect((await a).confidence).toBe(0.9);
-    expect((await b).confidence).toBe(0.2);
+    worker.reply({ type: "result", id: worker.sent[1]!.message.id, result: { ...result, confidenceMilli: 200 } });
+    worker.reply({ type: "result", id: worker.sent[0]!.message.id, result: { ...result, confidenceMilli: 900 } });
+    expect((await a).confidenceMilli).toBe(900);
+    expect((await b).confidenceMilli).toBe(200);
   });
 
   it("turns a worker error into a ScorerError with its code", async () => {

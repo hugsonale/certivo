@@ -173,9 +173,10 @@ describe("a frame can never leave the page or be kept (guide Part 3; full proof 
     const result = readFileSync(join(root, "types", "src", "index.ts"), "utf8");
     const body = /interface ScoreResult \{([\s\S]*?)\}/.exec(result)?.[1] ?? "";
     expect([...body.matchAll(/^\s*readonly (\w+):/gm)].map((m) => m[1]).sort()).toEqual([
-      "confidence",
+      "confidenceMilli",
       "modelVersion",
       "reasonCodes",
+      "signalMilli",
     ]);
   });
 });

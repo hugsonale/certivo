@@ -4,16 +4,21 @@ import {
   type PacketCodec,
   type ScorePacket,
   SdkError,
-  unimplementedCodec,
+  scoreCodecV1,
 } from "@certivo/sdk-core";
 import type { Scorer } from "@certivo/sdk-inference";
 import type { ScoreResult } from "@certivo/sdk-types";
 import { describe, expect, it, vi } from "vitest";
 import { type PipelineDeps, VerificationPipeline, type WaitingPacket } from "../src/index";
 
-const result: ScoreResult = { confidence: 0.85, reasonCodes: ["consistent_face"], modelVersion: "test-0" };
+const result: ScoreResult = {
+  confidenceMilli: 850,
+  reasonCodes: ["consistent_motion"],
+  signalMilli: { temporal: 900 },
+  modelVersion: "test-0",
+};
 
-function setup(overrides: Partial<PipelineDeps> = {}, scorer?: Scorer) {
+function setup(overrides: Partial<PipelineDeps> = {}, scorer?: Scorer, codecOverride?: PacketCodec) {
   const events: string[] = [];
   const frames: Array<{ close: ReturnType<typeof vi.fn> }> = [];
   const source = {
@@ -31,21 +36,23 @@ function setup(overrides: Partial<PipelineDeps> = {}, scorer?: Scorer) {
       return frame;
     },
   };
+  // The REAL codec, wrapped only to remember each packet it was given.
   const packets: ScorePacket[] = [];
+  const real = codecOverride ?? scoreCodecV1;
   const codec: PacketCodec = {
     encodeForSigning: (p) => {
       packets.push(p);
-      return new TextEncoder().encode(JSON.stringify(p));
+      return real.encodeForSigning(p);
     },
-    toWire: (p, signature) => ({ seq: p.seq, role: p.role, result: p.result, signature: Array.from(signature) }),
+    toWire: (p, signature) => real.toWire(p, signature),
   };
   const signer: DeviceSigner = {
     alg: "Ed25519",
     publicKeyRaw: async () => new Uint8Array(32),
-    sign: async () => new Uint8Array([9, 9]),
+    sign: async () => new Uint8Array(64).fill(7),
   };
   const bodies: unknown[] = [];
-  let now = 10_000;
+  let now = 1_760_000_000_000;
   const deps: PipelineDeps = {
     source,
     scorer: scorer ?? {
@@ -62,9 +69,9 @@ function setup(overrides: Partial<PipelineDeps> = {}, scorer?: Scorer) {
     },
     buffer: new MemoryPacketBuffer<WaitingPacket>(10),
     clock: () => (now += 5000),
-    sessionId: "cs_1",
-    participantRef: "p1",
-    deviceId: "dev_1",
+    sessionId: "cs_00000000000000000000000000000001",
+    participantReference: "alice",
+    deviceId: "dev_00000000000000000000000000000001",
     intervalMs: 5000,
     ...overrides,
   };
@@ -79,13 +86,24 @@ describe("one turn of the verification loop", () => {
     expect(frames[0]?.close).toHaveBeenCalledTimes(1);
   });
 
-  it("never lets a picture reach the packet or the thing that is sent", async () => {
-    const { pipeline, packets, bodies } = setup();
+  it("sends exactly what the platform accepts, and never a picture", async () => {
+    const { pipeline, bodies } = setup();
     await pipeline.runInterval();
-    const everything = JSON.stringify([packets, bodies]);
-    expect(everything).not.toContain("pixels");
-    expect(everything).not.toContain("image");
-    expect(Object.keys(packets[0]!.result).sort()).toEqual(["confidence", "modelVersion", "reasonCodes"]);
+    const body = bodies[0] as Record<string, unknown>;
+    expect(Object.keys(body).sort()).toEqual([
+      "confidence_milli",
+      "device_id",
+      "device_signature",
+      "explanation",
+      "interval_end_ms",
+      "interval_start_ms",
+      "model_version",
+      "participant_reference",
+      "seq",
+      "v",
+    ]);
+    expect(JSON.stringify(body)).not.toContain("pixels");
+    expect(JSON.stringify(body)).not.toContain("image");
   });
 
   it("numbers packets 0, 1, 2 and makes each interval start where the last one ended", async () => {
@@ -127,17 +145,24 @@ describe("one turn of the verification loop", () => {
     expect(frames[0]?.close).toHaveBeenCalledTimes(1);
   });
 
-  it("fails loudly, and sends nothing, while the packet format is still the placeholder", async () => {
-    const { pipeline, frames, bodies } = setup({ codec: unimplementedCodec });
-    await expect(pipeline.runInterval()).rejects.toMatchObject({ code: "not_implemented" });
+  it("refuses to send a score the platform would refuse (a model that gives a nonsense result)", async () => {
+    const nonsense: Scorer = { score: async () => ({ ...result, confidenceMilli: 1500 }) };
+    const { pipeline, bodies, frames } = setup({}, nonsense);
+    await expect(pipeline.runInterval()).rejects.toMatchObject({ code: "invalid_packet" });
     expect(bodies).toEqual([]);
     expect(frames[0]?.close).toHaveBeenCalledTimes(1);
   });
 
-  it("carries the observer role through to the packet (reserved for D-02)", async () => {
-    const { pipeline, packets } = setup({ role: "observer", subjectParticipantRef: "p2" });
-    await pipeline.runInterval();
-    expect(packets[0]).toMatchObject({ role: "observer", subjectParticipantRef: "p2", participantRef: "p1" });
+  it("holds the observer role back: it is built, but nothing is signed or sent (the platform has no role field yet)", async () => {
+    const { pipeline, packets, bodies, frames } = setup({ role: "observer", subjectParticipantReference: "bob" });
+    await expect(pipeline.runInterval()).rejects.toMatchObject({ code: "not_implemented" });
+    expect(packets[0]).toMatchObject({
+      role: "observer",
+      subjectParticipantReference: "bob",
+      participantReference: "alice",
+    });
+    expect(bodies).toEqual([]);
+    expect(frames[0]?.close).toHaveBeenCalledTimes(1);
   });
 
   it("uses the role 'self' when none is given", async () => {

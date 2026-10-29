@@ -5,6 +5,7 @@ import {
   type MemoryPacketBuffer,
   type PacketCodec,
   type ScorePacket,
+  type ScoreWirePacket,
   SdkError,
 } from "@certivo/sdk-core";
 import type { Scorer } from "@certivo/sdk-inference";
@@ -12,7 +13,7 @@ import type { PacketRole, ScoreResult } from "@certivo/sdk-types";
 
 export interface WaitingPacket {
   readonly seq: number;
-  readonly body: unknown;
+  readonly body: ScoreWirePacket;
 }
 
 export interface PipelineDeps {
@@ -21,16 +22,19 @@ export interface PipelineDeps {
   signer: DeviceSigner;
   codec: PacketCodec;
   /** Sends one packet body. Only the body leaves; a frame never reaches this function. */
-  send(body: unknown): Promise<unknown>;
+  send(body: ScoreWirePacket): Promise<unknown>;
   buffer: MemoryPacketBuffer<WaitingPacket>;
   clock(): number;
   sessionId: string;
-  participantRef: string;
+  participantReference: string;
   deviceId: string;
   intervalMs: number;
-  /** "self" (default) or "observer" (receiver-side scoring, D-02, built in P1-10). */
+  /**
+   * "self" (default). "observer" (receiver-side scoring, D-02) is held back: the codec refuses it until the platform's
+   * packet format has a role field (docs/adr/0022).
+   */
   role?: PacketRole;
-  subjectParticipantRef?: string;
+  subjectParticipantReference?: string;
 }
 
 export type IntervalOutcome =
@@ -72,16 +76,15 @@ export class VerificationPipeline {
     const seq = this.seq++;
     const packet: ScorePacket = buildPacket({
       sessionId: this.deps.sessionId,
-      participantRef: this.deps.participantRef,
+      participantReference: this.deps.participantReference,
       deviceId: this.deps.deviceId,
       seq,
       intervalStartMs: startMs,
       intervalEndMs: endMs,
       result,
-      alg: signer.alg,
       ...(this.deps.role !== undefined ? { role: this.deps.role } : {}),
-      ...(this.deps.subjectParticipantRef !== undefined
-        ? { subjectParticipantRef: this.deps.subjectParticipantRef }
+      ...(this.deps.subjectParticipantReference !== undefined
+        ? { subjectParticipantReference: this.deps.subjectParticipantReference }
         : {}),
     });
     const signature = await signer.sign(codec.encodeForSigning(packet));

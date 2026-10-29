@@ -1,0 +1,1925 @@
+{
+ "description": "Cases for the canonical JSON profile (BUILD_SPEC_0 section 4). For each entry in `cases`, encoding `value` must give exactly `canonical_utf8` (and these bytes in hex). For each entry in `rejected`, encoding `value` must FAIL. Every SDK language must match every case.",
+ "cases": [
+  {
+   "name": "empty object",
+   "value": {},
+   "canonical_utf8": "{}",
+   "canonical_bytes_hex": "7b7d"
+  },
+  {
+   "name": "empty array",
+   "value": [],
+   "canonical_utf8": "[]",
+   "canonical_bytes_hex": "5b5d"
+  },
+  {
+   "name": "zero",
+   "value": {
+    "a": 0
+   },
+   "canonical_utf8": "{\"a\":0}",
+   "canonical_bytes_hex": "7b2261223a307d"
+  },
+  {
+   "name": "negative",
+   "value": {
+    "a": -1
+   },
+   "canonical_utf8": "{\"a\":-1}",
+   "canonical_bytes_hex": "7b2261223a2d317d"
+  },
+  {
+   "name": "largest allowed integer",
+   "value": {
+    "a": 9007199254740991
+   },
+   "canonical_utf8": "{\"a\":9007199254740991}",
+   "canonical_bytes_hex": "7b2261223a393030373139393235343734303939317d"
+  },
+  {
+   "name": "smallest allowed integer",
+   "value": {
+    "a": -9007199254740991
+   },
+   "canonical_utf8": "{\"a\":-9007199254740991}",
+   "canonical_bytes_hex": "7b2261223a2d393030373139393235343734303939317d"
+  },
+  {
+   "name": "a millisecond timestamp",
+   "value": {
+    "t": 1760000004000
+   },
+   "canonical_utf8": "{\"t\":1760000004000}",
+   "canonical_bytes_hex": "7b2274223a313736303030303030343030307d"
+  },
+  {
+   "name": "key order: underscore, digit, letter",
+   "value": {
+    "a_b": 1,
+    "a1": 2,
+    "ab": 3,
+    "a": 4,
+    "_": 5,
+    "0": 6,
+    "9": 7,
+    "z": 8
+   },
+   "canonical_utf8": "{\"0\":6,\"9\":7,\"_\":5,\"a\":4,\"a1\":2,\"a_b\":1,\"ab\":3,\"z\":8}",
+   "canonical_bytes_hex": "7b2230223a362c2239223a372c225f223a352c2261223a342c226131223a322c22615f62223a312c226162223a332c227a223a387d"
+  },
+  {
+   "name": "nested objects are sorted too",
+   "value": {
+    "b": {
+     "d": 1,
+     "c": 2
+    },
+    "a": {
+     "y": [
+      3,
+      2,
+      1
+     ],
+     "x": {}
+    }
+   },
+   "canonical_utf8": "{\"a\":{\"x\":{},\"y\":[3,2,1]},\"b\":{\"c\":2,\"d\":1}}",
+   "canonical_bytes_hex": "7b2261223a7b2278223a7b7d2c2279223a5b332c322c315d7d2c2262223a7b2263223a322c2264223a317d7d"
+  },
+  {
+   "name": "arrays keep their order",
+   "value": {
+    "a": [
+     3,
+     1,
+     2,
+     [
+      9,
+      8
+     ],
+     {
+      "z": 1,
+      "y": 2
+     }
+    ]
+   },
+   "canonical_utf8": "{\"a\":[3,1,2,[9,8],{\"y\":2,\"z\":1}]}",
+   "canonical_bytes_hex": "7b2261223a5b332c312c322c5b392c385d2c7b2279223a322c227a223a317d5d7d"
+  },
+  {
+   "name": "a double quote in a string",
+   "value": {
+    "a": "say \"hi\""
+   },
+   "canonical_utf8": "{\"a\":\"say \\\"hi\\\"\"}",
+   "canonical_bytes_hex": "7b2261223a22736179205c2268695c22227d"
+  },
+  {
+   "name": "a backslash in a string",
+   "value": {
+    "a": "C:\\path\\file"
+   },
+   "canonical_utf8": "{\"a\":\"C:\\\\path\\\\file\"}",
+   "canonical_bytes_hex": "7b2261223a22433a5c5c706174685c5c66696c65227d"
+  },
+  {
+   "name": "a quote and a backslash together",
+   "value": {
+    "a": "\\\""
+   },
+   "canonical_utf8": "{\"a\":\"\\\\\\\"\"}",
+   "canonical_bytes_hex": "7b2261223a225c5c5c22227d"
+  },
+  {
+   "name": "a string that is only a space",
+   "value": {
+    "a": " "
+   },
+   "canonical_utf8": "{\"a\":\" \"}",
+   "canonical_bytes_hex": "7b2261223a2220227d"
+  },
+  {
+   "name": "every printable character",
+   "value": {
+    "a": " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
+   },
+   "canonical_utf8": "{\"a\":\" !\\\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\"}",
+   "canonical_bytes_hex": "7b2261223a2220215c22232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e227d"
+  },
+  {
+   "name": "slash and tilde are not escaped",
+   "value": {
+    "a": "a/b~c"
+   },
+   "canonical_utf8": "{\"a\":\"a/b~c\"}",
+   "canonical_bytes_hex": "7b2261223a22612f627e63227d"
+  },
+  {
+   "name": "an empty string",
+   "value": {
+    "a": ""
+   },
+   "canonical_utf8": "{\"a\":\"\"}",
+   "canonical_bytes_hex": "7b2261223a22227d"
+  },
+  {
+   "name": "the longest allowed key",
+   "value": {
+    "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk": 1
+   },
+   "canonical_utf8": "{\"kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk\":1}",
+   "canonical_bytes_hex": "7b226b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b223a317d"
+  },
+  {
+   "name": "strings that look like numbers stay strings",
+   "value": {
+    "a": "123",
+    "b": "-0",
+    "c": "true",
+    "d": "null"
+   },
+   "canonical_utf8": "{\"a\":\"123\",\"b\":\"-0\",\"c\":\"true\",\"d\":\"null\"}",
+   "canonical_bytes_hex": "7b2261223a22313233222c2262223a222d30222c2263223a2274727565222c2264223a226e756c6c227d"
+  },
+  {
+   "name": "a whole packet shape",
+   "value": {
+    "v": 1,
+    "seq": 0,
+    "explanation": {
+     "reason_codes": [
+      "x"
+     ],
+     "signal_milli": {}
+    }
+   },
+   "canonical_utf8": "{\"explanation\":{\"reason_codes\":[\"x\"],\"signal_milli\":{}},\"seq\":0,\"v\":1}",
+   "canonical_bytes_hex": "7b226578706c616e6174696f6e223a7b22726561736f6e5f636f646573223a5b2278225d2c227369676e616c5f6d696c6c69223a7b7d7d2c22736571223a302c2276223a317d"
+  },
+  {
+   "name": "generated 0",
+   "value": {
+    "f": 601,
+    "l": [
+     -9007199254740991,
+     1,
+     []
+    ],
+    "f53": "u.@>\"wEKc/3"
+   },
+   "canonical_utf8": "{\"f\":601,\"f53\":\"u.@>\\\"wEKc/3\",\"l\":[-9007199254740991,1,[]]}",
+   "canonical_bytes_hex": "7b2266223a3630312c22663533223a22752e403e5c2277454b632f33222c226c223a5b2d393030373139393235343734303939312c312c5b5d5d7d"
+  },
+  {
+   "name": "generated 1",
+   "value": {
+    "gp2": [
+     [
+      {},
+      698,
+      562
+     ],
+     -1
+    ],
+    "r": {
+     "0n": "%d'S>",
+     "m1o": "'!(",
+     "5r1tq": [],
+     "ahb": {}
+    },
+    "nwvajj": 0,
+    "9": 5267771260515
+   },
+   "canonical_utf8": "{\"9\":5267771260515,\"gp2\":[[{},698,562],-1],\"nwvajj\":0,\"r\":{\"0n\":\"%d'S>\",\"5r1tq\":[],\"ahb\":{},\"m1o\":\"'!(\"}}",
+   "canonical_bytes_hex": "7b2239223a353236373737313236303531352c22677032223a5b5b7b7d2c3639382c3536325d2c2d315d2c226e7776616a6a223a302c2272223a7b22306e223a22256427533e222c223572317471223a5b5d2c22616862223a7b7d2c226d316f223a22272128227d7d"
+  },
+  {
+   "name": "generated 2",
+   "value": "FMJm5K",
+   "canonical_utf8": "\"FMJm5K\"",
+   "canonical_bytes_hex": "22464d4a6d354b22"
+  },
+  {
+   "name": "generated 3",
+   "value": {
+    "o": {
+     "qu6": -9007199254740991,
+     "k": "{\\u",
+     "koel": {
+      "df": [
+       9007199254740991,
+       -9007199254740991,
+       -1
+      ],
+      "3bdoo": "ls{I\\Hh3",
+      "s": {
+       "d1_": -7482624252973,
+       "h": 3112077138965
+      },
+      "rwcd": "%|\"z `y"
+     },
+     "lyvnj3": {
+      "t": "a|X",
+      "soiijb": "%%j{g",
+      "u9tf": {
+       "m7spd9": "$~n",
+       "6i82j": 5086802813830,
+       "q": 9007199254740991
+      },
+      "q73de2": [
+       -9007199254740991
+      ]
+     }
+    },
+    "v1_": -1
+   },
+   "canonical_utf8": "{\"o\":{\"k\":\"{\\\\u\",\"koel\":{\"3bdoo\":\"ls{I\\\\Hh3\",\"df\":[9007199254740991,-9007199254740991,-1],\"rwcd\":\"%|\\\"z `y\",\"s\":{\"d1_\":-7482624252973,\"h\":3112077138965}},\"lyvnj3\":{\"q73de2\":[-9007199254740991],\"soiijb\":\"%%j{g\",\"t\":\"a|X\",\"u9tf\":{\"6i82j\":5086802813830,\"m7spd9\":\"$~n\",\"q\":9007199254740991}},\"qu6\":-9007199254740991},\"v1_\":-1}",
+   "canonical_bytes_hex": "7b226f223a7b226b223a227b5c5c75222c226b6f656c223a7b223362646f6f223a226c737b495c5c486833222c226466223a5b393030373139393235343734303939312c2d393030373139393235343734303939312c2d315d2c2272776364223a22257c5c227a206079222c2273223a7b2264315f223a2d373438323632343235323937332c2268223a333131323037373133383936357d7d2c226c79766e6a33223a7b22713733646532223a5b2d393030373139393235343734303939315d2c22736f69696a62223a2225256a7b67222c2274223a22617c58222c2275397466223a7b22366938326a223a353038363830323831333833302c226d3773706439223a22247e6e222c2271223a393030373139393235343734303939317d7d2c22717536223a2d393030373139393235343734303939317d2c2276315f223a2d317d"
+  },
+  {
+   "name": "generated 4",
+   "value": {},
+   "canonical_utf8": "{}",
+   "canonical_bytes_hex": "7b7d"
+  },
+  {
+   "name": "generated 5",
+   "value": "Ou",
+   "canonical_utf8": "\"Ou\"",
+   "canonical_bytes_hex": "224f7522"
+  },
+  {
+   "name": "generated 6",
+   "value": {
+    "2g8": [],
+    "gnwkt": [
+     "Nc]Ll3 J",
+     "nG8~flP"
+    ]
+   },
+   "canonical_utf8": "{\"2g8\":[],\"gnwkt\":[\"Nc]Ll3 J\",\"nG8~flP\"]}",
+   "canonical_bytes_hex": "7b22326738223a5b5d2c22676e776b74223a5b224e635d4c6c33204a222c226e47387e666c50225d7d"
+  },
+  {
+   "name": "generated 7",
+   "value": [
+    3585729907164,
+    "~f$tM,C(",
+    "6^Xh-"
+   ],
+   "canonical_utf8": "[3585729907164,\"~f$tM,C(\",\"6^Xh-\"]",
+   "canonical_bytes_hex": "5b333538353732393930373136342c227e6624744d2c4328222c22365e58682d225d"
+  },
+  {
+   "name": "generated 8",
+   "value": -9007199254740991,
+   "canonical_utf8": "-9007199254740991",
+   "canonical_bytes_hex": "2d39303037313939323534373430393931"
+  },
+  {
+   "name": "generated 9",
+   "value": "0@n",
+   "canonical_utf8": "\"0@n\"",
+   "canonical_bytes_hex": "2230406e22"
+  },
+  {
+   "name": "generated 10",
+   "value": [
+    "0~+",
+    {},
+    "07uFZ=8&1=o"
+   ],
+   "canonical_utf8": "[\"0~+\",{},\"07uFZ=8&1=o\"]",
+   "canonical_bytes_hex": "5b22307e2b222c7b7d2c22303775465a3d3826313d6f225d"
+  },
+  {
+   "name": "generated 11",
+   "value": "q^",
+   "canonical_utf8": "\"q^\"",
+   "canonical_bytes_hex": "22715e22"
+  },
+  {
+   "name": "generated 12",
+   "value": 7903010876072,
+   "canonical_utf8": "7903010876072",
+   "canonical_bytes_hex": "37393033303130383736303732"
+  },
+  {
+   "name": "generated 13",
+   "value": [
+    {
+     "i8qvn1": ",)",
+     "_rotl": -6868745570188
+    }
+   ],
+   "canonical_utf8": "[{\"_rotl\":-6868745570188,\"i8qvn1\":\",)\"}]",
+   "canonical_bytes_hex": "5b7b225f726f746c223a2d363836383734353537303138382c22693871766e31223a222c29227d5d"
+  },
+  {
+   "name": "generated 14",
+   "value": [
+    1
+   ],
+   "canonical_utf8": "[1]",
+   "canonical_bytes_hex": "5b315d"
+  },
+  {
+   "name": "generated 15",
+   "value": "3T-",
+   "canonical_utf8": "\"3T-\"",
+   "canonical_bytes_hex": "2233542d22"
+  },
+  {
+   "name": "generated 16",
+   "value": "yk[O%VK>^J",
+   "canonical_utf8": "\"yk[O%VK>^J\"",
+   "canonical_bytes_hex": "22796b5b4f25564b3e5e4a22"
+  },
+  {
+   "name": "generated 17",
+   "value": "u!En(r',",
+   "canonical_utf8": "\"u!En(r',\"",
+   "canonical_bytes_hex": "227521456e2872272c22"
+  },
+  {
+   "name": "generated 18",
+   "value": -5105252667518,
+   "canonical_utf8": "-5105252667518",
+   "canonical_bytes_hex": "2d35313035323532363637353138"
+  },
+  {
+   "name": "generated 19",
+   "value": {
+    "8oyh8y": -1
+   },
+   "canonical_utf8": "{\"8oyh8y\":-1}",
+   "canonical_bytes_hex": "7b22386f79683879223a2d317d"
+  },
+  {
+   "name": "generated 20",
+   "value": [
+    "?N=",
+    [
+     "A>V\\(C\\k",
+     9007199254740991
+    ],
+    "&qo5"
+   ],
+   "canonical_utf8": "[\"?N=\",[\"A>V\\\\(C\\\\k\",9007199254740991],\"&qo5\"]",
+   "canonical_bytes_hex": "5b223f4e3d222c5b22413e565c5c28435c5c6b222c393030373139393235343734303939315d2c2226716f35225d"
+  },
+  {
+   "name": "generated 21",
+   "value": [
+    {
+     "gjnd11": {},
+     "x9ls3": 1
+    },
+    "QE0"
+   ],
+   "canonical_utf8": "[{\"gjnd11\":{},\"x9ls3\":1},\"QE0\"]",
+   "canonical_bytes_hex": "5b7b22676a6e643131223a7b7d2c2278396c7333223a317d2c22514530225d"
+  },
+  {
+   "name": "generated 22",
+   "value": {
+    "74jlo": 536,
+    "c24": {
+     "utik": [
+      "ll",
+      [
+       "RxZTq",
+       ")wh|#",
+       0
+      ],
+      {
+       "pn": 0,
+       "s75tw": "Q$D-",
+       "1id": "D Dr{6J8$",
+       "snrds3": 1
+      }
+     ],
+     "ykkg": [
+      0
+     ]
+    },
+    "_gp1z": [
+     {
+      "ya": 890
+     }
+    ],
+    "wf_i_a": {
+     "n5nl2": [
+      "lQNYi"
+     ]
+    }
+   },
+   "canonical_utf8": "{\"74jlo\":536,\"_gp1z\":[{\"ya\":890}],\"c24\":{\"utik\":[\"ll\",[\"RxZTq\",\")wh|#\",0],{\"1id\":\"D Dr{6J8$\",\"pn\":0,\"s75tw\":\"Q$D-\",\"snrds3\":1}],\"ykkg\":[0]},\"wf_i_a\":{\"n5nl2\":[\"lQNYi\"]}}",
+   "canonical_bytes_hex": "7b2237346a6c6f223a3533362c225f6770317a223a5b7b227961223a3839307d5d2c22633234223a7b227574696b223a5b226c6c222c5b2252785a5471222c222977687c23222c305d2c7b22316964223a22442044727b364a3824222c22706e223a302c227337357477223a225124442d222c22736e72647333223a317d5d2c22796b6b67223a5b305d7d2c2277665f695f61223a7b226e356e6c32223a5b226c514e5969225d7d7d"
+  },
+  {
+   "name": "generated 23",
+   "value": 1,
+   "canonical_utf8": "1",
+   "canonical_bytes_hex": "31"
+  },
+  {
+   "name": "generated 24",
+   "value": ":dn",
+   "canonical_utf8": "\":dn\"",
+   "canonical_bytes_hex": "223a646e22"
+  },
+  {
+   "name": "generated 25",
+   "value": {
+    "w0vjs": [
+     "%[7wO7%",
+     9281753871924,
+     9007199254740991
+    ],
+    "7cmg": -1,
+    "wqaah": 0,
+    "h": "5"
+   },
+   "canonical_utf8": "{\"7cmg\":-1,\"h\":\"5\",\"w0vjs\":[\"%[7wO7%\",9281753871924,9007199254740991],\"wqaah\":0}",
+   "canonical_bytes_hex": "7b2237636d67223a2d312c2268223a2235222c227730766a73223a5b22255b37774f3725222c393238313735333837313932342c393030373139393235343734303939315d2c227771616168223a307d"
+  },
+  {
+   "name": "generated 26",
+   "value": {
+    "b15qc": "~^IY",
+    "ugo": "nC(2_H",
+    "rm6e": "E]",
+    "smiwba": []
+   },
+   "canonical_utf8": "{\"b15qc\":\"~^IY\",\"rm6e\":\"E]\",\"smiwba\":[],\"ugo\":\"nC(2_H\"}",
+   "canonical_bytes_hex": "7b226231357163223a227e5e4959222c22726d3665223a22455d222c22736d69776261223a5b5d2c2275676f223a226e4328325f48227d"
+  },
+  {
+   "name": "generated 27",
+   "value": "D&e\"?XwO^C&",
+   "canonical_utf8": "\"D&e\\\"?XwO^C&\"",
+   "canonical_bytes_hex": "224426655c223f58774f5e432622"
+  },
+  {
+   "name": "generated 28",
+   "value": 1,
+   "canonical_utf8": "1",
+   "canonical_bytes_hex": "31"
+  },
+  {
+   "name": "generated 29",
+   "value": {},
+   "canonical_utf8": "{}",
+   "canonical_bytes_hex": "7b7d"
+  },
+  {
+   "name": "generated 30",
+   "value": "z;BS#",
+   "canonical_utf8": "\"z;BS#\"",
+   "canonical_bytes_hex": "227a3b42532322"
+  },
+  {
+   "name": "generated 31",
+   "value": [
+    "_",
+    [
+     8802092953046
+    ],
+    {
+     "fc": [
+      [],
+      {},
+      "mg1k:]%,"
+     ],
+     "x3": "&>"
+    }
+   ],
+   "canonical_utf8": "[\"_\",[8802092953046],{\"fc\":[[],{},\"mg1k:]%,\"],\"x3\":\"&>\"}]",
+   "canonical_bytes_hex": "5b225f222c5b383830323039323935333034365d2c7b226663223a5b5b5d2c7b7d2c226d67316b3a5d252c225d2c227833223a22263e227d5d"
+  },
+  {
+   "name": "generated 32",
+   "value": "6nTxM<",
+   "canonical_utf8": "\"6nTxM<\"",
+   "canonical_bytes_hex": "22366e54784d3c22"
+  },
+  {
+   "name": "generated 33",
+   "value": [
+    {},
+    [
+     {
+      "1byd": -9007199254740991,
+      "_": "c]^}"
+     }
+    ]
+   ],
+   "canonical_utf8": "[{},[{\"1byd\":-9007199254740991,\"_\":\"c]^}\"}]]",
+   "canonical_bytes_hex": "5b7b7d2c5b7b2231627964223a2d393030373139393235343734303939312c225f223a22635d5e7d227d5d5d"
+  },
+  {
+   "name": "generated 34",
+   "value": [],
+   "canonical_utf8": "[]",
+   "canonical_bytes_hex": "5b5d"
+  },
+  {
+   "name": "generated 35",
+   "value": "Df4",
+   "canonical_utf8": "\"Df4\"",
+   "canonical_bytes_hex": "2244663422"
+  },
+  {
+   "name": "generated 36",
+   "value": {
+    "1yg27f": {
+     "bftadj": [
+      {},
+      -5755718964809
+     ]
+    },
+    "49y": {
+     "lnusau": 0,
+     "tp": 9007199254740991
+    }
+   },
+   "canonical_utf8": "{\"1yg27f\":{\"bftadj\":[{},-5755718964809]},\"49y\":{\"lnusau\":0,\"tp\":9007199254740991}}",
+   "canonical_bytes_hex": "7b22317967323766223a7b2262667461646a223a5b7b7d2c2d353735353731383936343830395d7d2c22343979223a7b226c6e75736175223a302c227470223a393030373139393235343734303939317d7d"
+  },
+  {
+   "name": "generated 37",
+   "value": [
+    9007199254740991
+   ],
+   "canonical_utf8": "[9007199254740991]",
+   "canonical_bytes_hex": "5b393030373139393235343734303939315d"
+  },
+  {
+   "name": "generated 38",
+   "value": [
+    0,
+    {
+     "uc4pe": [
+      "PO\"C@&j>=",
+      -3325043982115
+     ]
+    }
+   ],
+   "canonical_utf8": "[0,{\"uc4pe\":[\"PO\\\"C@&j>=\",-3325043982115]}]",
+   "canonical_bytes_hex": "5b302c7b227563347065223a5b22504f5c224340266a3e3d222c2d333332353034333938323131355d7d5d"
+  },
+  {
+   "name": "generated 39",
+   "value": {
+    "_iwc1": {
+     "vlxa": "U",
+     "tceg": 9007199254740991,
+     "x9uifw": [],
+     "w": 816
+    },
+    "o": -305818601289,
+    "y0xx7h": -9007199254740991,
+    "pumi": -5799596394279
+   },
+   "canonical_utf8": "{\"_iwc1\":{\"tceg\":9007199254740991,\"vlxa\":\"U\",\"w\":816,\"x9uifw\":[]},\"o\":-305818601289,\"pumi\":-5799596394279,\"y0xx7h\":-9007199254740991}",
+   "canonical_bytes_hex": "7b225f69776331223a7b2274636567223a393030373139393235343734303939312c22766c7861223a2255222c2277223a3831362c22783975696677223a5b5d7d2c226f223a2d3330353831383630313238392c2270756d69223a2d353739393539363339343237392c22793078783768223a2d393030373139393235343734303939317d"
+  },
+  {
+   "name": "generated 40",
+   "value": {
+    "jy": 146
+   },
+   "canonical_utf8": "{\"jy\":146}",
+   "canonical_bytes_hex": "7b226a79223a3134367d"
+  },
+  {
+   "name": "generated 41",
+   "value": -1067515101349,
+   "canonical_utf8": "-1067515101349",
+   "canonical_bytes_hex": "2d31303637353135313031333439"
+  },
+  {
+   "name": "generated 42",
+   "value": [
+    [
+     {
+      "vr8": "nx\"J"
+     },
+     [
+      [],
+      {
+       "j": "||"
+      }
+     ],
+     8049148312630
+    ],
+    "K5t*-Uy"
+   ],
+   "canonical_utf8": "[[{\"vr8\":\"nx\\\"J\"},[[],{\"j\":\"||\"}],8049148312630],\"K5t*-Uy\"]",
+   "canonical_bytes_hex": "5b5b7b22767238223a226e785c224a227d2c5b5b5d2c7b226a223a227c7c227d5d2c383034393134383331323633305d2c224b35742a2d5579225d"
+  },
+  {
+   "name": "generated 43",
+   "value": {
+    "d9l2mr": "^':",
+    "84": {
+     "fe4b3c": -1,
+     "4lcnh_": 9007199254740991,
+     "8gsh1": "w}4DIsH44w~",
+     "vonm": {
+      "7_5pt": "U$",
+      "8jkyl": {}
+     }
+    }
+   },
+   "canonical_utf8": "{\"84\":{\"4lcnh_\":9007199254740991,\"8gsh1\":\"w}4DIsH44w~\",\"fe4b3c\":-1,\"vonm\":{\"7_5pt\":\"U$\",\"8jkyl\":{}}},\"d9l2mr\":\"^':\"}",
+   "canonical_bytes_hex": "7b223834223a7b22346c636e685f223a393030373139393235343734303939312c223867736831223a22777d34444973483434777e222c22666534623363223a2d312c22766f6e6d223a7b22375f357074223a225524222c22386a6b796c223a7b7d7d7d2c2264396c326d72223a225e273a227d"
+  },
+  {
+   "name": "generated 44",
+   "value": [
+    {
+     "oeyx1p": {},
+     "6g": "sARZI",
+     "zchl": "ID5&\\ns5>0["
+    },
+    "v5Qc0"
+   ],
+   "canonical_utf8": "[{\"6g\":\"sARZI\",\"oeyx1p\":{},\"zchl\":\"ID5&\\\\ns5>0[\"},\"v5Qc0\"]",
+   "canonical_bytes_hex": "5b7b223667223a227341525a49222c226f6579783170223a7b7d2c227a63686c223a22494435265c5c6e73353e305b227d2c227635516330225d"
+  },
+  {
+   "name": "generated 45",
+   "value": 8883724140839,
+   "canonical_utf8": "8883724140839",
+   "canonical_bytes_hex": "38383833373234313430383339"
+  },
+  {
+   "name": "generated 46",
+   "value": [],
+   "canonical_utf8": "[]",
+   "canonical_bytes_hex": "5b5d"
+  },
+  {
+   "name": "generated 47",
+   "value": 1,
+   "canonical_utf8": "1",
+   "canonical_bytes_hex": "31"
+  },
+  {
+   "name": "generated 48",
+   "value": [],
+   "canonical_utf8": "[]",
+   "canonical_bytes_hex": "5b5d"
+  },
+  {
+   "name": "generated 49",
+   "value": [
+    -1
+   ],
+   "canonical_utf8": "[-1]",
+   "canonical_bytes_hex": "5b2d315d"
+  },
+  {
+   "name": "generated 50",
+   "value": {},
+   "canonical_utf8": "{}",
+   "canonical_bytes_hex": "7b7d"
+  },
+  {
+   "name": "generated 51",
+   "value": {
+    "y9x": [
+     {
+      "k05": "Noc.WiV{gs",
+      "04b3": {
+       "hgni8": "z]c{z"
+      },
+      "ws7u": {
+       "1o": 107,
+       "ae": "G]",
+       "g7ugnk": ";)XYpFU`",
+       "m1iy0": "k2G}w-xH<~_"
+      },
+      "dghuw": [
+       "O",
+       "LEDy,"
+      ]
+     }
+    ]
+   },
+   "canonical_utf8": "{\"y9x\":[{\"04b3\":{\"hgni8\":\"z]c{z\"},\"dghuw\":[\"O\",\"LEDy,\"],\"k05\":\"Noc.WiV{gs\",\"ws7u\":{\"1o\":107,\"ae\":\"G]\",\"g7ugnk\":\";)XYpFU`\",\"m1iy0\":\"k2G}w-xH<~_\"}}]}",
+   "canonical_bytes_hex": "7b22793978223a5b7b2230346233223a7b2268676e6938223a227a5d637b7a227d2c226467687577223a5b224f222c224c4544792c225d2c226b3035223a224e6f632e5769567b6773222c2277733775223a7b22316f223a3130372c226165223a22475d222c22673775676e6b223a223b29585970465560222c226d31697930223a226b32477d772d78483c7e5f227d7d5d7d"
+  },
+  {
+   "name": "generated 52",
+   "value": [
+    0,
+    [
+     {
+      "id1ed": 9007199254740991,
+      "c": {
+       "9_m6": "",
+       "h4n": "[Mr HH/e_@",
+       "4f": 804,
+       "h2hp_": "<w:'CD_"
+      }
+     },
+     []
+    ]
+   ],
+   "canonical_utf8": "[0,[{\"c\":{\"4f\":804,\"9_m6\":\"\",\"h2hp_\":\"<w:'CD_\",\"h4n\":\"[Mr HH/e_@\"},\"id1ed\":9007199254740991},[]]]",
+   "canonical_bytes_hex": "5b302c5b7b2263223a7b223466223a3830342c22395f6d36223a22222c22683268705f223a223c773a2743445f222c2268346e223a225b4d722048482f655f40227d2c226964316564223a393030373139393235343734303939317d2c5b5d5d5d"
+  },
+  {
+   "name": "generated 53",
+   "value": [],
+   "canonical_utf8": "[]",
+   "canonical_bytes_hex": "5b5d"
+  },
+  {
+   "name": "generated 54",
+   "value": {
+    "7": {
+     "8ufch": [
+      1,
+      {}
+     ],
+     "e9f1": "*NRa<)"
+    }
+   },
+   "canonical_utf8": "{\"7\":{\"8ufch\":[1,{}],\"e9f1\":\"*NRa<)\"}}",
+   "canonical_bytes_hex": "7b2237223a7b223875666368223a5b312c7b7d5d2c2265396631223a222a4e52613c29227d7d"
+  },
+  {
+   "name": "generated 55",
+   "value": {
+    "tzv": [
+     "v-!^^-Nq<"
+    ],
+    "cq": [
+     "rX ",
+     [
+      [
+       1,
+       6225593604690
+      ]
+     ],
+     {
+      "g": {
+       "rry5e4": "ii"
+      }
+     }
+    ]
+   },
+   "canonical_utf8": "{\"cq\":[\"rX \",[[1,6225593604690]],{\"g\":{\"rry5e4\":\"ii\"}}],\"tzv\":[\"v-!^^-Nq<\"]}",
+   "canonical_bytes_hex": "7b226371223a5b22725820222c5b5b312c363232353539333630343639305d5d2c7b2267223a7b22727279356534223a226969227d7d5d2c22747a76223a5b22762d215e5e2d4e713c225d7d"
+  },
+  {
+   "name": "generated 56",
+   "value": {},
+   "canonical_utf8": "{}",
+   "canonical_bytes_hex": "7b7d"
+  },
+  {
+   "name": "generated 57",
+   "value": {
+    "jff4z7": "z@c\"c[\"",
+    "15q2e": 567
+   },
+   "canonical_utf8": "{\"15q2e\":567,\"jff4z7\":\"z@c\\\"c[\\\"\"}",
+   "canonical_bytes_hex": "7b223135713265223a3536372c226a6666347a37223a227a40635c22635b5c22227d"
+  },
+  {
+   "name": "generated 58",
+   "value": [],
+   "canonical_utf8": "[]",
+   "canonical_bytes_hex": "5b5d"
+  },
+  {
+   "name": "generated 59",
+   "value": [
+    -9007199254740991,
+    -1
+   ],
+   "canonical_utf8": "[-9007199254740991,-1]",
+   "canonical_bytes_hex": "5b2d393030373139393235343734303939312c2d315d"
+  },
+  {
+   "name": "generated 60",
+   "value": [],
+   "canonical_utf8": "[]",
+   "canonical_bytes_hex": "5b5d"
+  },
+  {
+   "name": "generated 61",
+   "value": {
+    "2o": ":-t0U|o82",
+    "m5": {
+     "oikso7": {
+      "6xzkr": -7225407197953,
+      "bu9x": "jq+d3fq"
+     }
+    }
+   },
+   "canonical_utf8": "{\"2o\":\":-t0U|o82\",\"m5\":{\"oikso7\":{\"6xzkr\":-7225407197953,\"bu9x\":\"jq+d3fq\"}}}",
+   "canonical_bytes_hex": "7b22326f223a223a2d7430557c6f3832222c226d35223a7b226f696b736f37223a7b2236787a6b72223a2d373232353430373139373935332c2262753978223a226a712b64336671227d7d7d"
+  },
+  {
+   "name": "generated 62",
+   "value": "7&",
+   "canonical_utf8": "\"7&\"",
+   "canonical_bytes_hex": "22372622"
+  },
+  {
+   "name": "generated 63",
+   "value": [],
+   "canonical_utf8": "[]",
+   "canonical_bytes_hex": "5b5d"
+  },
+  {
+   "name": "generated 64",
+   "value": "xSp(",
+   "canonical_utf8": "\"xSp(\"",
+   "canonical_bytes_hex": "227853702822"
+  },
+  {
+   "name": "generated 65",
+   "value": {
+    "ae": {},
+    "k": "195"
+   },
+   "canonical_utf8": "{\"ae\":{},\"k\":\"195\"}",
+   "canonical_bytes_hex": "7b226165223a7b7d2c226b223a22313935227d"
+  },
+  {
+   "name": "generated 66",
+   "value": {
+    "hcbnzf": "Uby{g",
+    "3": [
+     1,
+     {
+      "q": -1
+     }
+    ],
+    "oqcwao": {
+     "qfk": 1223852427505,
+     "gz": [],
+     "hab": {
+      "moeg": 1
+     }
+    }
+   },
+   "canonical_utf8": "{\"3\":[1,{\"q\":-1}],\"hcbnzf\":\"Uby{g\",\"oqcwao\":{\"gz\":[],\"hab\":{\"moeg\":1},\"qfk\":1223852427505}}",
+   "canonical_bytes_hex": "7b2233223a5b312c7b2271223a2d317d5d2c226863626e7a66223a225562797b67222c226f716377616f223a7b22677a223a5b5d2c22686162223a7b226d6f6567223a317d2c2271666b223a313232333835323432373530357d7d"
+  },
+  {
+   "name": "generated 67",
+   "value": [],
+   "canonical_utf8": "[]",
+   "canonical_bytes_hex": "5b5d"
+  },
+  {
+   "name": "generated 68",
+   "value": [
+    -5334835891912,
+    [
+     {},
+     "=J!W&v/q",
+     "|4S1D/"
+    ],
+    {
+     "8l": [],
+     "x4g": [],
+     "ar": "Y!Rn",
+     "f9a": {
+      "kzdrp": [],
+      "2scmu": {
+       "1": 9007199254740991,
+       "b5lj": 1
+      }
+     }
+    }
+   ],
+   "canonical_utf8": "[-5334835891912,[{},\"=J!W&v/q\",\"|4S1D/\"],{\"8l\":[],\"ar\":\"Y!Rn\",\"f9a\":{\"2scmu\":{\"1\":9007199254740991,\"b5lj\":1},\"kzdrp\":[]},\"x4g\":[]}]",
+   "canonical_bytes_hex": "5b2d353333343833353839313931322c5b7b7d2c223d4a215726762f71222c227c345331442f225d2c7b22386c223a5b5d2c226172223a225921526e222c22663961223a7b223273636d75223a7b2231223a393030373139393235343734303939312c2262356c6a223a317d2c226b7a647270223a5b5d7d2c22783467223a5b5d7d5d"
+  },
+  {
+   "name": "generated 69",
+   "value": ">^FIg|>JZ",
+   "canonical_utf8": "\">^FIg|>JZ\"",
+   "canonical_bytes_hex": "223e5e4649677c3e4a5a22"
+  },
+  {
+   "name": "generated 70",
+   "value": -881414167280,
+   "canonical_utf8": "-881414167280",
+   "canonical_bytes_hex": "2d383831343134313637323830"
+  },
+  {
+   "name": "generated 71",
+   "value": {
+    "s106": [
+     9007199254740991,
+     [
+      [
+       "",
+       9007199254740991
+      ]
+     ],
+     -1
+    ],
+    "x90dm2": [
+     -8053001997925,
+     2
+    ],
+    "xaq1i": [
+     "3FbG",
+     "`K$06exBt",
+     -1
+    ],
+    "ry6": -3554079839437
+   },
+   "canonical_utf8": "{\"ry6\":-3554079839437,\"s106\":[9007199254740991,[[\"\",9007199254740991]],-1],\"x90dm2\":[-8053001997925,2],\"xaq1i\":[\"3FbG\",\"`K$06exBt\",-1]}",
+   "canonical_bytes_hex": "7b22727936223a2d333535343037393833393433372c2273313036223a5b393030373139393235343734303939312c5b5b22222c393030373139393235343734303939315d5d2c2d315d2c22783930646d32223a5b2d383035333030313939373932352c325d2c227861713169223a5b2233466247222c22604b24303665784274222c2d315d7d"
+  },
+  {
+   "name": "generated 72",
+   "value": [
+    -1,
+    "j5BCs9!wao",
+    []
+   ],
+   "canonical_utf8": "[-1,\"j5BCs9!wao\",[]]",
+   "canonical_bytes_hex": "5b2d312c226a35424373392177616f222c5b5d5d"
+  },
+  {
+   "name": "generated 73",
+   "value": [
+    [
+     "_S3h?F^"
+    ]
+   ],
+   "canonical_utf8": "[[\"_S3h?F^\"]]",
+   "canonical_bytes_hex": "5b5b225f5333683f465e225d5d"
+  },
+  {
+   "name": "generated 74",
+   "value": "@';qzPh",
+   "canonical_utf8": "\"@';qzPh\"",
+   "canonical_bytes_hex": "2240273b717a506822"
+  },
+  {
+   "name": "generated 75",
+   "value": [
+    {
+     "63m5": [
+      {},
+      "!UOn",
+      180
+     ],
+     "9gy": -143193208183,
+     "6diosc": {
+      "t": "J",
+      "p": {
+       "54": 1,
+       "4k6ru": "PanQY>qg{$",
+       "2zk7": 1,
+       "jizqa": -7869049666826
+      },
+      "pm": []
+     },
+     "lf6": "wf>h<ueY\"^"
+    },
+    -3629958385526,
+    {
+     "d": -9007199254740991,
+     "v57v9": 8578788692678,
+     "4cs": 9007199254740991,
+     "b": "a)Q(|'Qc"
+    }
+   ],
+   "canonical_utf8": "[{\"63m5\":[{},\"!UOn\",180],\"6diosc\":{\"p\":{\"2zk7\":1,\"4k6ru\":\"PanQY>qg{$\",\"54\":1,\"jizqa\":-7869049666826},\"pm\":[],\"t\":\"J\"},\"9gy\":-143193208183,\"lf6\":\"wf>h<ueY\\\"^\"},-3629958385526,{\"4cs\":9007199254740991,\"b\":\"a)Q(|'Qc\",\"d\":-9007199254740991,\"v57v9\":8578788692678}]",
+   "canonical_bytes_hex": "5b7b2236336d35223a5b7b7d2c2221554f6e222c3138305d2c223664696f7363223a7b2270223a7b22327a6b37223a312c22346b367275223a2250616e51593e71677b24222c223534223a312c226a697a7161223a2d373836393034393636363832367d2c22706d223a5b5d2c2274223a224a227d2c22396779223a2d3134333139333230383138332c226c6636223a2277663e683c7565595c225e227d2c2d333632393935383338353532362c7b22346373223a393030373139393235343734303939312c2262223a22612951287c275163222c2264223a2d393030373139393235343734303939312c227635377639223a383537383738383639323637387d5d"
+  },
+  {
+   "name": "generated 76",
+   "value": {
+    "zbz3s4": -7102720590164,
+    "xnmni": -9007199254740991,
+    "87gi5": "Y",
+    "2": [
+     {
+      "sup": "S",
+      "9dg3_x": {
+       "vkj3z": 0,
+       "ahvwi1": "EWf?"
+      },
+      "rdigcb": -1,
+      "k8s1v": "RGi"
+     },
+     0,
+     {
+      "2r4": 9007199254740991,
+      "21w5g": "3.JJ}{",
+      "znc": []
+     }
+    ]
+   },
+   "canonical_utf8": "{\"2\":[{\"9dg3_x\":{\"ahvwi1\":\"EWf?\",\"vkj3z\":0},\"k8s1v\":\"RGi\",\"rdigcb\":-1,\"sup\":\"S\"},0,{\"21w5g\":\"3.JJ}{\",\"2r4\":9007199254740991,\"znc\":[]}],\"87gi5\":\"Y\",\"xnmni\":-9007199254740991,\"zbz3s4\":-7102720590164}",
+   "canonical_bytes_hex": "7b2232223a5b7b22396467335f78223a7b22616876776931223a224557663f222c22766b6a337a223a307d2c226b38733176223a22524769222c22726469676362223a2d312c22737570223a2253227d2c302c7b223231773567223a22332e4a4a7d7b222c22327234223a393030373139393235343734303939312c227a6e63223a5b5d7d5d2c223837676935223a2259222c22786e6d6e69223a2d393030373139393235343734303939312c227a627a337334223a2d373130323732303539303136347d"
+  },
+  {
+   "name": "generated 77",
+   "value": -7094730323337,
+   "canonical_utf8": "-7094730323337",
+   "canonical_bytes_hex": "2d37303934373330333233333337"
+  },
+  {
+   "name": "generated 78",
+   "value": [
+    {
+     "pta0": -2563050127500
+    }
+   ],
+   "canonical_utf8": "[{\"pta0\":-2563050127500}]",
+   "canonical_bytes_hex": "5b7b2270746130223a2d323536333035303132373530307d5d"
+  },
+  {
+   "name": "generated 79",
+   "value": "p^k%Z`",
+   "canonical_utf8": "\"p^k%Z`\"",
+   "canonical_bytes_hex": "22705e6b255a6022"
+  },
+  {
+   "name": "generated 80",
+   "value": [
+    ".4zCE;5)",
+    "!,0-"
+   ],
+   "canonical_utf8": "[\".4zCE;5)\",\"!,0-\"]",
+   "canonical_bytes_hex": "5b222e347a43453b3529222c22212c302d225d"
+  },
+  {
+   "name": "generated 81",
+   "value": "w",
+   "canonical_utf8": "\"w\"",
+   "canonical_bytes_hex": "227722"
+  },
+  {
+   "name": "generated 82",
+   "value": 885,
+   "canonical_utf8": "885",
+   "canonical_bytes_hex": "383835"
+  },
+  {
+   "name": "generated 83",
+   "value": [
+    "}8\\"
+   ],
+   "canonical_utf8": "[\"}8\\\\\"]",
+   "canonical_bytes_hex": "5b227d385c5c225d"
+  },
+  {
+   "name": "generated 84",
+   "value": "$$6",
+   "canonical_utf8": "\"$$6\"",
+   "canonical_bytes_hex": "2224243622"
+  },
+  {
+   "name": "generated 85",
+   "value": 1514465183879,
+   "canonical_utf8": "1514465183879",
+   "canonical_bytes_hex": "31353134343635313833383739"
+  },
+  {
+   "name": "generated 86",
+   "value": [
+    {
+     "_sfx": "BAEBM2#[6W",
+     "cs2chd": {
+      "b": 1
+     },
+     "v9": []
+    }
+   ],
+   "canonical_utf8": "[{\"_sfx\":\"BAEBM2#[6W\",\"cs2chd\":{\"b\":1},\"v9\":[]}]",
+   "canonical_bytes_hex": "5b7b225f736678223a22424145424d32235b3657222c22637332636864223a7b2262223a317d2c227639223a5b5d7d5d"
+  },
+  {
+   "name": "generated 87",
+   "value": -8302687083437,
+   "canonical_utf8": "-8302687083437",
+   "canonical_bytes_hex": "2d38333032363837303833343337"
+  },
+  {
+   "name": "generated 88",
+   "value": {},
+   "canonical_utf8": "{}",
+   "canonical_bytes_hex": "7b7d"
+  },
+  {
+   "name": "generated 89",
+   "value": "U",
+   "canonical_utf8": "\"U\"",
+   "canonical_bytes_hex": "225522"
+  },
+  {
+   "name": "generated 90",
+   "value": {
+    "d": {
+     "3dz0": "f>L",
+     "x_p13": [
+      "n;IdWRmK6m",
+      [
+       "XYh",
+       -1,
+       "=6 "
+      ]
+     ],
+     "35dl2h": [
+      763
+     ],
+     "k": "eL2bN-<QQ"
+    }
+   },
+   "canonical_utf8": "{\"d\":{\"35dl2h\":[763],\"3dz0\":\"f>L\",\"k\":\"eL2bN-<QQ\",\"x_p13\":[\"n;IdWRmK6m\",[\"XYh\",-1,\"=6 \"]]}}",
+   "canonical_bytes_hex": "7b2264223a7b223335646c3268223a5b3736335d2c2233647a30223a22663e4c222c226b223a22654c32624e2d3c5151222c22785f703133223a5b226e3b496457526d4b366d222c5b22585968222c2d312c223d3620225d5d7d7d"
+  },
+  {
+   "name": "generated 91",
+   "value": [
+    "6m d2kUTfq\\",
+    "dT/]U22M",
+    "YpbD"
+   ],
+   "canonical_utf8": "[\"6m d2kUTfq\\\\\",\"dT/]U22M\",\"YpbD\"]",
+   "canonical_bytes_hex": "5b22366d2064326b555466715c5c222c2264542f5d5532324d222c2259706244225d"
+  },
+  {
+   "name": "generated 92",
+   "value": [],
+   "canonical_utf8": "[]",
+   "canonical_bytes_hex": "5b5d"
+  },
+  {
+   "name": "generated 93",
+   "value": {
+    "7lht": {
+     "ag85s": [],
+     "_m": 3436055940035,
+     "t_uf": "\\XGcCDAs"
+    },
+    "sk": "yf"
+   },
+   "canonical_utf8": "{\"7lht\":{\"_m\":3436055940035,\"ag85s\":[],\"t_uf\":\"\\\\XGcCDAs\"},\"sk\":\"yf\"}",
+   "canonical_bytes_hex": "7b22376c6874223a7b225f6d223a333433363035353934303033352c226167383573223a5b5d2c22745f7566223a225c5c58476343444173227d2c22736b223a227966227d"
+  },
+  {
+   "name": "generated 94",
+   "value": "t)aM)",
+   "canonical_utf8": "\"t)aM)\"",
+   "canonical_bytes_hex": "227429614d2922"
+  },
+  {
+   "name": "generated 95",
+   "value": [
+    {},
+    "l[7a](VA."
+   ],
+   "canonical_utf8": "[{},\"l[7a](VA.\"]",
+   "canonical_bytes_hex": "5b7b7d2c226c5b37615d2856412e225d"
+  },
+  {
+   "name": "generated 96",
+   "value": {
+    "n1": 0,
+    "5": {
+     "u8mn": [
+      {
+       "3t0yv": 8628346493113,
+       "cyytlw": 9007199254740991
+      },
+      {
+       "4wt": -1,
+       "3sv": 0,
+       "v": 0
+      }
+     ],
+     "_i": {
+      "oits": 0,
+      "u1": -9007199254740991,
+      "2ke": 9007199254740991,
+      "e_r": -1
+     }
+    }
+   },
+   "canonical_utf8": "{\"5\":{\"_i\":{\"2ke\":9007199254740991,\"e_r\":-1,\"oits\":0,\"u1\":-9007199254740991},\"u8mn\":[{\"3t0yv\":8628346493113,\"cyytlw\":9007199254740991},{\"3sv\":0,\"4wt\":-1,\"v\":0}]},\"n1\":0}",
+   "canonical_bytes_hex": "7b2235223a7b225f69223a7b22326b65223a393030373139393235343734303939312c22655f72223a2d312c226f697473223a302c227531223a2d393030373139393235343734303939317d2c2275386d6e223a5b7b223374307976223a383632383334363439333131332c22637979746c77223a393030373139393235343734303939317d2c7b22337376223a302c22347774223a2d312c2276223a307d5d7d2c226e31223a307d"
+  },
+  {
+   "name": "generated 97",
+   "value": "1i",
+   "canonical_utf8": "\"1i\"",
+   "canonical_bytes_hex": "22316922"
+  },
+  {
+   "name": "generated 98",
+   "value": {
+    "6kj8pp": {
+     "2f": [],
+     "d": 379
+    },
+    "6": 1
+   },
+   "canonical_utf8": "{\"6\":1,\"6kj8pp\":{\"2f\":[],\"d\":379}}",
+   "canonical_bytes_hex": "7b2236223a312c22366b6a387070223a7b223266223a5b5d2c2264223a3337397d7d"
+  },
+  {
+   "name": "generated 99",
+   "value": {
+    "93l_n": [
+     "ko",
+     "[Q9a",
+     -1
+    ],
+    "9y9do": "[-ZPF!",
+    "jcu_3h": {
+     "d_3": -1,
+     "8nny8b": {}
+    }
+   },
+   "canonical_utf8": "{\"93l_n\":[\"ko\",\"[Q9a\",-1],\"9y9do\":\"[-ZPF!\",\"jcu_3h\":{\"8nny8b\":{},\"d_3\":-1}}",
+   "canonical_bytes_hex": "7b2239336c5f6e223a5b226b6f222c225b513961222c2d315d2c22397939646f223a225b2d5a504621222c226a63755f3368223a7b22386e6e793862223a7b7d2c22645f33223a2d317d7d"
+  },
+  {
+   "name": "generated 100",
+   "value": [],
+   "canonical_utf8": "[]",
+   "canonical_bytes_hex": "5b5d"
+  },
+  {
+   "name": "generated 101",
+   "value": 9007199254740991,
+   "canonical_utf8": "9007199254740991",
+   "canonical_bytes_hex": "39303037313939323534373430393931"
+  },
+  {
+   "name": "generated 102",
+   "value": "B 0G}",
+   "canonical_utf8": "\"B 0G}\"",
+   "canonical_bytes_hex": "22422030477d22"
+  },
+  {
+   "name": "generated 103",
+   "value": {
+    "7": 9007199254740991
+   },
+   "canonical_utf8": "{\"7\":9007199254740991}",
+   "canonical_bytes_hex": "7b2237223a393030373139393235343734303939317d"
+  },
+  {
+   "name": "generated 104",
+   "value": 1,
+   "canonical_utf8": "1",
+   "canonical_bytes_hex": "31"
+  },
+  {
+   "name": "generated 105",
+   "value": "zH 9!A]Rhy;",
+   "canonical_utf8": "\"zH 9!A]Rhy;\"",
+   "canonical_bytes_hex": "227a48203921415d5268793b22"
+  },
+  {
+   "name": "generated 106",
+   "value": 3334086242983,
+   "canonical_utf8": "3334086242983",
+   "canonical_bytes_hex": "33333334303836323432393833"
+  },
+  {
+   "name": "generated 107",
+   "value": [
+    [
+     {
+      "a": 8309850880214,
+      "3v1qtg": 5845710383726,
+      "thf6": 0
+     },
+     [
+      0,
+      [
+       1439491139777,
+       0
+      ],
+      -4921815401473
+     ],
+     [
+      9007199254740991,
+      [
+       0,
+       ""
+      ],
+      "3aN-"
+     ]
+    ],
+    {
+     "_r": -9435094438098,
+     "w": "|UO&Q",
+     "ni7j": {}
+    },
+    {
+     "a834jy": [
+      "9c,&o9^%",
+      "iGc"
+     ],
+     "jjv": [
+      -5237679714685
+     ],
+     "a": []
+    }
+   ],
+   "canonical_utf8": "[[{\"3v1qtg\":5845710383726,\"a\":8309850880214,\"thf6\":0},[0,[1439491139777,0],-4921815401473],[9007199254740991,[0,\"\"],\"3aN-\"]],{\"_r\":-9435094438098,\"ni7j\":{},\"w\":\"|UO&Q\"},{\"a\":[],\"a834jy\":[\"9c,&o9^%\",\"iGc\"],\"jjv\":[-5237679714685]}]",
+   "canonical_bytes_hex": "5b5b7b22337631717467223a353834353731303338333732362c2261223a383330393835303838303231342c2274686636223a307d2c5b302c5b313433393439313133393737372c305d2c2d343932313831353430313437335d2c5b393030373139393235343734303939312c5b302c22225d2c2233614e2d225d5d2c7b225f72223a2d393433353039343433383039382c226e69376a223a7b7d2c2277223a227c554f2651227d2c7b2261223a5b5d2c22613833346a79223a5b2239632c266f395e25222c22694763225d2c226a6a76223a5b2d353233373637393731343638355d7d5d"
+  },
+  {
+   "name": "generated 108",
+   "value": "",
+   "canonical_utf8": "\"\"",
+   "canonical_bytes_hex": "2222"
+  },
+  {
+   "name": "generated 109",
+   "value": {
+    "lbqz": [
+     1,
+     []
+    ],
+    "yfpdwt": [
+     {
+      "c09pm": [
+       0
+      ],
+      "m9": {
+       "mbp06": 0,
+       "w": -9007199254740991
+      }
+     },
+     "wy9eL$",
+     "WHK'z"
+    ],
+    "7": 0,
+    "k5p": -1
+   },
+   "canonical_utf8": "{\"7\":0,\"k5p\":-1,\"lbqz\":[1,[]],\"yfpdwt\":[{\"c09pm\":[0],\"m9\":{\"mbp06\":0,\"w\":-9007199254740991}},\"wy9eL$\",\"WHK'z\"]}",
+   "canonical_bytes_hex": "7b2237223a302c226b3570223a2d312c226c62717a223a5b312c5b5d5d2c22796670647774223a5b7b22633039706d223a5b305d2c226d39223a7b226d62703036223a302c2277223a2d393030373139393235343734303939317d7d2c22777939654c24222c2257484b277a225d7d"
+  },
+  {
+   "name": "generated 110",
+   "value": 488,
+   "canonical_utf8": "488",
+   "canonical_bytes_hex": "343838"
+  },
+  {
+   "name": "generated 111",
+   "value": [],
+   "canonical_utf8": "[]",
+   "canonical_bytes_hex": "5b5d"
+  },
+  {
+   "name": "generated 112",
+   "value": "=>\\|igs$vB",
+   "canonical_utf8": "\"=>\\\\|igs$vB\"",
+   "canonical_bytes_hex": "223d3e5c5c7c69677324764222"
+  },
+  {
+   "name": "generated 113",
+   "value": 7,
+   "canonical_utf8": "7",
+   "canonical_bytes_hex": "37"
+  },
+  {
+   "name": "generated 114",
+   "value": 9007199254740991,
+   "canonical_utf8": "9007199254740991",
+   "canonical_bytes_hex": "39303037313939323534373430393931"
+  },
+  {
+   "name": "generated 115",
+   "value": "$dr",
+   "canonical_utf8": "\"$dr\"",
+   "canonical_bytes_hex": "2224647222"
+  },
+  {
+   "name": "generated 116",
+   "value": [
+    {}
+   ],
+   "canonical_utf8": "[{}]",
+   "canonical_bytes_hex": "5b7b7d5d"
+  },
+  {
+   "name": "generated 117",
+   "value": [],
+   "canonical_utf8": "[]",
+   "canonical_bytes_hex": "5b5d"
+  },
+  {
+   "name": "generated 118",
+   "value": {
+    "e4p": "/nKVK7N",
+    "0": [
+     1,
+     -2633326696246,
+     "U"
+    ],
+    "zd": "&}'oi"
+   },
+   "canonical_utf8": "{\"0\":[1,-2633326696246,\"U\"],\"e4p\":\"/nKVK7N\",\"zd\":\"&}'oi\"}",
+   "canonical_bytes_hex": "7b2230223a5b312c2d323633333332363639363234362c2255225d2c22653470223a222f6e4b564b374e222c227a64223a22267d276f69227d"
+  },
+  {
+   "name": "generated 119",
+   "value": -6989774338694,
+   "canonical_utf8": "-6989774338694",
+   "canonical_bytes_hex": "2d36393839373734333338363934"
+  },
+  {
+   "name": "generated 120",
+   "value": [
+    {
+     "6q2z": "sJxi?~2Fy",
+     "a": {
+      "hfqgfe": 0,
+      "aqqstw": {
+       "328ipa": "8{?t|'a#L",
+       "rb4qd": -1,
+       "rj": "IG798eaN[",
+       "nhgzbp": "-L'sm"
+      },
+      "kjk": {}
+     },
+     "1ip3": [
+      [
+       ""
+      ]
+     ],
+     "j": -1
+    },
+    "-"
+   ],
+   "canonical_utf8": "[{\"1ip3\":[[\"\"]],\"6q2z\":\"sJxi?~2Fy\",\"a\":{\"aqqstw\":{\"328ipa\":\"8{?t|'a#L\",\"nhgzbp\":\"-L'sm\",\"rb4qd\":-1,\"rj\":\"IG798eaN[\"},\"hfqgfe\":0,\"kjk\":{}},\"j\":-1},\"-\"]",
+   "canonical_bytes_hex": "5b7b2231697033223a5b5b22225d5d2c223671327a223a22734a78693f7e324679222c2261223a7b22617171737477223a7b22333238697061223a22387b3f747c2761234c222c226e68677a6270223a222d4c27736d222c227262347164223a2d312c22726a223a22494737393865614e5b227d2c22686671676665223a302c226b6a6b223a7b7d7d2c226a223a2d317d2c222d225d"
+  },
+  {
+   "name": "generated 121",
+   "value": [
+    [
+     {
+      "v82h": {
+       "uxb": "kQ'Uq| o^Mg",
+       "mmfk8a": 9007199254740991,
+       "kp": "/Z"
+      },
+      "zztl6": {
+       "9j": "/*?/TJ+s"
+      },
+      "kab1b": "?!V>])fij",
+      "e59a": "f/gOO#lX"
+     },
+     []
+    ],
+    -9007199254740991
+   ],
+   "canonical_utf8": "[[{\"e59a\":\"f/gOO#lX\",\"kab1b\":\"?!V>])fij\",\"v82h\":{\"kp\":\"/Z\",\"mmfk8a\":9007199254740991,\"uxb\":\"kQ'Uq| o^Mg\"},\"zztl6\":{\"9j\":\"/*?/TJ+s\"}},[]],-9007199254740991]",
+   "canonical_bytes_hex": "5b5b7b2265353961223a22662f674f4f236c58222c226b61623162223a223f21563e5d2966696a222c2276383268223a7b226b70223a222f5a222c226d6d666b3861223a393030373139393235343734303939312c22757862223a226b512755717c206f5e4d67227d2c227a7a746c36223a7b22396a223a222f2a3f2f544a2b73227d7d2c5b5d5d2c2d393030373139393235343734303939315d"
+  },
+  {
+   "name": "generated 122",
+   "value": [
+    "n(cNS,[WJWv",
+    [
+     203,
+     450
+    ],
+    []
+   ],
+   "canonical_utf8": "[\"n(cNS,[WJWv\",[203,450],[]]",
+   "canonical_bytes_hex": "5b226e28634e532c5b574a5776222c5b3230332c3435305d2c5b5d5d"
+  },
+  {
+   "name": "generated 123",
+   "value": -2882184036237,
+   "canonical_utf8": "-2882184036237",
+   "canonical_bytes_hex": "2d32383832313834303336323337"
+  },
+  {
+   "name": "generated 124",
+   "value": {
+    "v6tdq": [],
+    "6v27": 9007199254740991,
+    "be_tv": {
+     "z": -8438095841138
+    },
+    "49cs_": -9007199254740991
+   },
+   "canonical_utf8": "{\"49cs_\":-9007199254740991,\"6v27\":9007199254740991,\"be_tv\":{\"z\":-8438095841138},\"v6tdq\":[]}",
+   "canonical_bytes_hex": "7b22343963735f223a2d393030373139393235343734303939312c2236763237223a393030373139393235343734303939312c2262655f7476223a7b227a223a2d383433383039353834313133387d2c227636746471223a5b5d7d"
+  },
+  {
+   "name": "generated 125",
+   "value": [
+    [
+     9975020333666
+    ],
+    {},
+    [
+     9007199254740991,
+     [
+      420734193982,
+      [
+       -1,
+       "xa(",
+       256729953490
+      ],
+      ""
+     ],
+     {
+      "hyk": 548277156562,
+      "sj": 0,
+      "e1yox6": -3662553889688,
+      "e9": {
+       "xb9pxi": 298,
+       "8y8v": "WrS[c$o"
+      }
+     }
+    ]
+   ],
+   "canonical_utf8": "[[9975020333666],{},[9007199254740991,[420734193982,[-1,\"xa(\",256729953490],\"\"],{\"e1yox6\":-3662553889688,\"e9\":{\"8y8v\":\"WrS[c$o\",\"xb9pxi\":298},\"hyk\":548277156562,\"sj\":0}]]",
+   "canonical_bytes_hex": "5b5b393937353032303333333636365d2c7b7d2c5b393030373139393235343734303939312c5b3432303733343139333938322c5b2d312c22786128222c3235363732393935333439305d2c22225d2c7b226531796f7836223a2d333636323535333838393638382c226539223a7b2238793876223a225772535b63246f222c22786239707869223a3239387d2c2268796b223a3534383237373135363536322c22736a223a307d5d5d"
+  },
+  {
+   "name": "generated 126",
+   "value": "ThMl1",
+   "canonical_utf8": "\"ThMl1\"",
+   "canonical_bytes_hex": "2254684d6c3122"
+  },
+  {
+   "name": "generated 127",
+   "value": [
+    {
+     "i": {
+      "w6p": -9007199254740991,
+      "nze": [],
+      "_ykm4": 0
+     }
+    },
+    -1276243793554,
+    {
+     "5": 108,
+     "qi": "(m&2(m"
+    }
+   ],
+   "canonical_utf8": "[{\"i\":{\"_ykm4\":0,\"nze\":[],\"w6p\":-9007199254740991}},-1276243793554,{\"5\":108,\"qi\":\"(m&2(m\"}]",
+   "canonical_bytes_hex": "5b7b2269223a7b225f796b6d34223a302c226e7a65223a5b5d2c22773670223a2d393030373139393235343734303939317d7d2c2d313237363234333739333535342c7b2235223a3130382c227169223a22286d2632286d227d5d"
+  },
+  {
+   "name": "generated 128",
+   "value": 1,
+   "canonical_utf8": "1",
+   "canonical_bytes_hex": "31"
+  },
+  {
+   "name": "generated 129",
+   "value": [
+    0
+   ],
+   "canonical_utf8": "[0]",
+   "canonical_bytes_hex": "5b305d"
+  },
+  {
+   "name": "generated 130",
+   "value": 9372441080863,
+   "canonical_utf8": "9372441080863",
+   "canonical_bytes_hex": "39333732343431303830383633"
+  },
+  {
+   "name": "generated 131",
+   "value": {
+    "a": [
+     {
+      "9": -9007199254740991
+     },
+     [
+      -6770175741870,
+      243
+     ],
+     [
+      {
+       "9gz": "C)>",
+       "ic": -1
+      },
+      {
+       "d2": "Vc",
+       "zp9cp5": "o%w"
+      }
+     ]
+    ],
+    "389": " \"CPEi2W3Ce"
+   },
+   "canonical_utf8": "{\"389\":\" \\\"CPEi2W3Ce\",\"a\":[{\"9\":-9007199254740991},[-6770175741870,243],[{\"9gz\":\"C)>\",\"ic\":-1},{\"d2\":\"Vc\",\"zp9cp5\":\"o%w\"}]]}",
+   "canonical_bytes_hex": "7b22333839223a22205c22435045693257334365222c2261223a5b7b2239223a2d393030373139393235343734303939317d2c5b2d363737303137353734313837302c3234335d2c5b7b2239677a223a2243293e222c226963223a2d317d2c7b226432223a225663222c227a7039637035223a226f2577227d5d5d7d"
+  },
+  {
+   "name": "generated 132",
+   "value": 1,
+   "canonical_utf8": "1",
+   "canonical_bytes_hex": "31"
+  },
+  {
+   "name": "generated 133",
+   "value": {},
+   "canonical_utf8": "{}",
+   "canonical_bytes_hex": "7b7d"
+  },
+  {
+   "name": "generated 134",
+   "value": -5893599687160,
+   "canonical_utf8": "-5893599687160",
+   "canonical_bytes_hex": "2d35383933353939363837313630"
+  },
+  {
+   "name": "generated 135",
+   "value": "4H",
+   "canonical_utf8": "\"4H\"",
+   "canonical_bytes_hex": "22344822"
+  },
+  {
+   "name": "generated 136",
+   "value": "_dt",
+   "canonical_utf8": "\"_dt\"",
+   "canonical_bytes_hex": "225f647422"
+  },
+  {
+   "name": "generated 137",
+   "value": ",",
+   "canonical_utf8": "\",\"",
+   "canonical_bytes_hex": "222c22"
+  },
+  {
+   "name": "generated 138",
+   "value": {
+    "p73jgt": {
+     "nur": 775,
+     "1svun6": {
+      "v": -9007199254740991,
+      "tg6f": {
+       "4": "S@(b3?S1WWs",
+       "d8b": -9007199254740991,
+       "_cgl3": ""
+      }
+     },
+     "w4e": "D_60X=W.",
+     "wuucs6": "P!Nb"
+    },
+    "69cq5e": "dM|",
+    "6gva16": "VL#)b'n"
+   },
+   "canonical_utf8": "{\"69cq5e\":\"dM|\",\"6gva16\":\"VL#)b'n\",\"p73jgt\":{\"1svun6\":{\"tg6f\":{\"4\":\"S@(b3?S1WWs\",\"_cgl3\":\"\",\"d8b\":-9007199254740991},\"v\":-9007199254740991},\"nur\":775,\"w4e\":\"D_60X=W.\",\"wuucs6\":\"P!Nb\"}}",
+   "canonical_bytes_hex": "7b22363963713565223a22644d7c222c22366776613136223a22564c232962276e222c227037336a6774223a7b22317376756e36223a7b2274673666223a7b2234223a2253402862333f5331575773222c225f63676c33223a22222c22643862223a2d393030373139393235343734303939317d2c2276223a2d393030373139393235343734303939317d2c226e7572223a3737352c22773465223a22445f3630583d572e222c22777575637336223a2250214e62227d7d"
+  },
+  {
+   "name": "generated 139",
+   "value": {},
+   "canonical_utf8": "{}",
+   "canonical_bytes_hex": "7b7d"
+  },
+  {
+   "name": "generated 140",
+   "value": "V5A",
+   "canonical_utf8": "\"V5A\"",
+   "canonical_bytes_hex": "2256354122"
+  },
+  {
+   "name": "generated 141",
+   "value": -1,
+   "canonical_utf8": "-1",
+   "canonical_bytes_hex": "2d31"
+  },
+  {
+   "name": "generated 142",
+   "value": [
+    0,
+    {
+     "vq2": -5956842008129,
+     "86m": []
+    }
+   ],
+   "canonical_utf8": "[0,{\"86m\":[],\"vq2\":-5956842008129}]",
+   "canonical_bytes_hex": "5b302c7b2238366d223a5b5d2c22767132223a2d353935363834323030383132397d5d"
+  },
+  {
+   "name": "generated 143",
+   "value": "Rwm^4i$fi",
+   "canonical_utf8": "\"Rwm^4i$fi\"",
+   "canonical_bytes_hex": "2252776d5e346924666922"
+  },
+  {
+   "name": "generated 144",
+   "value": {},
+   "canonical_utf8": "{}",
+   "canonical_bytes_hex": "7b7d"
+  },
+  {
+   "name": "generated 145",
+   "value": "Rxh bj6\\\\8",
+   "canonical_utf8": "\"Rxh bj6\\\\\\\\8\"",
+   "canonical_bytes_hex": "2252786820626a365c5c5c5c3822"
+  },
+  {
+   "name": "generated 146",
+   "value": [],
+   "canonical_utf8": "[]",
+   "canonical_bytes_hex": "5b5d"
+  },
+  {
+   "name": "generated 147",
+   "value": 1,
+   "canonical_utf8": "1",
+   "canonical_bytes_hex": "31"
+  },
+  {
+   "name": "generated 148",
+   "value": "QF",
+   "canonical_utf8": "\"QF\"",
+   "canonical_bytes_hex": "22514622"
+  },
+  {
+   "name": "generated 149",
+   "value": {
+    "a32_": -9007199254740991,
+    "9e1w53": [
+     "2+;%\"",
+     1
+    ]
+   },
+   "canonical_utf8": "{\"9e1w53\":[\"2+;%\\\"\",1],\"a32_\":-9007199254740991}",
+   "canonical_bytes_hex": "7b22396531773533223a5b22322b3b255c22222c315d2c226133325f223a2d393030373139393235343734303939317d"
+  }
+ ],
+ "rejected": [
+  {
+   "name": "a float",
+   "value": {
+    "a": 1.5
+   }
+  },
+  {
+   "name": "a small float",
+   "value": {
+    "a": 0.1
+   }
+  },
+  {
+   "name": "true",
+   "value": {
+    "a": true
+   }
+  },
+  {
+   "name": "false",
+   "value": {
+    "a": false
+   }
+  },
+  {
+   "name": "null",
+   "value": {
+    "a": null
+   }
+  },
+  {
+   "name": "a non-ASCII letter",
+   "value": {
+    "a": "caf\u00e9"
+   }
+  },
+  {
+   "name": "a tab",
+   "value": {
+    "a": "tab\t"
+   }
+  },
+  {
+   "name": "a newline",
+   "value": {
+    "a": "line\nbreak"
+   }
+  },
+  {
+   "name": "the DEL character",
+   "value": {
+    "a": "del\u007f"
+   }
+  },
+  {
+   "name": "an upper-case key",
+   "value": {
+    "A": 1
+   }
+  },
+  {
+   "name": "a key with a dash",
+   "value": {
+    "a-b": 1
+   }
+  },
+  {
+   "name": "an empty key",
+   "value": {
+    "": 1
+   }
+  },
+  {
+   "name": "a 65-character key",
+   "value": {
+    "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk": 1
+   }
+  },
+  {
+   "name": "an integer just above the limit",
+   "value": {
+    "a": 9007199254740992
+   }
+  },
+  {
+   "name": "an integer just below the limit",
+   "value": {
+    "a": -9007199254740992
+   }
+  },
+  {
+   "name": "a bad value deep inside",
+   "value": {
+    "a": [
+     {
+      "b": {
+       "c": 1.5
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "a bad key deep inside",
+   "value": {
+    "a": [
+     {
+      "B": 1
+     }
+    ]
+   }
+  }
+ ]
+}

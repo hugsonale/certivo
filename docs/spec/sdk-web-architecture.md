@@ -40,11 +40,22 @@ core.send(body)  or  buffer it if the platform is unreachable
 
 These are static checks. The runtime proof that no media leaves the page is P0-24.
 
-## PROVISIONAL (settled by later steps)
+## The packet and the conformance gate (P0-22)
 
-| Item | Settled by |
+The SDK's packet codec is BUILD_SPEC_0 section 4, exactly. `npm test` reads the platform's published vectors and fails on any difference:
+
+| File in `docs/spec/test-vectors/` | What the SDK must reproduce |
 | :---- | :---- |
-| Packet field names, the range of `confidence`, the exact signed bytes | P0-22 (Spec 0 and its test vector) |
-| Whether "self" packets omit the `role` field (so existing bytes do not change) | P0-22, with a Spec 0 amendment |
+| `score-packet-v1.json` | The canonical text and bytes, the Ed25519 signature, and (through the whole loop) the request body |
+| `canonical-json-v1.json` | 170 cases of canonical JSON, and 17 inputs that must be refused |
+
+The `sdk-web` workflow also runs when these files change. A missing file fails the test (it never skips).
+
+## Held back or provisional
+
+| Item | Status |
+| :---- | :---- |
+| ECDSA P-256 fallback | Switched off (`SUPPORTED_ALGS` is Ed25519 only): the platform's device record has no `alg` field yet (ADR 0022) |
+| Observer role (D-02) | Exists in the SDK, refused by the codec: the wire format has no role field (ADR 0022) |
 | Reason-code catalogue and the indicator wording | P0-38, P0-50 |
 | Bundle budgets (30 KB, 10 KB, 36 KB gzip) | P0-27 and the first design partner |
