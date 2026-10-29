@@ -19,7 +19,7 @@ function setup(runner: ModelRunner | null) {
   return { out, send };
 }
 const image = () => ({ close: vi.fn() }) as unknown as ImageBitmap;
-const result = { confidence: 0.7, reasonCodes: ["consistent_face"], modelVersion: "t-0" };
+const result = { confidenceMilli: 700, reasonCodes: ["consistent_motion"], signalMilli: {}, modelVersion: "t-0" };
 
 describe("installWorker", () => {
   it("with no model, never invents a score, and still closes the picture", async () => {

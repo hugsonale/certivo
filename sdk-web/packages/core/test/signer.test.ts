@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { chooseSigningAlg, createDeviceSigner, type KeyStore, MemoryKeyStore, SdkError } from "../src/index";
+import {
+  chooseSigningAlg,
+  createDeviceSigner,
+  type KeyStore,
+  MemoryKeyStore,
+  SdkError,
+  SUPPORTED_ALGS,
+} from "../src/index";
 
 const real = globalThis.crypto.subtle;
 
@@ -26,12 +33,25 @@ describe("choosing the signing algorithm (ADR 0020)", () => {
     expect(await chooseSigningAlg()).toBe("Ed25519");
   });
 
-  it("falls back to ECDSA P-256 when Ed25519 is missing", async () => {
-    expect(await chooseSigningAlg(subtleWithout("Ed25519"))).toBe("ECDSA-P256");
+  it("today the platform accepts only Ed25519 devices, so that is the only algorithm the SDK will use", () => {
+    expect(SUPPORTED_ALGS).toEqual(["Ed25519"]);
+  });
+
+  it("does NOT quietly fall back to ECDSA when Ed25519 is missing: the platform would refuse that device", async () => {
+    const error = await chooseSigningAlg(subtleWithout("Ed25519")).catch((e: unknown) => e);
+    expect((error as SdkError).code).toBe("capability_missing");
+    const created = await createDeviceSigner(new MemoryKeyStore(), subtleWithout("Ed25519")).catch((e: unknown) => e);
+    expect((created as SdkError).code).toBe("capability_missing");
+  });
+
+  it("falls back to ECDSA P-256 once the platform accepts it (ADR 0022: one list to change)", async () => {
+    expect(await chooseSigningAlg(subtleWithout("Ed25519"), ["Ed25519", "ECDSA-P256"])).toBe("ECDSA-P256");
   });
 
   it("says so clearly when the browser can do neither", async () => {
-    const error = await chooseSigningAlg(subtleWithout("Ed25519", "ECDSA")).catch((e: unknown) => e);
+    const error = await chooseSigningAlg(subtleWithout("Ed25519", "ECDSA"), ["Ed25519", "ECDSA-P256"]).catch(
+      (e: unknown) => e,
+    );
     expect(error).toBeInstanceOf(SdkError);
     expect((error as SdkError).code).toBe("capability_missing");
   });
@@ -67,7 +87,10 @@ describe("the device signer", () => {
   });
 
   it("signs with the ECDSA fallback in raw 64-byte form, and the signature verifies", async () => {
-    const { signer } = await createDeviceSigner(new MemoryKeyStore(), subtleWithout("Ed25519"));
+    const { signer } = await createDeviceSigner(new MemoryKeyStore(), subtleWithout("Ed25519"), [
+      "Ed25519",
+      "ECDSA-P256",
+    ]);
     expect(signer.alg).toBe("ECDSA-P256");
     const signature = await signer.sign(message);
     expect(signature.length).toBe(64);
@@ -79,6 +102,15 @@ describe("the device signer", () => {
       ["verify"],
     );
     expect(await real.verify({ name: "ECDSA", hash: "SHA-256" }, publicKey, signature, message)).toBe(true);
+  });
+
+  it("makes a new key when the stored one uses an algorithm the platform no longer accepts", async () => {
+    const store = new MemoryKeyStore();
+    const old = await createDeviceSigner(store, subtleWithout("Ed25519"), ["Ed25519", "ECDSA-P256"]);
+    expect(old.signer.alg).toBe("ECDSA-P256");
+    const now = await createDeviceSigner(store); // default: Ed25519 only
+    expect(now.isNewKey).toBe(true);
+    expect(now.signer.alg).toBe("Ed25519");
   });
 
   it("treats unreadable storage as 'no key' and carries on", async () => {

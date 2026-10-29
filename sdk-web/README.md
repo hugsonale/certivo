@@ -18,6 +18,12 @@ There is no model yet (P0-37) and the packet byte format is not final (P0-22).
 `npm test` includes **architecture guards** that read the source and fail if a rule is broken (for example, if the capture
 code starts using the network). See `docs/adr/0021-web-sdk-architecture.md` for why.
 
+## Staying in step with the platform
+
+The SDK must produce exactly the bytes the platform signs. `npm test` checks this against the platform's published test vectors
+in `docs/spec/test-vectors/` (one full packet with its signature, plus 170 canonical-JSON cases and 17 refusals). If a vector file is
+missing, the test **fails**. The `sdk-web` CI check also runs whenever those files change. Details: `docs/adr/0022-sdk-packet-codec-and-conformance.md`.
+
 ## How to run it on your computer
 
 You need **Node 24 or newer** (it includes npm 11). Older npm (10) crashes on the test runner we pinned.

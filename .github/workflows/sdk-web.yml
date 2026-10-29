@@ -1,16 +1,18 @@
 # Checks for the Web SDK (P0-21): lint, types, tests, build, bundle-size budget, dependency audit.
-# Runs only when something under sdk-web/ changes.
+# Runs when something under sdk-web/ changes, and when the platform's test vectors change (the SDK must match them).
 name: sdk-web
 
 on:
   pull_request:
     paths:
       - "sdk-web/**"
+      - "docs/spec/test-vectors/**"
       - ".github/workflows/sdk-web.yml"
   push:
     branches: [rebuild, main]
     paths:
       - "sdk-web/**"
+      - "docs/spec/test-vectors/**"
       - ".github/workflows/sdk-web.yml"
 
 permissions:

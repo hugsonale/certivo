@@ -32,12 +32,24 @@ async function generate(subtle: SubtleCrypto, alg: SigningAlg): Promise<CryptoKe
 }
 
 /**
- * Decides which algorithm this browser can use: Ed25519 if it works, otherwise ECDSA P-256 (ADR 0020).
- * It tries for real rather than guessing from the browser version.
+ * The algorithms the SDK will use today. ONLY Ed25519: the platform's device registration accepts nothing else
+ * (a 43-character Ed25519 public key, platform/app/schemas.py DeviceIn), and BUILD_SPEC_0 section 11 says the ECDSA
+ * P-256 fallback needs an `alg` field on devices first. Add "ECDSA-P256" here, in one place, when the platform has it
+ * (docs/adr/0022). Until then an ECDSA key would be created and then refused, which is worse than saying so up front.
  */
-export async function chooseSigningAlg(subtle?: SubtleCrypto): Promise<SigningAlg> {
+export const SUPPORTED_ALGS: readonly SigningAlg[] = ["Ed25519"];
+
+/**
+ * Decides which algorithm this browser can use: the first of `supported` that really works, in order of preference
+ * (ADR 0020). It tries for real rather than guessing from the browser version.
+ */
+export async function chooseSigningAlg(
+  subtle?: SubtleCrypto,
+  supported: readonly SigningAlg[] = SUPPORTED_ALGS,
+): Promise<SigningAlg> {
   const s = subtleOf(subtle);
   for (const alg of ["Ed25519", "ECDSA-P256"] as const) {
+    if (!supported.includes(alg)) continue;
     try {
       await generate(s, alg);
       return alg;
@@ -45,7 +57,10 @@ export async function chooseSigningAlg(subtle?: SubtleCrypto): Promise<SigningAl
       // not supported here: try the next one
     }
   }
-  throw new SdkError("capability_missing", "This browser can sign with neither Ed25519 nor ECDSA P-256.");
+  throw new SdkError(
+    "capability_missing",
+    `This browser cannot sign with any algorithm the platform accepts (${supported.join(", ")}).`,
+  );
 }
 
 class WebCryptoSigner implements DeviceSigner {
@@ -78,6 +93,7 @@ export interface CreatedSigner {
 export async function createDeviceSigner(
   store: KeyStore = new MemoryKeyStore(),
   subtle?: SubtleCrypto,
+  supported: readonly SigningAlg[] = SUPPORTED_ALGS,
 ): Promise<CreatedSigner> {
   const s = subtleOf(subtle);
   let stored = null;
@@ -86,10 +102,11 @@ export async function createDeviceSigner(
   } catch {
     stored = null; // unreadable storage counts as "no key"
   }
-  if (stored) {
+  if (stored && supported.includes(stored.alg)) {
     return { signer: new WebCryptoSigner(stored.alg, stored.pair, s), isNewKey: false };
   }
-  const alg = await chooseSigningAlg(s);
+  // No key, or one the platform no longer accepts: make a new one.
+  const alg = await chooseSigningAlg(s, supported);
   const pair = await generate(s, alg);
   try {
     await store.save({ alg, pair });

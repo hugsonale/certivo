@@ -57,3 +57,8 @@ The demo call app (P0-26). Overhead measurement (P0-27). The model and the ONNX 
 ## Related
 
 P0-21; D-01, D-02; ADR 0020; guide Part 3 (gates), P0-24, P0-61; `docs/spec/sdk-web-architecture.md`; `sdk-web/README.md`.
+
+## Update (P0-22, 29 October 2026)
+
+Reading BUILD_SPEC_0 corrected the provisional packet shape used here: confidence is a whole number 0 to 1000, the explanation also carries named signals, and there is no `role` or `alg` field on the wire. Point 5 above (the observer role) is therefore
+held back, not sendable, until the platform's schema has a role field. See docs/adr/0022 for the corrections and the platform work they imply.
