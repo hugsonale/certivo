@@ -1,4 +1,35 @@
+import type { ScoreWirePacket } from "./codec";
 import { SdkError } from "./errors";
+
+/** Why the SDK is pausing. The platform accepts only these four words (platform/app/schemas.py PauseIn). */
+export type PauseReason = "connectivity" | "sdk_error" | "model_unavailable" | "other";
+
+/** The platform's answer to one packet (ScoreEventOut). */
+export interface ScoreEventResponse {
+  readonly accepted: boolean;
+  readonly seq: number;
+  readonly current_policy_outcome: string;
+  readonly duplicate: boolean;
+}
+
+/** The platform's answer to a batch (ScoreBatchOut). */
+export interface ScoreBatchResponse {
+  readonly results: ReadonlyArray<{
+    readonly index: number;
+    readonly accepted: boolean;
+    readonly seq: number;
+    readonly current_policy_outcome: string | null;
+    readonly duplicate: boolean;
+    readonly error: { readonly code: string; readonly message: string } | null;
+  }>;
+  readonly accepted_count: number;
+  readonly duplicate_count: number;
+  readonly rejected_count: number;
+  readonly gaps_recorded: number;
+}
+
+/** The most packets one batch may hold (platform MAX_BATCH_PACKETS). */
+export const MAX_BATCH_PACKETS = 25;
 
 export interface SessionClientOptions {
   /** For example "https://api.certivo.example" (no trailing slash needed). */
@@ -27,16 +58,20 @@ export class SessionClient {
     this.base = `${options.baseUrl.replace(/\/+$/, "")}/internal/v1/sessions/continuous/${encodeURIComponent(options.sessionId)}`;
   }
 
-  sendScoreEvent(body: unknown, idempotencyKey?: string): Promise<unknown> {
-    return this.post("/score-events", body, idempotencyKey);
+  sendScoreEvent(body: ScoreWirePacket, idempotencyKey?: string): Promise<ScoreEventResponse> {
+    return this.post("/score-events", body, idempotencyKey) as Promise<ScoreEventResponse>;
   }
 
-  sendBatch(packets: readonly unknown[]): Promise<unknown> {
-    return this.post("/score-events/batch", { packets });
+  /** Packets buffered while the platform could not be reached, oldest first (at most MAX_BATCH_PACKETS). */
+  sendBatch(packets: readonly ScoreWirePacket[]): Promise<ScoreBatchResponse> {
+    if (packets.length < 1 || packets.length > MAX_BATCH_PACKETS) {
+      throw new RangeError(`a batch holds 1 to ${MAX_BATCH_PACKETS} packets`);
+    }
+    return this.post("/score-events/batch", { packets }) as Promise<ScoreBatchResponse>;
   }
 
-  async pause(reason?: string): Promise<void> {
-    await this.post("/pause", reason === undefined ? {} : { reason });
+  async pause(reason: PauseReason = "other"): Promise<void> {
+    await this.post("/pause", { reason });
   }
 
   async resume(): Promise<void> {
