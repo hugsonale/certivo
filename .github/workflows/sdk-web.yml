@@ -50,3 +50,32 @@ jobs:
         run: npm run size
       - name: Dependency audit
         run: npm audit --audit-level=high
+
+  # P0-24: a real browser runs the SDK frame path and checks that no picture leaves the page or is kept.
+  browser-test:
+    name: browser-test (no media leaves the page)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: sdk-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: sdk-web/package-lock.json
+      - name: Install exactly what the lock file says
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Browser test
+        run: npm run test:browser
+      - name: Keep the failure details
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-test-results
+          path: sdk-web/test-results
+          if-no-files-found: ignore

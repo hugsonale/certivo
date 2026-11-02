@@ -1,0 +1,410 @@
+{
+  "schema": "certivo.p0-20.v1",
+  "pageVersion": "p0-20-v1",
+  "ranAt": "2026-10-27T11:20:37.725Z",
+  "browser": {
+    "name": "Edge",
+    "version": "156.0.0.0",
+    "major": 156,
+    "os": "Windows",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 Edg/156.0.0.0",
+    "platform": "Windows"
+  },
+  "context": {
+    "isSecureContext": true,
+    "crossOriginIsolated": false,
+    "cores": 8,
+    "deviceMemoryGB": 16
+  },
+  "summary": {
+    "ed25519": "YES",
+    "ecdsa": "YES",
+    "localFrames": "YES",
+    "processor": "YES",
+    "worker": "YES",
+    "remote": "YES",
+    "encoded": "YES"
+  },
+  "tests": [
+    {
+      "id": "env.secure",
+      "group": "1. Environment",
+      "name": "Page is a secure context (WebCrypto and the camera need this)",
+      "status": "pass",
+      "detail": "yes (http://localhost:8080)",
+      "data": null,
+      "ms": 1
+    },
+    {
+      "id": "env.nonetwork",
+      "group": "1. Environment",
+      "name": "This page cannot send anything over the network",
+      "status": "pass",
+      "detail": "a test request was blocked by the page's own security policy before leaving the browser",
+      "data": null,
+      "ms": 119
+    },
+    {
+      "id": "crypto.basic",
+      "group": "2. Signing (WebCrypto)",
+      "name": "WebCrypto exists; SHA-256 and random numbers work",
+      "status": "pass",
+      "detail": "SHA-256 test value matches",
+      "data": null,
+      "ms": 1
+    },
+    {
+      "id": "ed25519.generate",
+      "group": "2. Signing (WebCrypto)",
+      "name": "Ed25519: create a key pair whose private key is marked non-extractable",
+      "status": "pass",
+      "detail": "key pair created; private key says extractable = false",
+      "data": null,
+      "ms": 1
+    },
+    {
+      "id": "ed25519.locked",
+      "group": "2. Signing (WebCrypto)",
+      "name": "Ed25519: the private key really cannot be exported; the public key can",
+      "status": "pass",
+      "detail": "every export attempt on the private key was refused; public key exported as 32 bytes",
+      "data": {
+        "pkcs8": "refused (InvalidAccessError)",
+        "jwk": "refused (InvalidAccessError)",
+        "raw": "refused (InvalidAccessError)"
+      },
+      "ms": 1
+    },
+    {
+      "id": "ed25519.signverify",
+      "group": "2. Signing (WebCrypto)",
+      "name": "Ed25519: sign, verify, and reject a changed message and a wrong key",
+      "status": "pass",
+      "detail": "64-byte signature; good=true, changed message=false, wrong key=false",
+      "data": null,
+      "ms": 1
+    },
+    {
+      "id": "ed25519.deterministic",
+      "group": "2. Signing (WebCrypto)",
+      "name": "Ed25519: the same message always gives the same signature (RFC 8032)",
+      "status": "pass",
+      "detail": "two signatures were identical",
+      "data": null,
+      "ms": 0
+    },
+    {
+      "id": "ed25519.rfc8032",
+      "group": "2. Signing (WebCrypto)",
+      "name": "Ed25519: matches the official RFC 8032 test vectors exactly",
+      "status": "pass",
+      "detail": "TEST 1 (empty message): signature identical, official signature verifies; TEST 2 (one byte): signature identical, official signature verifies",
+      "data": null,
+      "ms": 3
+    },
+    {
+      "id": "ecdsa.p256",
+      "group": "2. Signing (WebCrypto)",
+      "name": "Fallback: ECDSA P-256 sign and verify with a non-extractable key",
+      "status": "pass",
+      "detail": "works; signature is 64 bytes in raw r||s form (the server would need to convert it if it expects DER)",
+      "data": null,
+      "ms": 1
+    },
+    {
+      "id": "persist.ed25519",
+      "group": "3. Key storage",
+      "name": "Ed25519 key stays non-extractable after being stored and reloaded",
+      "status": "pass",
+      "detail": "stored, reloaded, still non-extractable, and still signs correctly",
+      "data": null,
+      "ms": 46
+    },
+    {
+      "id": "persist.ecdsa",
+      "group": "3. Key storage",
+      "name": "ECDSA P-256 key stays non-extractable after being stored and reloaded",
+      "status": "pass",
+      "detail": "stored, reloaded, still non-extractable, and still signs correctly",
+      "data": null,
+      "ms": 17
+    },
+    {
+      "id": "storage.persist",
+      "group": "3. Key storage",
+      "name": "Browser storage: can the page ask the browser not to delete its data?",
+      "status": "info",
+      "detail": "persist() exists; already persistent: false; quota about 10240 MB. NOT TESTED HERE: some browsers (notably Safari) delete a site's data after about 7 days without a visit. The SDK must re-register a key if it is gone.",
+      "data": {
+        "persistApi": true,
+        "alreadyPersisted": false,
+        "quotaMB": 10240
+      },
+      "ms": 3
+    },
+    {
+      "id": "api.MediaStreamTrackProcessor",
+      "group": "4a. Frame access: which tools exist",
+      "name": "MediaStreamTrackProcessor: read raw video frames straight from a video track",
+      "status": "pass",
+      "detail": "present",
+      "data": null,
+      "ms": 0
+    },
+    {
+      "id": "api.VideoFrame",
+      "group": "4a. Frame access: which tools exist",
+      "name": "VideoFrame: the raw-frame object used by WebCodecs",
+      "status": "pass",
+      "detail": "present",
+      "data": null,
+      "ms": 0
+    },
+    {
+      "id": "api.VideoDecoder",
+      "group": "4a. Frame access: which tools exist",
+      "name": "VideoDecoder: WebCodecs decoder (to read the picture inside encoded frames)",
+      "status": "pass",
+      "detail": "present",
+      "data": null,
+      "ms": 0
+    },
+    {
+      "id": "api.OffscreenCanvas",
+      "group": "4a. Frame access: which tools exist",
+      "name": "OffscreenCanvas: draw and read pixels inside a worker",
+      "status": "pass",
+      "detail": "present",
+      "data": null,
+      "ms": 0
+    },
+    {
+      "id": "api.createImageBitmap",
+      "group": "4a. Frame access: which tools exist",
+      "name": "createImageBitmap: turn a frame into a transferable image",
+      "status": "pass",
+      "detail": "present",
+      "data": null,
+      "ms": 0
+    },
+    {
+      "id": "api.requestVideoFrameCallback",
+      "group": "4a. Frame access: which tools exist",
+      "name": "requestVideoFrameCallback: be told exactly when a new video frame is ready",
+      "status": "pass",
+      "detail": "present",
+      "data": null,
+      "ms": 0
+    },
+    {
+      "id": "api.ImageCapture",
+      "group": "4a. Frame access: which tools exist",
+      "name": "ImageCapture: grab a single frame from a camera track",
+      "status": "pass",
+      "detail": "present",
+      "data": null,
+      "ms": 0
+    },
+    {
+      "id": "api.RTCRtpScriptTransform",
+      "group": "4a. Frame access: which tools exist",
+      "name": "RTCRtpScriptTransform: standard Insertable Streams (encoded frames, in a worker)",
+      "status": "pass",
+      "detail": "present",
+      "data": null,
+      "ms": 0
+    },
+    {
+      "id": "api.RTCRtpReceiver.createEncodedStreams",
+      "group": "4a. Frame access: which tools exist",
+      "name": "RTCRtpReceiver.createEncodedStreams: older Chrome-style Insertable Streams",
+      "status": "pass",
+      "detail": "present",
+      "data": null,
+      "ms": 0
+    },
+    {
+      "id": "frames.local.video_canvas",
+      "group": "4b. Frame access: reading a local video (made on a canvas, no camera)",
+      "name": "Read frames as pixels via a video element and canvas (works everywhere)",
+      "status": "pass",
+      "detail": "10 frames at 320x240 in 0.68s, and the pixels changed between frames (live video)",
+      "data": {
+        "count": 10,
+        "distinct": 10,
+        "width": 320,
+        "height": 240,
+        "secs": 0.68,
+        "usedRequestVideoFrameCallback": true
+      },
+      "ms": 741
+    },
+    {
+      "id": "frames.local.processor",
+      "group": "4b. Frame access: reading a local video (made on a canvas, no camera)",
+      "name": "Read raw VideoFrame objects with MediaStreamTrackProcessor",
+      "status": "pass",
+      "detail": "10 raw frames at 320x240 in 0.6s; each was closed straight away",
+      "data": {
+        "count": 10,
+        "width": 320,
+        "height": 240,
+        "timestampsIncrease": true,
+        "secs": 0.6
+      },
+      "ms": 598
+    },
+    {
+      "id": "frames.local.imagecapture",
+      "group": "4b. Frame access: reading a local video (made on a canvas, no camera)",
+      "name": "Grab single frames with ImageCapture.grabFrame()",
+      "status": "pass",
+      "detail": "grabbed a 320x240 frame",
+      "data": {
+        "width": 320,
+        "height": 240
+      },
+      "ms": 7
+    },
+    {
+      "id": "frames.worker.bitmap",
+      "group": "4c. Frame access: inside a worker (the SDK reads frames off the main thread)",
+      "name": "Send a frame to a worker as an image and read its pixels there",
+      "status": "pass",
+      "detail": "worker read a 320x240 frame and its pixels",
+      "data": {
+        "type": "bitmap",
+        "ok": true,
+        "w": 320,
+        "h": 240,
+        "luma": 137.44266265376007
+      },
+      "ms": 26
+    },
+    {
+      "id": "frames.worker.videoframe",
+      "group": "4c. Frame access: inside a worker (the SDK reads frames off the main thread)",
+      "name": "Hand a VideoFrame to a worker (transfer, not copy)",
+      "status": "pass",
+      "detail": "worker received a 320x240 VideoFrame and turned it into an image",
+      "data": {
+        "type": "videoframe",
+        "ok": true,
+        "w": 320,
+        "h": 240
+      },
+      "ms": 12
+    },
+    {
+      "id": "frames.worker.track",
+      "group": "4c. Frame access: inside a worker (the SDK reads frames off the main thread)",
+      "name": "Hand the whole video track to a worker and read frames there",
+      "status": "unsupported",
+      "detail": "a video track cannot be sent to a worker in this browser (DataCloneError: Failed to execute 'postMessage' on 'Worker': Value at index 0 does not have a transferable type.). The SDK would read frames on the main thread and send them on.",
+      "data": null,
+      "ms": 2
+    },
+    {
+      "id": "frames.webcodecs",
+      "group": "4d. Frame access: decoding (needed to look inside encoded frames)",
+      "name": "WebCodecs: which video codecs can be decoded",
+      "status": "info",
+      "detail": "VP8: yes, VP9: yes, H.264: yes, AV1: yes",
+      "data": {
+        "VP8": "yes",
+        "VP9": "yes",
+        "H.264": "yes",
+        "AV1": "yes"
+      },
+      "ms": 0
+    },
+    {
+      "id": "rtc.loopback",
+      "group": "4e. Frame access: a call (receiver-side scoring, decision D-02)",
+      "name": "Make a loopback call inside the page and read the encoded frames passing through",
+      "status": "pass",
+      "detail": "call connected. Using RTCRtpScriptTransform (standard, runs in a worker): 60 frames seen leaving the sender, 61 frames arriving at the receiver in about 3 seconds",
+      "data": {
+        "api": "RTCRtpScriptTransform (standard, runs in a worker)",
+        "sender": {
+          "frames": 60,
+          "bytes": 51075,
+          "keyFrames": 1
+        },
+        "receiver": {
+          "frames": 61,
+          "bytes": 51624,
+          "keyFrames": 2
+        }
+      },
+      "ms": 3078
+    },
+    {
+      "id": "rtc.remote.video_canvas",
+      "group": "4e. Frame access: a call (receiver-side scoring, decision D-02)",
+      "name": "Read the RECEIVED video as pixels (video element and canvas)",
+      "status": "pass",
+      "detail": "10 received frames at 320x240 in 0.52s; the pixels changed (live)",
+      "data": {
+        "count": 10,
+        "distinct": 9,
+        "width": 320,
+        "height": 240,
+        "secs": 0.52,
+        "usedRequestVideoFrameCallback": true
+      },
+      "ms": 561
+    },
+    {
+      "id": "rtc.remote.processor",
+      "group": "4e. Frame access: a call (receiver-side scoring, decision D-02)",
+      "name": "Read the RECEIVED video as raw VideoFrame objects",
+      "status": "pass",
+      "detail": "10 received raw frames at 320x240 in 0.48s",
+      "data": {
+        "count": 10,
+        "width": 320,
+        "height": 240,
+        "timestampsIncrease": true,
+        "secs": 0.48
+      },
+      "ms": 478
+    },
+    {
+      "id": "platform.wasm",
+      "group": "5. Platform (for the on-device model, step P0-21)",
+      "name": "WebAssembly, and its SIMD speed-up",
+      "status": "info",
+      "detail": "WebAssembly present; SIMD supported",
+      "data": {
+        "simd": true
+      },
+      "ms": 1
+    },
+    {
+      "id": "platform.threads",
+      "group": "5. Platform (for the on-device model, step P0-21)",
+      "name": "Multi-threaded WebAssembly (needs a cross-origin-isolated page)",
+      "status": "info",
+      "detail": "cross-origin isolated: false; SharedArrayBuffer: false; CPU cores reported: 8. This test page is not isolated on purpose, so 'false' is expected here. It only shows the browser could do it if a partner's page sends the right headers.",
+      "data": {
+        "crossOriginIsolated": false,
+        "sharedArrayBuffer": false,
+        "cores": 8
+      },
+      "ms": 1
+    },
+    {
+      "id": "platform.gpu",
+      "group": "5. Platform (for the on-device model, step P0-21)",
+      "name": "Graphics acceleration: WebGPU and WebGL2",
+      "status": "info",
+      "detail": "WebGPU: available; WebGL2: available",
+      "data": {
+        "webgpu": true,
+        "webgl2": true
+      },
+      "ms": 58
+    }
+  ]
+}

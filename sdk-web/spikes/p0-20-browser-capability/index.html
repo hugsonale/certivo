@@ -1,0 +1,746 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- No network: connect-src 'none' stops this page sending anything anywhere. Test 1.2 proves it. -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src blob: mediastream:; worker-src blob:; connect-src 'none'">
+<title>Certivo P0-20 browser capability spike</title>
+<style>
+  :root { color-scheme: light dark; --ok:#0a7d33; --bad:#b3261e; --warn:#8a5a00; --mute:#5f6368; --line:#8884; }
+  body { font: 15px/1.5 system-ui, sans-serif; max-width: 1000px; margin: 0 auto; padding: 16px 16px 64px; }
+  h1 { font-size: 22px; margin: 8px 0 4px; } h2 { font-size: 16px; margin: 28px 0 8px; }
+  p { margin: 6px 0; } .mute { color: var(--mute); }
+  .box { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin: 12px 0; }
+  button { font: inherit; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--line); cursor: pointer; margin: 4px 6px 4px 0; }
+  button.primary { background: #1a56db; color: #fff; border-color: #1a56db; }
+  button:disabled { opacity: .5; cursor: default; }
+  table { border-collapse: collapse; width: 100%; margin-top: 4px; }
+  th, td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--mute); }
+  td.id { font: 12px ui-monospace, monospace; color: var(--mute); white-space: nowrap; }
+  .badge { display: inline-block; font-weight: 600; font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+  .pass { color: var(--ok); } .fail { color: var(--bad); } .unsupported { color: var(--warn); }
+  .error { color: var(--bad); } .skipped, .info, .running, .waiting { color: var(--mute); }
+  #summary td:first-child { width: 62%; }
+  textarea { width: 100%; height: 130px; font: 12px ui-monospace, monospace; }
+  canvas.hidden, video.hidden { position: fixed; left: -9999px; width: 2px; height: 2px; }
+</style>
+</head>
+<body>
+<h1>Certivo P0-20: browser capability spike</h1>
+<p class="mute">Page version p0-20-v2. Runs entirely inside your browser. It sends nothing anywhere (its security policy forbids network requests) and stores nothing except a few throw-away test keys that it deletes at the end.</p>
+
+<div class="box">
+  <p><strong>How to use it</strong></p>
+  <ol>
+    <li>Click <strong>Run all tests</strong> and keep this tab in front until it says <em>Finished</em> (about 30 seconds). Background tabs are slowed down by the browser and give wrong results.</li>
+    <li>Click <strong>Download results</strong> and send me the file (or click <strong>Copy results</strong> and paste it in the chat).</li>
+    <li>Optional: click <strong>Run camera test</strong>. It asks permission, reads a few frames to measure speed, then stops the camera. Frames are never saved or sent.</li>
+  </ol>
+</div>
+
+<div>
+  <button id="runAll" class="primary">Run all tests</button>
+  <button id="runCam">Run camera test (optional)</button>
+  <button id="copy" disabled>Copy results</button>
+  <button id="download" disabled>Download results</button>
+  <span id="status" class="mute" role="status" aria-live="polite"></span>
+</div>
+
+<h2>Your browser</h2>
+<div class="box" id="browserBox">detecting…</div>
+
+<h2>The answers that matter</h2>
+<table id="summary"><thead><tr><th>Question</th><th>Answer</th></tr></thead><tbody></tbody></table>
+
+<h2>Every test</h2>
+<table id="results"><thead><tr><th>ID</th><th>Test</th><th>Result</th><th>What happened</th></tr></thead><tbody></tbody></table>
+
+<h2>Results as text</h2>
+<textarea id="json" readonly aria-label="Results as JSON"></textarea>
+
+<script>
+"use strict";
+/* ============================================================================================
+   Helpers
+   ============================================================================================ */
+const PAGE_VERSION = "p0-20-v2";
+const enc = new TextEncoder();
+const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+const unhex = (h) => Uint8Array.from(h.match(/../g).map((x) => parseInt(x, 16)));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const withTimeout = (promise, ms, label) => Promise.race([
+  promise,
+  new Promise((_, rej) => setTimeout(() => rej(new Error(`timed out after ${ms / 1000}s (${label})`)), ms)),
+]);
+const errText = (e) => `${e && e.name ? e.name : "Error"}: ${e && e.message ? e.message : e}`;
+
+// Result constructors. "unsupported" = the feature is not there. "fail" = it is there but behaves wrongly.
+// "error" = the test itself could not run (not a verdict on the browser).
+const R = {
+  pass: (detail, data) => ({ status: "pass", detail, data }),
+  fail: (detail, data) => ({ status: "fail", detail, data }),
+  unsupported: (detail, data) => ({ status: "unsupported", detail, data }),
+  skipped: (detail) => ({ status: "skipped", detail }),
+  info: (detail, data) => ({ status: "info", detail, data }),
+  error: (detail) => ({ status: "error", detail }),
+};
+
+const tests = [];
+const cleanups = [];
+const ctx = {}; // values handed from one test to the next
+function test(id, group, name, fn, opts = {}) {
+  tests.push({ id, group, name, fn, timeout: opts.timeout || 20000, manual: !!opts.manual });
+}
+
+function meanLuma(imageData) {
+  const d = imageData.data; let s = 0;
+  for (let i = 0; i < d.length; i += 4) s += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+  return s / (d.length / 4);
+}
+
+// A moving picture made on a canvas, exposed as a video track. Needs no camera.
+function makeCanvasStream(fps = 15, w = 320, h = 240) {
+  const canvas = document.createElement("canvas");
+  canvas.width = w; canvas.height = h;
+  const g = canvas.getContext("2d", { willReadFrequently: true });
+  let t = 0;
+  const draw = () => {
+    t++;
+    g.fillStyle = `hsl(${(t * 7) % 360} 60% 40%)`; g.fillRect(0, 0, w, h);
+    g.fillStyle = "#fff"; g.fillRect((t * 9) % w, 40, 60, 60);
+    g.fillStyle = "#000"; g.font = "20px sans-serif"; g.fillText("frame " + t, 10, h - 20);
+  };
+  draw();
+  const timer = setInterval(draw, 1000 / fps);
+  const stream = canvas.captureStream(fps);
+  return { canvas, stream, track: stream.getVideoTracks()[0], stop() { clearInterval(timer); stream.getTracks().forEach((x) => x.stop()); } };
+}
+
+// Reads n frames the universal way: <video> -> canvas -> pixels. Works in every browser.
+async function readViaVideoCanvas(stream, n = 10, ms = 7000) {
+  const v = document.createElement("video");
+  v.className = "hidden"; v.muted = true; v.playsInline = true; v.srcObject = stream;
+  document.body.appendChild(v);
+  try {
+    try { await v.play(); } catch (e) { throw new Error("video.play() was refused: " + errText(e)); }
+    const cv = document.createElement("canvas");
+    const g = cv.getContext("2d", { willReadFrequently: true });
+    const seen = new Set(); let count = 0, w = 0, h = 0;
+    const rvfc = "requestVideoFrameCallback" in v;
+    const t0 = performance.now();
+    await new Promise((resolve) => {
+      const stop = setTimeout(resolve, ms);
+      const grab = () => {
+        if (v.videoWidth) {
+          cv.width = w = v.videoWidth; cv.height = h = v.videoHeight;
+          g.drawImage(v, 0, 0);
+          seen.add(Math.round(meanLuma(g.getImageData(0, 0, w, h)) * 10));
+          count++;
+        }
+        if (count >= n) { clearTimeout(stop); resolve(); } else next();
+      };
+      const next = () => (rvfc ? v.requestVideoFrameCallback(grab) : setTimeout(grab, 100));
+      next();
+    });
+    const secs = (performance.now() - t0) / 1000;
+    return { count, distinct: seen.size, width: w, height: h, secs: +secs.toFixed(2), usedRequestVideoFrameCallback: rvfc };
+  } finally { v.srcObject = null; v.remove(); }
+}
+
+// Reads n frames as raw VideoFrame objects (Chrome, Edge, and newer Firefox and Safari).
+async function readViaProcessor(track, n = 10) {
+  const reader = new MediaStreamTrackProcessor({ track }).readable.getReader();
+  let count = 0, w = 0, h = 0, increasing = true, last = -1;
+  const t0 = performance.now();
+  try {
+    while (count < n) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      w = value.displayWidth; h = value.displayHeight;
+      if (value.timestamp < last) increasing = false;
+      last = value.timestamp;
+      value.close(); // always release a frame straight away: they hold camera memory
+      count++;
+    }
+  } finally { try { await reader.cancel(); } catch (_) { /* already closed */ } }
+  return { count, width: w, height: h, timestampsIncrease: increasing, secs: +((performance.now() - t0) / 1000).toFixed(2) };
+}
+
+const blobWorker = (src) => {
+  const url = URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+  const worker = new Worker(url);
+  worker.__url = url;
+  return worker;
+};
+const killWorker = (w) => { try { w.terminate(); URL.revokeObjectURL(w.__url); } catch (_) { /* ignore */ } };
+
+/* ============================================================================================
+   1. Environment
+   ============================================================================================ */
+test("env.secure", "1. Environment", "Page is a secure context (WebCrypto and the camera need this)", async () =>
+  window.isSecureContext
+    ? R.pass(`yes (${location.origin})`)
+    : R.fail("No. Open this page from http://localhost:8080 or an https address, not from a file or a network address."));
+
+test("env.nonetwork", "1. Environment", "This page cannot send anything over the network", async () => {
+  let directive = null;
+  const listener = (e) => { directive = e.violatedDirective; };
+  document.addEventListener("securitypolicyviolation", listener);
+  try { await fetch("https://example.invalid/"); } catch (_) { /* expected: blocked */ }
+  await sleep(100);
+  document.removeEventListener("securitypolicyviolation", listener);
+  return directive && directive.startsWith("connect-src")
+    ? R.pass("a test request was blocked by the page's own security policy before leaving the browser")
+    : R.fail("the security policy did not block a test request; do not use the camera test in this browser");
+});
+
+/* ============================================================================================
+   2. Signing: Ed25519 and the ECDSA P-256 fallback (decision D-01)
+   ============================================================================================ */
+test("crypto.basic", "2. Signing (WebCrypto)", "WebCrypto exists; SHA-256 and random numbers work", async () => {
+  if (!window.crypto || !crypto.subtle) return R.fail("crypto.subtle is missing");
+  const d = hex(await crypto.subtle.digest("SHA-256", enc.encode("abc")));
+  const ok = d === "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+  const r = crypto.getRandomValues(new Uint8Array(16));
+  return ok && r.some((x) => x !== 0) ? R.pass("SHA-256 test value matches") : R.fail("SHA-256 gave a wrong answer: " + d);
+});
+
+test("ed25519.generate", "2. Signing (WebCrypto)", "Ed25519: create a key pair whose private key is marked non-extractable", async () => {
+  try { ctx.ed = await crypto.subtle.generateKey({ name: "Ed25519" }, false, ["sign", "verify"]); }
+  catch (e) { return R.unsupported(errText(e)); }
+  const { privateKey: p, publicKey: u } = ctx.ed;
+  const problems = [];
+  if (p.type !== "private" || u.type !== "public") problems.push("key types are wrong");
+  if (p.extractable !== false) problems.push("the private key reports that it CAN be extracted");
+  if (p.algorithm.name !== "Ed25519") problems.push("algorithm name is " + p.algorithm.name);
+  return problems.length ? R.fail(problems.join("; ")) : R.pass("key pair created; private key says extractable = false");
+});
+
+test("ed25519.locked", "2. Signing (WebCrypto)", "Ed25519: the private key really cannot be exported; the public key can", async () => {
+  if (!ctx.ed) return R.skipped("needs ed25519.generate to pass first");
+  const attempts = {};
+  for (const fmt of ["pkcs8", "jwk", "raw"]) {
+    try { await crypto.subtle.exportKey(fmt, ctx.ed.privateKey); attempts[fmt] = "EXPORTED"; }
+    catch (e) { attempts[fmt] = "refused (" + e.name + ")"; }
+  }
+  if (Object.values(attempts).includes("EXPORTED")) return R.fail("private key was exported: " + JSON.stringify(attempts), attempts);
+  const raw = await crypto.subtle.exportKey("raw", ctx.ed.publicKey);
+  return raw.byteLength === 32
+    ? R.pass("every export attempt on the private key was refused; public key exported as 32 bytes", attempts)
+    : R.fail("public key was " + raw.byteLength + " bytes, expected 32", attempts);
+});
+
+test("ed25519.signverify", "2. Signing (WebCrypto)", "Ed25519: sign, verify, and reject a changed message and a wrong key", async () => {
+  if (!ctx.ed) return R.skipped("needs ed25519.generate to pass first");
+  const msg = enc.encode("certivo signing check");
+  const sig = await crypto.subtle.sign("Ed25519", ctx.ed.privateKey, msg);
+  const good = await crypto.subtle.verify("Ed25519", ctx.ed.publicKey, sig, msg);
+  const tampered = await crypto.subtle.verify("Ed25519", ctx.ed.publicKey, sig, enc.encode("certivo signing check!"));
+  const other = await crypto.subtle.generateKey({ name: "Ed25519" }, false, ["sign", "verify"]);
+  const wrongKey = await crypto.subtle.verify("Ed25519", other.publicKey, sig, msg);
+  const ok = sig.byteLength === 64 && good && !tampered && !wrongKey;
+  return ok ? R.pass("64-byte signature; good=true, changed message=false, wrong key=false")
+            : R.fail(`signature bytes=${sig.byteLength}, good=${good}, tampered=${tampered}, wrongKey=${wrongKey}`);
+});
+
+test("ed25519.deterministic", "2. Signing (WebCrypto)", "Ed25519: the same message always gives the same signature (RFC 8032)", async () => {
+  if (!ctx.ed) return R.skipped("needs ed25519.generate to pass first");
+  const msg = enc.encode("same input");
+  const a = hex(await crypto.subtle.sign("Ed25519", ctx.ed.privateKey, msg));
+  const b = hex(await crypto.subtle.sign("Ed25519", ctx.ed.privateKey, msg));
+  return a === b ? R.pass("two signatures were identical") : R.fail("two signatures of the same message differed");
+});
+
+// Official test vectors from RFC 8032, section 7.1. If a browser passes these, its Ed25519 is the standard one,
+// so the platform's signatures (docs/spec/test-vectors/) will verify the same way everywhere.
+const RFC8032 = [
+  { name: "TEST 1 (empty message)", seed: "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+    pub: "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", msg: "",
+    sig: "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b" },
+  { name: "TEST 2 (one byte)", seed: "4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb",
+    pub: "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c", msg: "72",
+    sig: "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00" },
+];
+test("ed25519.rfc8032", "2. Signing (WebCrypto)", "Ed25519: matches the official RFC 8032 test vectors exactly", async () => {
+  try { await crypto.subtle.generateKey({ name: "Ed25519" }, false, ["sign"]); } catch (e) { return R.unsupported(errText(e)); }
+  const prefix = unhex("302e020100300506032b657004220420"); // PKCS#8 wrapper for a 32-byte Ed25519 seed
+  const lines = [];
+  for (const v of RFC8032) {
+    const pkcs8 = new Uint8Array([...prefix, ...unhex(v.seed)]);
+    const priv = await crypto.subtle.importKey("pkcs8", pkcs8, { name: "Ed25519" }, false, ["sign"]);
+    const pub = await crypto.subtle.importKey("raw", unhex(v.pub), { name: "Ed25519" }, true, ["verify"]);
+    const msg = v.msg ? unhex(v.msg) : new Uint8Array(0);
+    const sig = await crypto.subtle.sign("Ed25519", priv, msg);
+    const same = hex(sig) === v.sig;
+    const verifies = await crypto.subtle.verify("Ed25519", pub, unhex(v.sig), msg);
+    lines.push(`${v.name}: signature ${same ? "identical" : "DIFFERENT"}, official signature ${verifies ? "verifies" : "REJECTED"}`);
+    if (!same || !verifies) return R.fail(lines.join("; "));
+  }
+  return R.pass(lines.join("; "));
+});
+
+test("ecdsa.p256", "2. Signing (WebCrypto)", "Fallback: ECDSA P-256 sign and verify with a non-extractable key", async () => {
+  let pair;
+  try { pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign", "verify"]); }
+  catch (e) { return R.unsupported(errText(e)); }
+  const alg = { name: "ECDSA", hash: "SHA-256" };
+  const msg = enc.encode("certivo fallback check");
+  const sig = await crypto.subtle.sign(alg, pair.privateKey, msg);
+  const ok = await crypto.subtle.verify(alg, pair.publicKey, sig, msg);
+  let locked = true;
+  try { await crypto.subtle.exportKey("pkcs8", pair.privateKey); locked = false; } catch (_) { /* refused: good */ }
+  return ok && locked
+    ? R.pass(`works; signature is ${sig.byteLength} bytes in raw r||s form (the server would need to convert it if it expects DER)`)
+    : R.fail(`verify=${ok}, privateKeyLocked=${locked}`);
+});
+
+/* ============================================================================================
+   3. Does a non-extractable key survive a page reload? (stored in the browser's IndexedDB)
+   ============================================================================================ */
+function idbOpen(name) {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(name, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore("keys");
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+    req.onblocked = () => reject(new Error("database open was blocked"));
+  });
+}
+const idbPut = (db, k, v) => new Promise((res, rej) => { const t = db.transaction("keys", "readwrite"); t.objectStore("keys").put(v, k); t.oncomplete = res; t.onerror = () => rej(t.error); t.onabort = () => rej(t.error); });
+const idbGet = (db, k) => new Promise((res, rej) => { const r = db.transaction("keys").objectStore("keys").get(k); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+const idbDelete = (name) => new Promise((res) => { try { const r = indexedDB.deleteDatabase(name); r.onsuccess = r.onerror = r.onblocked = () => res(); } catch (_) { res(); } });
+
+async function persistenceCheck(genAlg, signAlg, kind) {
+  let pair;
+  try { pair = await crypto.subtle.generateKey(genAlg, false, ["sign", "verify"]); }
+  catch (e) { return R.unsupported(`${kind} is not available here: ${errText(e)}`); }
+  if (typeof indexedDB === "undefined") return R.fail("IndexedDB is not available (private browsing?)");
+  const name = "certivo-p020-" + Math.random().toString(36).slice(2);
+  try {
+    let db = await idbOpen(name);
+    try { await idbPut(db, "pair", pair); }
+    catch (e) { db.close(); return R.fail("the browser refused to store the key pair: " + errText(e)); }
+    db.close(); // close and reopen: the closest we can get to a reload without leaving the page
+    db = await idbOpen(name);
+    const loaded = await idbGet(db, "pair");
+    db.close();
+    if (!loaded || !loaded.privateKey) return R.fail("the key pair came back empty");
+    if (loaded.privateKey.extractable !== false) return R.fail("the stored private key came back extractable");
+    const msg = enc.encode("persisted key check");
+    const sig = await crypto.subtle.sign(signAlg, loaded.privateKey, msg);
+    const ok = await crypto.subtle.verify(signAlg, loaded.publicKey, sig, msg);
+    return ok ? R.pass("stored, reloaded, still non-extractable, and still signs correctly")
+              : R.fail("the reloaded key signed, but the signature did not verify");
+  } catch (e) { return R.fail(errText(e)); }
+  finally { await idbDelete(name); }
+}
+test("persist.ed25519", "3. Key storage", "Ed25519 key stays non-extractable after being stored and reloaded", () =>
+  persistenceCheck({ name: "Ed25519" }, "Ed25519", "Ed25519"));
+test("persist.ecdsa", "3. Key storage", "ECDSA P-256 key stays non-extractable after being stored and reloaded", () =>
+  persistenceCheck({ name: "ECDSA", namedCurve: "P-256" }, { name: "ECDSA", hash: "SHA-256" }, "ECDSA P-256"));
+
+test("storage.persist", "3. Key storage", "Browser storage: can the page ask the browser not to delete its data?", async () => {
+  if (!navigator.storage) return R.unsupported("navigator.storage is missing");
+  const data = { persistApi: typeof navigator.storage.persist === "function", alreadyPersisted: null, quotaMB: null };
+  try { data.alreadyPersisted = await navigator.storage.persisted(); } catch (_) { /* ignore */ }
+  try { const e = await navigator.storage.estimate(); data.quotaMB = Math.round((e.quota || 0) / 1048576); } catch (_) { /* ignore */ }
+  return R.info(`persist() ${data.persistApi ? "exists" : "missing"}; already persistent: ${data.alreadyPersisted}; quota about ${data.quotaMB} MB. ` +
+    "NOT TESTED HERE: some browsers (notably Safari) delete a site's data after about 7 days without a visit. The SDK must re-register a key if it is gone.", data);
+});
+
+/* ============================================================================================
+   4. Frame access
+   ============================================================================================ */
+const API_CHECKS = [
+  ["MediaStreamTrackProcessor", () => typeof MediaStreamTrackProcessor !== "undefined", "read raw video frames straight from a video track"],
+  ["VideoFrame", () => typeof VideoFrame !== "undefined", "the raw-frame object used by WebCodecs"],
+  ["VideoDecoder", () => typeof VideoDecoder !== "undefined", "WebCodecs decoder (to read the picture inside encoded frames)"],
+  ["OffscreenCanvas", () => typeof OffscreenCanvas !== "undefined", "draw and read pixels inside a worker"],
+  ["createImageBitmap", () => typeof createImageBitmap === "function", "turn a frame into a transferable image"],
+  ["requestVideoFrameCallback", () => "requestVideoFrameCallback" in HTMLVideoElement.prototype, "be told exactly when a new video frame is ready"],
+  ["ImageCapture", () => typeof ImageCapture !== "undefined", "grab a single frame from a camera track"],
+  ["RTCRtpScriptTransform", () => typeof RTCRtpScriptTransform !== "undefined", "standard Insertable Streams (encoded frames, in a worker)"],
+  ["RTCRtpReceiver.createEncodedStreams", () => typeof RTCRtpReceiver !== "undefined" && "createEncodedStreams" in RTCRtpReceiver.prototype, "older Chrome-style Insertable Streams"],
+];
+for (const [name, check, why] of API_CHECKS) {
+  test("api." + name, "4a. Frame access: which tools exist", name + ": " + why, async () =>
+    check() ? R.pass("present") : R.unsupported("not present in this browser"));
+}
+
+test("frames.local.video_canvas", "4b. Frame access: reading a local video (made on a canvas, no camera)", "Read frames as pixels via a video element and canvas (works everywhere)", async () => {
+  const src = makeCanvasStream(15);
+  ctx.local = src;
+  try {
+    const r = await readViaVideoCanvas(src.stream, 10);
+    if (r.count < 10) return R.fail(`only ${r.count} frames arrived in ${r.secs}s. Keep this tab in front while the tests run.`, r);
+    return r.distinct > 1
+      ? R.pass(`${r.count} frames at ${r.width}x${r.height} in ${r.secs}s, and the pixels changed between frames (live video)`, r)
+      : R.fail("frames arrived but the pixels never changed", r);
+  } catch (e) { return R.fail(errText(e)); }
+});
+
+test("frames.local.processor", "4b. Frame access: reading a local video (made on a canvas, no camera)", "Read raw VideoFrame objects with MediaStreamTrackProcessor", async () => {
+  if (typeof MediaStreamTrackProcessor === "undefined") return R.unsupported("MediaStreamTrackProcessor does not exist here; the SDK would use the video-element path instead");
+  if (!ctx.local) return R.skipped("needs the canvas video from the previous test");
+  try {
+    const r = await readViaProcessor(ctx.local.track, 10);
+    return r.count >= 10 && r.timestampsIncrease
+      ? R.pass(`${r.count} raw frames at ${r.width}x${r.height} in ${r.secs}s; each was closed straight away`, r)
+      : R.fail(`frames=${r.count}, timestamps increasing=${r.timestampsIncrease}`, r);
+  } catch (e) { return R.fail(errText(e)); }
+});
+
+test("frames.local.imagecapture", "4b. Frame access: reading a local video (made on a canvas, no camera)", "Grab single frames with ImageCapture.grabFrame()", async () => {
+  if (typeof ImageCapture === "undefined") return R.unsupported("ImageCapture does not exist here");
+  if (!ctx.local) return R.skipped("needs the canvas video from an earlier test");
+  try {
+    const ic = new ImageCapture(ctx.local.track);
+    const bmp = await ic.grabFrame();
+    const r = { width: bmp.width, height: bmp.height };
+    bmp.close();
+    return R.pass(`grabbed a ${r.width}x${r.height} frame`, r);
+  } catch (e) { return R.unsupported("ImageCapture exists but could not grab a frame from this kind of track: " + errText(e)); }
+});
+
+const FRAME_WORKER = `
+self.onmessage = async (e) => {
+  const m = e.data;
+  try {
+    if (m.type === "probe") {
+      self.postMessage({ type: "probe", ok: true, processor: typeof MediaStreamTrackProcessor !== "undefined",
+        generator: typeof MediaStreamTrackGenerator !== "undefined", videoFrame: typeof VideoFrame !== "undefined",
+        offscreenCanvas: typeof OffscreenCanvas !== "undefined", imageBitmap: typeof createImageBitmap === "function" });
+    } else if (m.type === "bitmap") {
+      const bmp = m.bitmap, w = bmp.width, h = bmp.height;
+      const oc = new OffscreenCanvas(w, h); const g = oc.getContext("2d", { willReadFrequently: true });
+      g.drawImage(bmp, 0, 0); bmp.close();
+      const d = g.getImageData(0, 0, w, h).data; let s = 0;
+      for (let i = 0; i < d.length; i += 4) s += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+      self.postMessage({ type: "bitmap", ok: true, w, h, luma: s / (d.length / 4) });
+    } else if (m.type === "videoframe") {
+      const f = m.frame, w = f.displayWidth, h = f.displayHeight;
+      const bmp = await createImageBitmap(f); f.close(); bmp.close();
+      self.postMessage({ type: "videoframe", ok: true, w, h });
+    } else if (m.type === "track") {
+      if (typeof MediaStreamTrackProcessor === "undefined") { self.postMessage({ type: "track", ok: false, why: "MediaStreamTrackProcessor does not exist inside a worker" }); return; }
+      const reader = new MediaStreamTrackProcessor({ track: m.track }).readable.getReader();
+      let n = 0, w = 0, h = 0;
+      while (n < 5) { const { value, done } = await reader.read(); if (done) break; w = value.displayWidth; h = value.displayHeight; value.close(); n++; }
+      await reader.cancel(); self.postMessage({ type: "track", ok: n >= 5, n, w, h });
+    }
+  } catch (err) { self.postMessage({ type: m.type, ok: false, why: err.name + ": " + err.message }); }
+};`;
+function askWorker(message, transfer) {
+  const worker = blobWorker(FRAME_WORKER);
+  return withTimeout(new Promise((resolve, reject) => {
+    worker.onmessage = (e) => resolve(e.data);
+    worker.onerror = (e) => reject(new Error("worker error: " + (e.message || "unknown")));
+    worker.postMessage(message, transfer);
+  }), 10000, "worker reply").finally(() => killWorker(worker));
+}
+
+test("frames.worker.bitmap", "4c. Frame access: inside a worker (the SDK reads frames off the main thread)", "Send a frame to a worker as an image and read its pixels there", async () => {
+  if (typeof createImageBitmap !== "function" || typeof OffscreenCanvas === "undefined") return R.unsupported("needs createImageBitmap and OffscreenCanvas");
+  if (!ctx.local) return R.skipped("needs the canvas video from an earlier test");
+  const c = ctx.local.canvas;
+  const bmp = await createImageBitmap(c);
+  const mainLuma = meanLuma(c.getContext("2d").getImageData(0, 0, c.width, c.height));
+  const reply = await askWorker({ type: "bitmap", bitmap: bmp }, [bmp]);
+  if (!reply.ok) return R.fail(reply.why || "worker could not read the frame", reply);
+  const close = Math.abs(reply.luma - mainLuma) < 12; // the canvas keeps moving, so allow a small difference
+  return close ? R.pass(`worker read a ${reply.w}x${reply.h} frame and its pixels`, reply) : R.fail(`worker pixels differ from main-thread pixels (${reply.luma.toFixed(1)} vs ${mainLuma.toFixed(1)})`, reply);
+});
+
+test("frames.worker.videoframe", "4c. Frame access: inside a worker (the SDK reads frames off the main thread)", "Hand a VideoFrame to a worker (transfer, not copy)", async () => {
+  if (typeof VideoFrame === "undefined") return R.unsupported("VideoFrame does not exist here");
+  if (!ctx.local) return R.skipped("needs the canvas video from an earlier test");
+  const frame = new VideoFrame(ctx.local.canvas, { timestamp: 0 });
+  const reply = await askWorker({ type: "videoframe", frame }, [frame]);
+  return reply.ok ? R.pass(`worker received a ${reply.w}x${reply.h} VideoFrame and turned it into an image`, reply) : R.fail(reply.why || "failed", reply);
+});
+
+test("frames.worker.processor", "4c. Frame access: inside a worker (the SDK reads frames off the main thread)", "Does MediaStreamTrackProcessor exist INSIDE a worker? (some browsers offer it only there)", async () => {
+  const reply = await askWorker({ type: "probe" });
+  ctx.workerHasProcessor = !!reply.processor;
+  const list = `inside a worker: MediaStreamTrackProcessor ${reply.processor ? "yes" : "no"}, MediaStreamTrackGenerator ${reply.generator ? "yes" : "no"}, VideoFrame ${reply.videoFrame ? "yes" : "no"}, OffscreenCanvas ${reply.offscreenCanvas ? "yes" : "no"}`;
+  return reply.processor ? R.pass(list, reply) : R.unsupported(list, reply);
+});
+
+test("frames.worker.track", "4c. Frame access: inside a worker (the SDK reads frames off the main thread)", "Hand the whole video track to a worker and read frames there", async () => {
+  if (!ctx.local) return R.skipped("needs the canvas video from an earlier test");
+  if (!ctx.workerHasProcessor) return R.unsupported("a worker here has no MediaStreamTrackProcessor, so a track could not be read there even if it could be sent");
+  const clone = ctx.local.track.clone();
+  try {
+    const reply = await askWorker({ type: "track", track: clone }, [clone]);
+    return reply.ok ? R.pass(`worker read ${reply.n} frames straight from the track`, reply) : R.unsupported(reply.why || "worker could not read the track", reply);
+  } catch (e) {
+    return R.unsupported("a worker has the API, but a video track cannot be sent to it in this browser (" + errText(e) + "). The SDK would read frames on the main thread and send them on.");
+  }
+});
+
+const CODECS = [["VP8", "vp8"], ["VP9", "vp09.00.10.08"], ["H.264", "avc1.42E01E"], ["AV1", "av01.0.04M.08"]];
+test("frames.webcodecs", "4d. Frame access: decoding (needed to look inside encoded frames)", "WebCodecs: which video codecs can be decoded", async () => {
+  if (typeof VideoDecoder === "undefined") return R.unsupported("VideoDecoder does not exist here");
+  const out = {};
+  for (const [label, codec] of CODECS) {
+    try { out[label] = (await VideoDecoder.isConfigSupported({ codec })).supported ? "yes" : "no"; } catch (_) { out[label] = "error"; }
+  }
+  return R.info(Object.entries(out).map(([k, v]) => `${k}: ${v}`).join(", "), out);
+});
+
+/* ---- Loopback call: two connections inside this page, no network, no servers ---- */
+const XFORM_WORKER = `
+const counts = {};
+onrtctransform = (event) => {
+  const role = event.transformer.options.role; const c = counts[role] = { frames: 0, bytes: 0, keyFrames: 0 };
+  const count = new TransformStream({ transform(frame, ctl) { c.frames++; c.bytes += frame.data.byteLength; if (frame.type === "key") c.keyFrames++; ctl.enqueue(frame); } });
+  event.transformer.readable.pipeThrough(count).pipeTo(event.transformer.writable);
+};
+self.onmessage = (e) => { if (e.data === "report") self.postMessage(JSON.parse(JSON.stringify(counts))); };`;
+
+test("rtc.loopback", "4e. Frame access: a call (receiver-side scoring, decision D-02)", "Make a loopback call inside the page and read the encoded frames passing through", async () => {
+  if (typeof RTCPeerConnection === "undefined") return R.unsupported("RTCPeerConnection does not exist here");
+  const useScript = typeof RTCRtpScriptTransform !== "undefined";
+  const useLegacy = !useScript && typeof RTCRtpReceiver !== "undefined" && "createEncodedStreams" in RTCRtpReceiver.prototype;
+  if (!useScript && !useLegacy) ctx.noEncodedApi = true;
+  const cfg = { iceServers: [] }; // no servers at all: nothing leaves this computer
+  if (useLegacy) cfg.encodedInsertableStreams = true;
+  const src = makeCanvasStream(20);
+  const pc1 = new RTCPeerConnection(cfg), pc2 = new RTCPeerConnection(cfg);
+  ctx.rtc = { pc1, pc2, src };
+  cleanups.push(() => { try { pc1.close(); pc2.close(); } catch (_) { /* ignore */ } src.stop(); });
+  pc1.onicecandidate = (e) => { if (e.candidate) pc2.addIceCandidate(e.candidate).catch(() => {}); };
+  pc2.onicecandidate = (e) => { if (e.candidate) pc1.addIceCandidate(e.candidate).catch(() => {}); };
+  const gotTrack = new Promise((res) => { pc2.ontrack = (e) => res(e); });
+  const connected = new Promise((res) => { pc2.onconnectionstatechange = () => { if (pc2.connectionState === "connected") res(); }; });
+
+  const counters = { sender: { frames: 0, bytes: 0, keyFrames: 0 }, receiver: { frames: 0, bytes: 0, keyFrames: 0 } };
+  let xfWorker = null;
+  const sender = pc1.addTrack(src.track, src.stream);
+  if (useScript) {
+    xfWorker = blobWorker(XFORM_WORKER); cleanups.push(() => killWorker(xfWorker));
+    sender.transform = new RTCRtpScriptTransform(xfWorker, { role: "sender" });
+  } else if (useLegacy) {
+    const { readable, writable } = sender.createEncodedStreams();
+    readable.pipeThrough(new TransformStream({ transform(f, c) { counters.sender.frames++; counters.sender.bytes += f.data.byteLength; if (f.type === "key") counters.sender.keyFrames++; c.enqueue(f); } })).pipeTo(writable);
+  }
+  pc2.addEventListener("track", (e) => {
+    if (useScript) e.receiver.transform = new RTCRtpScriptTransform(xfWorker, { role: "receiver" });
+    else if (useLegacy) {
+      const { readable, writable } = e.receiver.createEncodedStreams();
+      readable.pipeThrough(new TransformStream({ transform(f, c) { counters.receiver.frames++; counters.receiver.bytes += f.data.byteLength; if (f.type === "key") counters.receiver.keyFrames++; c.enqueue(f); } })).pipeTo(writable);
+    }
+  });
+  try {
+    const offer = await pc1.createOffer(); await pc1.setLocalDescription(offer);
+    await pc2.setRemoteDescription(offer);
+    const answer = await pc2.createAnswer(); await pc2.setLocalDescription(answer);
+    await pc1.setRemoteDescription(answer);
+    const trackEvent = await withTimeout(gotTrack, 10000, "remote track");
+    ctx.remote = { track: trackEvent.track, stream: trackEvent.streams[0] || new MediaStream([trackEvent.track]) };
+    await withTimeout(connected, 10000, "connection");
+  } catch (e) {
+    return R.error("the loopback call could not be set up (" + errText(e) + "). Some networks or browser settings block this. It says nothing about whether the browser supports the APIs; try again, or on another network.");
+  }
+  await sleep(3000);
+  let report = counters;
+  if (useScript) {
+    report = await withTimeout(new Promise((res) => { xfWorker.onmessage = (e) => res(e.data); xfWorker.postMessage("report"); }), 5000, "transform report")
+      .catch(() => null);
+    if (!report) return R.fail("the transform worker never reported");
+  }
+  const sf = (report.sender || {}).frames || 0, rf = (report.receiver || {}).frames || 0;
+  const api = useScript ? "RTCRtpScriptTransform (standard, runs in a worker)" : useLegacy ? "createEncodedStreams (older Chrome-style, main thread)" : "none";
+  if (!useScript && !useLegacy) return R.unsupported("the call connected, but this browser has neither RTCRtpScriptTransform nor createEncodedStreams, so encoded frames cannot be read", { connected: true });
+  return rf >= 10 && sf >= 10
+    ? R.pass(`call connected. Using ${api}: ${sf} frames seen leaving the sender, ${rf} frames arriving at the receiver in about 3 seconds`, { api, ...report })
+    : R.fail(`call connected but too few encoded frames reached the transform (sender ${sf}, receiver ${rf}). Keep this tab in front while testing.`, { api, ...report });
+}, { timeout: 40000 });
+
+test("rtc.remote.video_canvas", "4e. Frame access: a call (receiver-side scoring, decision D-02)", "Read the RECEIVED video as pixels (video element and canvas)", async () => {
+  if (!ctx.remote) return R.skipped("needs the loopback call from the previous test");
+  try {
+    const r = await readViaVideoCanvas(ctx.remote.stream, 10, 9000);
+    return r.count >= 10 && r.distinct > 1
+      ? R.pass(`${r.count} received frames at ${r.width}x${r.height} in ${r.secs}s; the pixels changed (live)`, r)
+      : R.fail(`received ${r.count} frames, ${r.distinct} distinct`, r);
+  } catch (e) { return R.fail(errText(e)); }
+});
+
+test("rtc.remote.processor", "4e. Frame access: a call (receiver-side scoring, decision D-02)", "Read the RECEIVED video as raw VideoFrame objects", async () => {
+  if (typeof MediaStreamTrackProcessor === "undefined") return R.unsupported("MediaStreamTrackProcessor does not exist here; receiver-side scoring would use the video-element path");
+  if (!ctx.remote) return R.skipped("needs the loopback call from an earlier test");
+  try {
+    const r = await readViaProcessor(ctx.remote.track, 10);
+    return r.count >= 10 ? R.pass(`${r.count} received raw frames at ${r.width}x${r.height} in ${r.secs}s`, r) : R.fail(`only ${r.count} frames`, r);
+  } catch (e) { return R.fail(errText(e)); }
+});
+
+/* ============================================================================================
+   5. Platform: what the on-device model (ONNX Runtime Web) will be able to use
+   ============================================================================================ */
+test("platform.wasm", "5. Platform (for the on-device model, step P0-21)", "WebAssembly, and its SIMD speed-up", async () => {
+  if (typeof WebAssembly === "undefined") return R.fail("WebAssembly is missing");
+  const simd = WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11]));
+  return R.info(`WebAssembly present; SIMD ${simd ? "supported" : "NOT supported"}`, { simd });
+});
+test("platform.threads", "5. Platform (for the on-device model, step P0-21)", "Multi-threaded WebAssembly (needs a cross-origin-isolated page)", async () => {
+  const data = { crossOriginIsolated: !!window.crossOriginIsolated, sharedArrayBuffer: typeof SharedArrayBuffer !== "undefined", cores: navigator.hardwareConcurrency || null };
+  return R.info(`cross-origin isolated: ${data.crossOriginIsolated}; SharedArrayBuffer: ${data.sharedArrayBuffer}; CPU cores reported: ${data.cores}. ` +
+    "This test page is not isolated on purpose, so 'false' is expected here. It only shows the browser could do it if a partner's page sends the right headers.", data);
+});
+test("platform.gpu", "5. Platform (for the on-device model, step P0-21)", "Graphics acceleration: WebGPU and WebGL2", async () => {
+  const data = { webgpu: false, webgl2: false };
+  try { if (navigator.gpu) data.webgpu = !!(await navigator.gpu.requestAdapter()); } catch (_) { /* leave false */ }
+  try { data.webgl2 = !!document.createElement("canvas").getContext("webgl2"); } catch (_) { /* leave false */ }
+  return R.info(`WebGPU: ${data.webgpu ? "available" : "not available"}; WebGL2: ${data.webgl2 ? "available" : "not available"}`, data);
+});
+
+/* ============================================================================================
+   Optional: real camera (only when you click the button)
+   ============================================================================================ */
+test("camera.frames", "6. Camera (optional)", "Real camera: read frames, then stop the camera", async () => {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return R.unsupported("getUserMedia is missing");
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false }); }
+  catch (e) { return R.skipped("camera not used: " + errText(e)); }
+  try {
+    const track = stream.getVideoTracks()[0];
+    const settings = track.getSettings();
+    const out = { settings: { width: settings.width, height: settings.height, frameRate: settings.frameRate } };
+    out.videoCanvas = await readViaVideoCanvas(stream, 30, 9000);
+    if (typeof MediaStreamTrackProcessor !== "undefined") out.processor = await readViaProcessor(track, 30);
+    const fps = out.videoCanvas.count / Math.max(out.videoCanvas.secs, 0.001);
+    return R.pass(`camera ${out.settings.width}x${out.settings.height}; the video-element path delivered about ${fps.toFixed(1)} frames per second` +
+      (out.processor ? `; the raw-frame path read ${out.processor.count} frames in ${out.processor.secs}s` : "") + ". Frames were discarded immediately.", out);
+  } finally { stream.getTracks().forEach((t) => t.stop()); }
+}, { manual: true, timeout: 40000 });
+
+/* ============================================================================================
+   Runner, summary and output
+   ============================================================================================ */
+const results = [];
+function detectBrowser() {
+  const ua = navigator.userAgent; let name = "Unknown", version = "", m;
+  if ((m = /HeadlessChrome\/([\d.]+)/.exec(ua))) { name = "Chrome (headless)"; version = m[1]; }
+  else if ((m = /Edg\/([\d.]+)/.exec(ua))) { name = "Edge"; version = m[1]; }
+  else if ((m = /OPR\/([\d.]+)/.exec(ua))) { name = "Opera"; version = m[1]; }
+  else if ((m = /Firefox\/([\d.]+)/.exec(ua))) { name = "Firefox"; version = m[1]; }
+  else if ((m = /(?:Chrome|CriOS)\/([\d.]+)/.exec(ua))) { name = "Chrome"; version = m[1]; }
+  else if ((m = /Version\/([\d.]+).*Safari/.exec(ua))) { name = "Safari"; version = m[1]; }
+  let os = "Unknown";
+  if (/Windows NT/.test(ua)) os = "Windows"; else if (/iPhone|iPad|iPod/.test(ua)) os = "iOS";
+  else if (/Android/.test(ua)) os = "Android"; else if (/Mac OS X/.test(ua)) os = "macOS"; else if (/Linux/.test(ua)) os = "Linux";
+  return { name, version, major: parseInt(version, 10) || null, os, userAgent: ua, platform: (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "" };
+}
+
+async function runOne(t) {
+  const started = performance.now();
+  let res;
+  try { res = await withTimeout(Promise.resolve(t.fn()), t.timeout, t.name); }
+  catch (e) { res = /timed out/.test(String(e && e.message)) ? R.error(errText(e)) : R.fail("unexpected error: " + errText(e)); }
+  return { id: t.id, group: t.group, name: t.name, status: res.status, detail: res.detail || "", data: res.data === undefined ? null : res.data, ms: Math.round(performance.now() - started) };
+}
+
+const STATUS_LABEL = { pass: "✔ PASS", fail: "✖ FAIL", unsupported: "– NOT SUPPORTED", skipped: "○ SKIPPED", info: "ⓘ INFO", error: "! COULD NOT RUN", running: "… running", waiting: "waiting" };
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function paintRows() {
+  const body = document.querySelector("#results tbody"); let last = "";
+  body.innerHTML = results.map((r) => {
+    let head = "";
+    if (r.group !== last) { head = `<tr><td colspan="4"><strong>${esc(r.group)}</strong></td></tr>`; last = r.group; }
+    return head + `<tr><td class="id">${esc(r.id)}</td><td>${esc(r.name)}</td><td><span class="badge ${r.status}">${STATUS_LABEL[r.status]}</span></td><td>${esc(r.detail)}</td></tr>`;
+  }).join("");
+}
+const get = (id) => results.find((r) => r.id === id);
+const st = (id) => (get(id) ? get(id).status : "waiting");
+const allPass = (ids) => ids.every((i) => st(i) === "pass");
+
+function computeSummary() {
+  const yn = (ok, ranAll) => (!ranAll ? "not tested" : ok ? "YES" : "NO");
+  const rows = [];
+  const ed = ["ed25519.generate", "ed25519.locked", "ed25519.signverify", "ed25519.rfc8032", "persist.ed25519"];
+  rows.push(["Can this browser sign with Ed25519, with a locked private key that survives being stored? (decision D-01)", yn(allPass(ed), ed.every((i) => get(i))), "ed25519"]);
+  rows.push(["Does the fallback (ECDSA P-256) work the same way?", yn(allPass(["ecdsa.p256", "persist.ecdsa"]), get("ecdsa.p256") && get("persist.ecdsa")), "ecdsa"]);
+  rows.push(["Can frames be read from a local video in a way the SDK can use?", yn(st("frames.local.video_canvas") === "pass", get("frames.local.video_canvas")), "localFrames"]);
+  rows.push(["Can raw frames be read directly (MediaStreamTrackProcessor)?", st("frames.local.processor") === "pass" ? "YES" : st("frames.local.processor") === "unsupported" ? "NO (not available)" : get("frames.local.processor") ? "NO" : "not tested", "processor"]);
+  rows.push(["Is raw frame reading (MediaStreamTrackProcessor) available inside a worker?", st("frames.worker.processor") === "pass" ? "YES" : st("frames.worker.processor") === "unsupported" ? "NO" : "not tested", "processorInWorker"]);
+  rows.push(["Can a frame be moved to a worker and read there?", yn(st("frames.worker.bitmap") === "pass", get("frames.worker.bitmap")), "worker"]);
+  rows.push(["Can the RECEIVED video of a call be read as pixels? (receiver-side scoring, D-02)", st("rtc.remote.video_canvas") === "pass" ? "YES" : st("rtc.remote.video_canvas") === "skipped" || st("rtc.loopback") === "error" ? "not tested (call did not connect)" : get("rtc.remote.video_canvas") ? "NO" : "not tested", "remote"]);
+  rows.push(["Can encoded frames of a call be read (Insertable Streams)?", st("rtc.loopback") === "pass" ? "YES" : st("rtc.loopback") === "error" ? "not tested (call did not connect)" : get("rtc.loopback") ? "NO" : "not tested", "encoded"]);
+  return rows;
+}
+function paintSummary() {
+  document.querySelector("#summary tbody").innerHTML = computeSummary().map(([q, a]) =>
+    `<tr><td>${esc(q)}</td><td><strong>${esc(a)}</strong></td></tr>`).join("");
+}
+
+function buildReport(browser) {
+  return {
+    schema: "certivo.p0-20.v1", pageVersion: PAGE_VERSION, ranAt: new Date().toISOString(),
+    browser, context: { isSecureContext: window.isSecureContext, crossOriginIsolated: !!window.crossOriginIsolated, cores: navigator.hardwareConcurrency || null, deviceMemoryGB: navigator.deviceMemory || null },
+    summary: Object.fromEntries(computeSummary().map(([q, a, key]) => [key, a])),
+    tests: results,
+  };
+}
+function publish(browser) {
+  paintRows(); paintSummary();
+  const report = buildReport(browser);
+  document.getElementById("json").value = JSON.stringify(report, null, 2);
+  window.__lastReport = report;
+  document.getElementById("copy").disabled = document.getElementById("download").disabled = false;
+  return report;
+}
+
+async function runList(list, label) {
+  const browser = detectBrowser();
+  const statusEl = document.getElementById("status");
+  document.getElementById("runAll").disabled = document.getElementById("runCam").disabled = true;
+  for (const t of list) {
+    statusEl.textContent = `${label}: ${t.name}…`;
+    const row = { id: t.id, group: t.group, name: t.name, status: "running", detail: "", data: null, ms: 0 };
+    const existing = results.findIndex((r) => r.id === t.id);
+    if (existing >= 0) results[existing] = row; else results.push(row);
+    paintRows();
+    const done = await runOne(t);
+    results[results.findIndex((r) => r.id === t.id)] = done;
+    paintRows(); paintSummary();
+  }
+  for (const c of cleanups.splice(0)) { try { c(); } catch (_) { /* ignore */ } }
+  if (ctx.local) { ctx.local.stop(); ctx.local = null; }
+  ctx.remote = null; ctx.rtc = null;
+  statusEl.textContent = "Finished. Now click Download results (or Copy results).";
+  document.getElementById("runAll").disabled = document.getElementById("runCam").disabled = false;
+  return publish(browser);
+}
+
+if (typeof document !== "undefined" && document.getElementById("runAll")) {
+  const browser = detectBrowser();
+  document.getElementById("browserBox").innerHTML =
+    `<strong>${esc(browser.name)} ${esc(browser.version)}</strong> on ${esc(browser.os)}<br><span class="mute">${esc(browser.userAgent)}</span>`;
+  paintSummary();
+  window.runAll = () => runList(tests.filter((t) => !t.manual), "Running");
+  window.runCamera = () => runList(tests.filter((t) => t.manual), "Camera test");
+  document.getElementById("runAll").onclick = window.runAll;
+  document.getElementById("runCam").onclick = window.runCamera;
+  document.getElementById("copy").onclick = async () => {
+    const ta = document.getElementById("json");
+    try { await navigator.clipboard.writeText(ta.value); document.getElementById("status").textContent = "Copied. Paste it into the chat."; }
+    catch (_) { ta.select(); document.getElementById("status").textContent = "Select all the text below and copy it with Ctrl+C."; }
+  };
+  document.getElementById("download").onclick = () => {
+    const r = window.__lastReport, b = r.browser;
+    const name = `p0-20-${b.name}-${b.version}-${b.os}.json`.toLowerCase().replace(/[^a-z0-9.\-]+/g, "-");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(r, null, 2)], { type: "application/json" }));
+    a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  };
+} else {
+  globalThis.__certivoTests = { tests, ctx, cleanups, R };
+}
+</script>
+</body>
+</html>
