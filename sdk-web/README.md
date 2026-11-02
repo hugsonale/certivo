@@ -81,3 +81,11 @@ You need **Node 24 or newer** (it includes npm 11). Older npm (10) crashes on th
 
 Versions are exact (no `^`), pinned to releases at least 14 days old (guide P0-61), and `npm audit` must stay clean at "high".
 `vitest` is pinned to 5.0.4: the older 4.x releases have known security advisories, and 4.1.x and 5.x crash npm 10. Re-check when npm 10 is no longer a concern.
+
+## Browser test: no media leaves the page (P0-24)
+
+`npm run test:browser` runs the real SDK frame path in a real Chromium for 180 intervals, with a stand-in model, and fails if anything that could be a picture
+leaves the page, or if a picture is still open after an interval. See `docs/adr/0024-capture-pipeline-and-no-media-egress.md`.
+
+First time on a machine: `npx playwright install chromium`. The rules that decide what counts as a leak are in `e2e/leak-detector.ts` and are unit-tested
+by `npm test`. The test ends by sending a picture out on purpose to prove the detector notices.

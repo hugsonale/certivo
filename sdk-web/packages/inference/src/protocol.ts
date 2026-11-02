@@ -7,7 +7,7 @@ export type WorkerResponse =
   | { type: "result"; id: number; result: ScoreResult }
   | { type: "error"; id: number; code: ScorerErrorCode; message: string };
 
-export type ScorerErrorCode = "model_not_loaded" | "scoring_failed" | "timeout" | "worker_failed";
+export type ScorerErrorCode = "model_not_loaded" | "scoring_failed" | "timeout" | "worker_failed" | "busy";
 
 export class ScorerError extends Error {
   override readonly name = "ScorerError";

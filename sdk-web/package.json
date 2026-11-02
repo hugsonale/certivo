@@ -17,10 +17,12 @@
     "test": "vitest run",
     "build": "node scripts/build.mjs",
     "size": "node scripts/check-size.mjs",
-    "check": "npm run lint && npm run typecheck && npm test && npm run build && npm run size"
+    "check": "npm run lint && npm run typecheck && npm test && npm run build && npm run size",
+    "test:browser": "playwright test"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
+    "@playwright/test": "1.64.1",
     "@types/node": "22.20.5",
     "esbuild": "0.28.2",
     "typescript": "7.0.2",

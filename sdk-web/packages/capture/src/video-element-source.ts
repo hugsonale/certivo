@@ -71,7 +71,13 @@ export class VideoElementFrameSource implements FrameSource {
     canvas.width = width;
     canvas.height = height;
     context.drawImage(video, 0, 0, width, height);
-    const image = await createImageBitmap(canvas);
+    let image: ImageBitmap;
+    try {
+      image = await createImageBitmap(canvas);
+    } finally {
+      // The canvas must not keep a copy of the picture between intervals (guide P0-24: no frame retention).
+      context.clearRect(0, 0, width, height);
+    }
 
     let closed = false;
     return {
@@ -92,6 +98,10 @@ export class VideoElementFrameSource implements FrameSource {
       this.video.pause();
       this.video.srcObject = null; // lets go of the stream without stopping the camera
       this.video.remove();
+    }
+    if (this.canvas) {
+      this.canvas.width = 0; // gives the canvas's picture memory back
+      this.canvas.height = 0;
     }
     this.video = undefined;
     this.canvas = undefined;

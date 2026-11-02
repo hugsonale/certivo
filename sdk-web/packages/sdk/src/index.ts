@@ -8,5 +8,6 @@ export * from "@certivo/sdk-inference";
 export type * from "@certivo/sdk-types";
 export * from "@certivo/sdk-ui";
 export { type IntervalOutcome, type PipelineDeps, VerificationPipeline, type WaitingPacket } from "./pipeline";
+export { IntervalRunner, type IntervalRunnerOptions } from "./runner";
 
 export const SDK_VERSION = "0.0.0";
