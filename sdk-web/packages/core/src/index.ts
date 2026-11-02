@@ -13,6 +13,17 @@ export { SdkError, type SdkErrorCode } from "./errors";
 export { IndexedDbKeyStore, type KeyStore, MemoryKeyStore, type StoredKey } from "./keystore";
 export { buildPacket, MAX_INTERVAL_MS, type PacketInput, type ScorePacket } from "./packet";
 export {
+  BROWSER_KEY_PROTECTION,
+  type DeviceRegistrationReply,
+  type DeviceRegistrationRequest,
+  defaultLock,
+  type LockRunner,
+  type ProvisionedDevice,
+  type ProvisionOptions,
+  provisionDevice,
+  type RegisterDevice,
+} from "./provision";
+export {
   MAX_BATCH_PACKETS,
   type PauseReason,
   type ScoreBatchResponse,
@@ -25,5 +36,8 @@ export {
   chooseSigningAlg,
   createDeviceSigner,
   type DeviceSigner,
+  type LoadedKey,
+  loadOrCreateKey,
   SUPPORTED_ALGS,
+  signerFor,
 } from "./signer";

@@ -180,3 +180,53 @@ describe("a frame can never leave the page or be kept (guide Part 3; full proof 
     ]);
   });
 });
+
+describe("the private key is never read, logged or sent (guide P0-23; the runtime proof is packages/core/test/key-leak.test.ts)", () => {
+  const everySource = () =>
+    PACKAGES.flatMap((pkg) =>
+      sourceFiles(pkg).map((file) => ({ pkg, file, code: stripComments(readFileSync(file, "utf8")) })),
+    );
+
+  it("no SDK code writes to the console (a log line is where a secret would leak)", () => {
+    for (const { file, code } of everySource()) expect(findViolations(code, [/\bconsole\s*\./]), file).toEqual([]);
+  });
+
+  it("every key export is of a PUBLIC key in raw form", () => {
+    let seen = 0;
+    for (const { file, code } of everySource()) {
+      for (const match of code.matchAll(/exportKey\(([^)]*)\)/g)) {
+        seen++;
+        expect(match[1], `${file}: ${match[0]}`).toMatch(/^\s*"raw",\s*[\w.]*publicKey\s*$/);
+      }
+    }
+    expect(seen).toBeGreaterThan(0); // the check is looking at something
+  });
+
+  it("every key is created non-extractable", () => {
+    let seen = 0;
+    for (const { file, code } of everySource()) {
+      for (const match of code.matchAll(/generateKey\(\s*[^,]+,\s*(\w+)/g)) {
+        seen++;
+        expect(match[1], `${file}: ${match[0]}`).toBe("false");
+      }
+    }
+    expect(seen).toBeGreaterThan(0);
+  });
+
+  it("no code names the formats a private key could be exported in", () => {
+    for (const { file, code } of everySource()) expect(findViolations(code, [/pkcs8/i, /"jwk"/i]), file).toEqual([]);
+  });
+
+  it("only the key store touches IndexedDB", () => {
+    const users = everySource()
+      .filter(({ code }) => /\bindexedDB\b/.test(code))
+      .map(({ file }) => file.slice(root.length + 1));
+    expect(users).toEqual([join("core", "src", "keystore.ts")]);
+  });
+
+  it("the guard itself works", () => {
+    expect(findViolations("console.log(key)", [/\bconsole\s*\./])).not.toEqual([]);
+    expect(findViolations('await subtle.exportKey("pkcs8", privateKey)', [/pkcs8/i])).not.toEqual([]);
+    expect(findViolations("// console.log is mentioned only in this comment", [/\bconsole\s*\./])).toEqual([]);
+  });
+});

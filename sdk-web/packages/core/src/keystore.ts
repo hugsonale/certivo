@@ -1,9 +1,15 @@
 import type { SigningAlg } from "@certivo/sdk-types";
 
-/** A device key pair and which algorithm it uses. The private key is ALWAYS non-extractable. */
+/**
+ * A device key pair, which algorithm it uses, and (once the partner backend has registered it) the device ID the
+ * platform gave it. They are kept together on purpose: a key without its ID needs registering, and an ID without its key
+ * is meaningless. The private key is ALWAYS non-extractable.
+ */
 export interface StoredKey {
   readonly alg: SigningAlg;
   readonly pair: CryptoKeyPair;
+  /** Present only after registration succeeded. Records saved by P0-21 builds simply do not have it yet. */
+  readonly deviceId?: string;
 }
 
 /** Where the device key lives between page loads. */

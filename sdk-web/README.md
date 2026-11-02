@@ -24,6 +24,32 @@ The SDK must produce exactly the bytes the platform signs. `npm test` checks thi
 in `docs/spec/test-vectors/` (one full packet with its signature, plus 170 canonical-JSON cases and 17 refusals). If a vector file is
 missing, the test **fails**. The `sdk-web` CI check also runs whenever those files change. Details: `docs/adr/0022-sdk-packet-codec-and-conformance.md`.
 
+## Registering a device (P0-23)
+
+Each browser gets its own signing key, made on the device, locked so that nothing can read it back out. Call this **after the person has consented** (the consent flow arrives in P0-51):
+
+```ts
+import { provisionDevice } from "@certivo/sdk";
+
+const device = await provisionDevice({
+  // Sends the request to YOUR backend, which calls the platform with YOUR secret API key.
+  register: async (request) => {
+    const reply = await fetch("/your-backend/certivo-device", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request), // exactly { "public_key": "<43 characters>" }
+    });
+    return { deviceId: (await reply.json()).id };
+  },
+});
+// device.deviceId goes in every score packet; device.signer signs them.
+```
+
+Your backend forwards the body unchanged to the platform's `POST /v1/devices` with your API key, and returns the `id` it gets back
+(it looks like `dev_` and 32 hex characters). The SDK never holds your secret key. Safe to call on every page load: it registers once, then remembers.
+If the browser deletes its data, the device is registered again (`device.persisted` is `false` when that will happen on the next visit).
+Details and limits: `docs/adr/0023-browser-key-provisioning.md`.
+
 ## How to run it on your computer
 
 You need **Node 24 or newer** (it includes npm 11). Older npm (10) crashes on the test runner we pinned.
