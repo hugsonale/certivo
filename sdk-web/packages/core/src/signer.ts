@@ -1,6 +1,6 @@
 import type { SigningAlg } from "@certivo/sdk-types";
 import { SdkError } from "./errors";
-import { type KeyStore, MemoryKeyStore } from "./keystore";
+import { type KeyStore, MemoryKeyStore, type StoredKey } from "./keystore";
 
 /** Signs on behalf of this device. The private key is held by the browser and can never be read. */
 export interface DeviceSigner {
@@ -86,32 +86,54 @@ export interface CreatedSigner {
   readonly isNewKey: boolean;
 }
 
+export interface LoadedKey {
+  readonly stored: StoredKey;
+  readonly isNewKey: boolean;
+  /** False if the key could not be saved: it works for this visit but will not survive a reload. */
+  readonly persisted: boolean;
+}
+
 /**
- * Loads this device's key, or makes one if there is none. A missing key is normal (the browser may
- * have cleared it): it simply means a new device registration.
+ * Loads this device's key, or makes one if there is none (or only one the platform no longer accepts). A missing key is
+ * normal (the browser may have cleared it): it simply means a new device registration. The private key is created
+ * non-extractable here and nowhere else.
  */
+export async function loadOrCreateKey(
+  store: KeyStore = new MemoryKeyStore(),
+  subtle?: SubtleCrypto,
+  supported: readonly SigningAlg[] = SUPPORTED_ALGS,
+): Promise<LoadedKey> {
+  const s = subtleOf(subtle);
+  let existing: StoredKey | null = null;
+  try {
+    existing = (await store.load()) ?? null;
+  } catch {
+    existing = null; // unreadable storage counts as "no key"
+  }
+  if (existing && supported.includes(existing.alg)) {
+    return { stored: existing, isNewKey: false, persisted: true };
+  }
+  const alg = await chooseSigningAlg(s, supported);
+  const stored: StoredKey = { alg, pair: await generate(s, alg) };
+  let persisted = true;
+  try {
+    await store.save(stored);
+  } catch {
+    persisted = false; // still works for this visit; it just will not survive a reload
+  }
+  return { stored, isNewKey: true, persisted };
+}
+
+/** A signer for a stored key. */
+export function signerFor(stored: StoredKey, subtle?: SubtleCrypto): DeviceSigner {
+  return new WebCryptoSigner(stored.alg, stored.pair, subtleOf(subtle));
+}
+
 export async function createDeviceSigner(
   store: KeyStore = new MemoryKeyStore(),
   subtle?: SubtleCrypto,
   supported: readonly SigningAlg[] = SUPPORTED_ALGS,
 ): Promise<CreatedSigner> {
-  const s = subtleOf(subtle);
-  let stored = null;
-  try {
-    stored = (await store.load()) ?? null;
-  } catch {
-    stored = null; // unreadable storage counts as "no key"
-  }
-  if (stored && supported.includes(stored.alg)) {
-    return { signer: new WebCryptoSigner(stored.alg, stored.pair, s), isNewKey: false };
-  }
-  // No key, or one the platform no longer accepts: make a new one.
-  const alg = await chooseSigningAlg(s, supported);
-  const pair = await generate(s, alg);
-  try {
-    await store.save({ alg, pair });
-  } catch {
-    // The key still works for this visit; it just will not survive a reload.
-  }
-  return { signer: new WebCryptoSigner(alg, pair, s), isNewKey: true };
+  const { stored, isNewKey } = await loadOrCreateKey(store, subtle, supported);
+  return { signer: signerFor(stored, subtle), isNewKey };
 }

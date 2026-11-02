@@ -51,6 +51,10 @@ The SDK's packet codec is BUILD_SPEC_0 section 4, exactly. `npm test` reads the 
 
 The `sdk-web` workflow also runs when these files change. A missing file fails the test (it never skips).
 
+## The device key (P0-23)
+
+`provisionDevice` creates a non-extractable key in the browser, has the partner's backend register its public key, and remembers the device ID with the key. The tests prove the private key is never in a request, a log line or an error, and the static guards forbid the console, any private-key export and any extractable key. See `docs/adr/0023-browser-key-provisioning.md`.
+
 ## Held back or provisional
 
 | Item | Status |

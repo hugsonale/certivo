@@ -7,6 +7,7 @@ export type SdkErrorCode =
   | "server_error" //       the server failed (5xx)
   | "rejected" //           the server refused the request (other 4xx); see serverCode
   | "invalid_packet" //     the packet could not be built (a rule in packet.ts was broken)
+  | "registration_failed" // the partner backend could not register this device
   | "capability_missing" // the browser cannot do something the SDK needs
   | "not_implemented"; //   a later step in the build guide supplies this
 
