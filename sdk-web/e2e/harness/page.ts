@@ -1,14 +1,14 @@
 import {
   type IntervalOutcome,
   IntervalRunner,
-  MemoryPacketBuffer,
+  PacketSender,
   provisionDevice,
   SDK_VERSION,
+  type SenderTelemetry,
   SessionClient,
   scoreCodecV1,
   VerificationPipeline,
   VideoElementFrameSource,
-  type WaitingPacket,
   WorkerScorer,
 } from "@certivo/sdk";
 import { allowed, type E2eEvent, type E2eState, liveBitmaps, pruneBitmaps } from "./instrument";
@@ -23,7 +23,7 @@ export interface WorkerStats {
 }
 
 export interface CycleSummary {
-  outcomes: { sent: number; buffered: number; no_score: number };
+  outcomes: { sent: number; buffered: number; no_score: number; dropped: number; stopped: number };
   reasons: string[];
   errors: string[];
   /** After each interval: how many pictures made in the page still held pixels. */
@@ -36,6 +36,8 @@ export interface E2eApi {
   workerStats(): Promise<WorkerStats>;
   pageEvents(): E2eEvent[];
   videoElementsInPage(): number;
+  /** Waits for the sender to upload whatever is still waiting, then reports its counters. */
+  flushSender(): Promise<{ drained: boolean; telemetry: SenderTelemetry }>;
   teardown(): Promise<void>;
   /** On purpose: sends a picture or its pixels out, to prove the test notices. */
   leakOnPurpose(kind: "png" | "pixels", pixels?: number[]): Promise<void>;
@@ -49,6 +51,7 @@ interface Running {
   scorer: WorkerScorer;
   source: VideoElementFrameSource;
   pipeline: VerificationPipeline;
+  sender: PacketSender;
   stopCamera(): void;
 }
 let running: Running | undefined;
@@ -101,26 +104,26 @@ const api: E2eApi = {
       sdkVersion: SDK_VERSION,
       platform: "web",
     });
+    const sender = new PacketSender({ transport: client, sessionId: SESSION_ID });
     const pipeline = new VerificationPipeline({
       source,
       scorer,
       signer: device.signer,
       codec: scoreCodecV1,
-      send: (body) => client.sendScoreEvent(body),
-      buffer: new MemoryPacketBuffer<WaitingPacket>(),
+      sender,
       clock: () => Date.now(),
       sessionId: SESSION_ID,
       participantReference: "p_e2e",
       deviceId: device.deviceId,
       intervalMs: 100,
     });
-    running = { worker, scorer, source, pipeline, stopCamera: camera.stop };
+    running = { worker, scorer, source, pipeline, sender, stopCamera: camera.stop };
   },
 
   runCycles(count) {
     const { pipeline } = need();
     const summary: CycleSummary = {
-      outcomes: { sent: 0, buffered: 0, no_score: 0 },
+      outcomes: { sent: 0, buffered: 0, no_score: 0, dropped: 0, stopped: 0 },
       reasons: [],
       errors: [],
       livePicturesAfterEach: [],
@@ -171,8 +174,15 @@ const api: E2eApi = {
     return document.querySelectorAll("video").length;
   },
 
+  async flushSender() {
+    const { sender } = need();
+    const drained = await sender.flush(20_000);
+    return { drained, telemetry: sender.telemetry() };
+  },
+
   async teardown() {
     const current = need();
+    current.sender.close();
     current.source.stop();
     current.scorer.dispose();
     current.stopCamera();

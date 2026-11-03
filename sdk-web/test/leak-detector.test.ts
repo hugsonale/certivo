@@ -109,6 +109,40 @@ describe("the leak detector catches every way a picture could go out", () => {
   });
 });
 
+describe("the leak detector and batch uploads", () => {
+  const batchOf = (packets: unknown[], extra: Record<string, unknown> = {}) => ({
+    method: "POST",
+    url: "http://127.0.0.1:1234/internal/v1/sessions/continuous/sess_1/score-events/batch",
+    body: encoder.encode(JSON.stringify({ packets, ...extra })),
+    contentType: "application/json",
+  });
+  const one = JSON.parse(packet) as unknown;
+
+  it("accepts a batch of normal packets even though the whole request is bigger than one packet may be", () => {
+    const request = batchOf(Array.from({ length: 20 }, () => one));
+    expect(request.body.length).toBeGreaterThan(MAX_BODY_BYTES);
+    expect(findLeaks(request, canary)).toEqual([]);
+  });
+  it("still holds each packet in the batch to the single-packet limit", () => {
+    const fat = {
+      ...(one as object),
+      note: "x".repeat(200),
+      more: Array.from({ length: 40 }, (_, i) => `value-${i}-${"y".repeat(100)}`),
+    };
+    expect(findLeaks(batchOf([one, fat]), canary).map((l) => l.rule)).toContain("body-too-big");
+  });
+  it("refuses a batch with more than 25 packets, or with anything besides the packets", () => {
+    expect(findLeaks(batchOf(Array.from({ length: 26 }, () => one)), canary).map((l) => l.rule)).toContain(
+      "body-too-big",
+    );
+    expect(findLeaks(batchOf([one], { frame: "abc" }), canary).map((l) => l.rule)).toContain("odd-json-shape");
+  });
+  it("still finds pixels hidden inside a batch", () => {
+    const hidden = { ...(one as object), note: btoa(toLatin1(sample)) };
+    expect(findLeaks(batchOf([one, hidden]), canary).map((l) => l.rule)).toContain("pixel-copy");
+  });
+});
+
 describe("the leak detector finds the real pixel bytes in every disguise", () => {
   const forms = needlesFor(sample);
   it("knows many disguises", () => {

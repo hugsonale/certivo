@@ -18,6 +18,7 @@ type W = { __certivoE2E: E2eApi };
 
 const here = (file: string) => fileURLToPath(new URL(file, import.meta.url));
 const SCORE_PATH = /^\/internal\/v1\/sessions\/continuous\/[A-Za-z0-9_-]+\/score-events$/;
+const BATCH_PATH = /^\/internal\/v1\/sessions\/continuous\/[A-Za-z0-9_-]+\/score-events\/batch$/;
 
 async function bundle(entry: string): Promise<string> {
   const result = await build({
@@ -34,13 +35,35 @@ async function bundle(entry: string): Promise<string> {
 
 interface PretendPlatform {
   origin: string;
+  /** The seq of every packet the pretend platform took, in order (it follows Build Spec 0: duplicates are not taken twice). */
+  accepted: number[];
+  /** How many packet requests it answered with 503 on purpose. */
+  refused: number;
   /** Every request that reached the server, with its body exactly as sent. */
   requests: RecordedRequest[];
   close(): Promise<void>;
 }
 
-async function startPretendPlatform(pageJs: string, workerJs: string): Promise<PretendPlatform> {
+/** `failPackets`: the 1-based numbers of the packet requests (single or batch) to answer with 503, as if the platform were down. */
+async function startPretendPlatform(
+  pageJs: string,
+  workerJs: string,
+  failPackets: number[] = [],
+): Promise<PretendPlatform> {
   const requests: RecordedRequest[] = [];
+  const accepted: number[] = [];
+  const seen = new Set<number>();
+  let packetRequests = 0;
+  let refused = 0;
+  const take = (packet: { seq?: unknown }) => {
+    const seq = typeof packet.seq === "number" ? packet.seq : -1;
+    const duplicate = seen.has(seq);
+    if (!duplicate) {
+      seen.add(seq);
+      accepted.push(seq);
+    }
+    return { accepted: true, seq, current_policy_outcome: "allow", duplicate };
+  };
   let origin = "";
   const server: Server = createServer((req, res) => {
     const chunks: Buffer[] = [];
@@ -63,9 +86,35 @@ async function startPretendPlatform(pageJs: string, workerJs: string): Promise<P
       } else if (req.method === "GET" && path === "/worker.js") {
         res.writeHead(200, { "Content-Type": "text/javascript" });
         res.end(workerJs);
-      } else if (req.method === "POST" && SCORE_PATH.test(path)) {
+      } else if (req.method === "POST" && (SCORE_PATH.test(path) || BATCH_PATH.test(path))) {
+        packetRequests++;
+        if (failPackets.includes(packetRequests)) {
+          refused++;
+          res.writeHead(503, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: { code: "unavailable", message: "down on purpose" } }));
+          return;
+        }
+        let parsed: { seq?: unknown; packets?: Array<{ seq?: unknown }> } = {};
+        try {
+          if (body) parsed = JSON.parse(new TextDecoder().decode(body));
+        } catch {
+          // a body that is not JSON is what the sanity check sends on purpose; it is recorded above and simply not understood
+        }
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ accepted: true, seq: 0, current_policy_outcome: "allow", duplicate: false }));
+        if (BATCH_PATH.test(path)) {
+          const results = (parsed.packets ?? []).map((p, index) => ({ index, ...take(p), error: null }));
+          res.end(
+            JSON.stringify({
+              results,
+              accepted_count: results.length,
+              duplicate_count: 0,
+              rejected_count: 0,
+              gaps_recorded: 0,
+            }),
+          );
+        } else {
+          res.end(JSON.stringify(take(parsed)));
+        }
       } else {
         res.writeHead(404);
         res.end();
@@ -77,6 +126,10 @@ async function startPretendPlatform(pageJs: string, workerJs: string): Promise<P
   return {
     origin,
     requests,
+    accepted,
+    get refused() {
+      return refused;
+    },
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };
 }
@@ -150,7 +203,7 @@ test.describe("P0-24: no media leaves the page, no frame is kept", () => {
   });
 
   test("the pretend call really ran (so the checks below are looking at something)", () => {
-    const total = main.outcomes.sent + main.outcomes.buffered + main.outcomes.no_score;
+    const total = Object.values(main.outcomes).reduce((a, b) => a + b, 0);
     expect(main.errors, "errors during the run").toEqual([]);
     expect(main.reasons, "intervals that produced no score").toEqual([]);
     expect(total).toBe(MAIN_CYCLES);
@@ -283,5 +336,88 @@ test.describe("P0-24: no media leaves the page, no frame is kept", () => {
     expect(findLeaks(pixels, canary).map((l) => l.rule)).toContain("pixel-copy");
     // ...and the page-side watcher saw the encoding and the upload too.
     expect(events.map((e) => e.kind)).toEqual(expect.arrayContaining(["encode:toblob", "network:fetch"]));
+  });
+});
+
+/**
+ * P0-25 in a real browser: the platform goes down for a few requests in the middle of a call. The sender must keep the
+ * packets, retry, upload them in order, and everything it sends (single packets AND the batch upload) must still pass the
+ * same leak checks. The details of lost, duplicated and reordered packets are in packages/core/test; this is the proof that
+ * the real browser path behaves the same way.
+ */
+test.describe("P0-25: an outage in the middle of a call, in a real browser", () => {
+  const CYCLES = 40;
+  let platform: PretendPlatform;
+  let context: BrowserContext;
+  let run: CycleSummary;
+  let flushed: {
+    drained: boolean;
+    telemetry: {
+      retries: number;
+      batchesSent: number;
+      droppedBufferFull: number;
+      droppedRejected: number;
+      bufferedNow: number;
+      confirmed: number;
+      submitted: number;
+    };
+  };
+  let stats: WorkerStats;
+
+  test.beforeAll(async ({ browser }) => {
+    // the 8th, 9th and 10th packet requests are answered 503
+    platform = await startPretendPlatform(
+      await bundle(here("./harness/page-entry.ts")),
+      await bundle(here("./harness/worker-entry.ts")),
+      [8, 9, 10],
+    );
+    context = await browser.newContext();
+    await context.route("**/*", (route) =>
+      new URL(route.request().url()).origin === platform.origin ? route.continue() : route.abort(),
+    );
+    const page = await context.newPage();
+    await page.goto(platform.origin);
+    await page.waitForFunction(() => "__certivoE2E" in window);
+    await page.evaluate(() => (window as unknown as W).__certivoE2E.setup());
+    run = await page.evaluate((n) => (window as unknown as W).__certivoE2E.runCycles(n), CYCLES);
+    flushed = await page.evaluate(() => (window as unknown as W).__certivoE2E.flushSender());
+    stats = await page.evaluate(() => (window as unknown as W).__certivoE2E.workerStats());
+    await page.evaluate(() => (window as unknown as W).__certivoE2E.teardown());
+  });
+
+  test.afterAll(async () => {
+    await context?.close();
+    await platform?.close();
+  });
+
+  test("the sender buffered during the outage and uploaded every packet exactly once, in order", () => {
+    expect(run.errors).toEqual([]);
+    expect(platform.refused, "the outage really happened").toBe(3);
+    expect(run.outcomes.buffered, "some packets waited").toBeGreaterThan(0);
+    expect(flushed.drained).toBe(true);
+    expect(platform.accepted).toEqual(Array.from({ length: CYCLES }, (_, i) => i));
+    expect(flushed.telemetry).toMatchObject({
+      confirmed: CYCLES,
+      submitted: CYCLES,
+      droppedBufferFull: 0,
+      droppedRejected: 0,
+      bufferedNow: 0,
+    });
+    expect(flushed.telemetry.retries).toBeGreaterThanOrEqual(1);
+    expect(flushed.telemetry.batchesSent, "the backlog went up on the batch endpoint").toBeGreaterThanOrEqual(1);
+  });
+
+  test("everything sent during the outage and recovery, including the batch upload, is still only small JSON", () => {
+    const canary = stats.samples.map((s) => Uint8Array.from(s));
+    expect(canary.length).toBeGreaterThan(0);
+    const posts = platform.requests.filter((r) => r.method === "POST");
+    expect(
+      posts.some((r) => BATCH_PATH.test(new URL(r.url).pathname)),
+      "a batch upload was made",
+    ).toBe(true);
+    for (const request of platform.requests) {
+      expect(unexpectedDestination(request.url, platform.origin), `${request.method} ${request.url}`).toBeUndefined();
+      expect(findLeaks(request, canary), `${request.method} ${request.url}`).toEqual([]);
+    }
   });
 });
