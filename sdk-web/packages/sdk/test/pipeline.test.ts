@@ -120,7 +120,7 @@ describe("one turn of the verification loop", () => {
     expect(await pipeline.runInterval()).toEqual({ status: "no_score", reason: "model_not_loaded" });
     expect(bodies).toEqual([]);
     expect(frames[0]?.close).toHaveBeenCalledTimes(1);
-    expect(deps.buffer.size).toBe(0);
+    expect(deps.buffer?.size).toBe(0);
   });
 
   it("does not use up a sequence number on a turn that produced no score", async () => {
@@ -136,7 +136,7 @@ describe("one turn of the verification loop", () => {
   it("keeps a signed packet in the buffer when the platform cannot be reached", async () => {
     const { pipeline, deps } = setup({ send: async () => Promise.reject(new SdkError("network_error", "offline")) });
     expect(await pipeline.runInterval()).toMatchObject({ status: "buffered", seq: 0 });
-    expect(deps.buffer.size).toBe(1);
+    expect(deps.buffer?.size).toBe(1);
   });
 
   it("does not hide other failures (an expired token must be noticed), and still closes the frame", async () => {
