@@ -24,6 +24,18 @@ export {
   type RegisterDevice,
 } from "./provision";
 export {
+  PacketSender,
+  type PacketSenderOptions,
+  type PacketTransport,
+  type QueuedPacket,
+  type RetryPolicy,
+  type SenderEvent,
+  type SenderTelemetry,
+  type StopReason,
+  type SubmitOutcome,
+} from "./sender";
+export { MemorySeqStore, type SeqStore, TabSeqStore, type TabStorage } from "./seq-store";
+export {
   MAX_BATCH_PACKETS,
   type PauseReason,
   type ScoreBatchResponse,

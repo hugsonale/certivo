@@ -25,6 +25,8 @@ export interface Leak {
 
 /** A packet is a few hundred bytes. Anything near the size of a frame is wrong. */
 export const MAX_BODY_BYTES = 4096;
+/** A batch upload holds at most this many packets (Build Spec 0 section 2); each is held to the same limit as a single one. */
+export const MAX_BATCH_PACKETS = 25;
 export const MAX_URL_LENGTH = 300;
 const MAX_STRING_LENGTH = 256;
 const MAX_NUMBER_LIST = 64;
@@ -125,7 +127,8 @@ export function findLeaks(request: RecordedRequest, canary: readonly Uint8Array[
   const body = request.body;
   if (!body || body.length === 0) return leaks;
 
-  if (body.length > MAX_BODY_BYTES) add("body-too-big", `${body.length} bytes (limit ${MAX_BODY_BYTES})`);
+  const batch = /\/score-events\/batch(?:$|\?)/.test(request.url);
+  if (!batch && body.length > MAX_BODY_BYTES) add("body-too-big", `${body.length} bytes (limit ${MAX_BODY_BYTES})`);
   if (!/^application\/json\b/i.test(request.contentType ?? "")) {
     add("not-json", `content type is "${request.contentType ?? "none"}"`);
   }
@@ -148,6 +151,22 @@ export function findLeaks(request: RecordedRequest, canary: readonly Uint8Array[
   try {
     const parsed: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body));
     for (const problem of jsonShapeProblems(parsed)) add("odd-json-shape", problem);
+    if (batch) {
+      // A batch is {"packets": [...]} and nothing else, with each packet held to the single-packet size limit.
+      const object = parsed as { packets?: unknown } | null;
+      const keys = object && typeof object === "object" ? Object.keys(object) : [];
+      if (keys.length !== 1 || !Array.isArray(object?.packets)) {
+        add("odd-json-shape", 'a batch must be {"packets": [...]} and nothing else');
+      } else {
+        if (object.packets.length > MAX_BATCH_PACKETS)
+          add("body-too-big", `${object.packets.length} packets in a batch`);
+        for (const [index, packet] of object.packets.entries()) {
+          const size = JSON.stringify(packet).length;
+          if (size > MAX_BODY_BYTES)
+            add("body-too-big", `packet ${index} of the batch is ${size} bytes (limit ${MAX_BODY_BYTES})`);
+        }
+      }
+    }
   } catch {
     add("not-json", "the body is not valid JSON text");
   }
@@ -171,7 +190,7 @@ export function unexpectedDestination(url: string, allowedOrigin: string): strin
   }
   if (parsed.origin !== allowedOrigin) return `leaves the test server: ${parsed.origin}`;
   const allowed =
-    /^\/(page\.js|worker\.js|favicon\.ico|internal\/v1\/sessions\/continuous\/[A-Za-z0-9_-]+\/score-events)?$/;
+    /^\/(page\.js|worker\.js|favicon\.ico|internal\/v1\/sessions\/continuous\/[A-Za-z0-9_-]+\/score-events(?:\/batch)?)?$/;
   if (!allowed.test(parsed.pathname)) return `unexpected path: ${parsed.pathname}`;
   if (parsed.search) return `has a query string: ${parsed.search.slice(0, 40)}`;
   return undefined;
