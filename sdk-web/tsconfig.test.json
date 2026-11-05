@@ -1,5 +1,14 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": { "types": ["node"] },
-  "include": ["packages/*/src", "packages/*/test", "test", "e2e", "vitest.config.ts", "playwright.config.ts"]
+  "include": [
+    "packages/*/src",
+    "packages/*/test",
+    "test",
+    "e2e",
+    "overhead",
+    "vitest.config.ts",
+    "playwright.config.ts",
+    "playwright.overhead.config.ts"
+  ]
 }
