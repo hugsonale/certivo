@@ -1,0 +1,2 @@
+# Same bytes on every machine, so file fingerprints (and therefore reproduction checks) agree on Windows and Linux.
+* text eol=lf
