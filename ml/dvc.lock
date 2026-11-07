@@ -1,0 +1,140 @@
+schema: '2.0'
+stages:
+  make_data:
+    cmd: python -m certivo_ml.synthetic
+    deps:
+    - path: certivo_ml/params.py
+      hash: md5
+      md5: d12a91c008e146a3e631857c9c364ba0
+      size: 291
+    - path: certivo_ml/synthetic.py
+      hash: md5
+      md5: 9d0ab3375f0f3df3abc980f1e620e8e0
+      size: 3993
+    params:
+      params.yaml:
+        synthetic:
+          seed: 20261105
+          samples: 2400
+          side: 16
+          group_noise:
+          - 10
+          - 20
+          - 40
+          stamp_amplitude: 8
+          split:
+            train: 0.6
+            val: 0.2
+            test: 0.2
+    outs:
+    - path: data/synthetic-v0
+      hash: md5
+      md5: 502f39d5a6d9403daea180973a422250.dir
+      size: 622851
+      nfiles: 5
+  train_baseline:
+    cmd: python -m certivo_ml.baseline train
+    deps:
+    - path: certivo_ml/baseline.py
+      hash: md5
+      md5: e06cbd95ee3a7f1a979aa75da0f9f9d5
+      size: 5818
+    - path: certivo_ml/metrics.py
+      hash: md5
+      md5: fcfde66117a78a22b128774773e0fbfa
+      size: 3770
+    - path: certivo_ml/synthetic.py
+      hash: md5
+      md5: 9d0ab3375f0f3df3abc980f1e620e8e0
+      size: 3993
+    - path: data/synthetic-v0
+      hash: md5
+      md5: 502f39d5a6d9403daea180973a422250.dir
+      size: 622851
+      nfiles: 5
+    params:
+      params.yaml:
+        baseline:
+          temperature_grid:
+          - 1
+          - 2
+          - 5
+          - 10
+          - 20
+          - 50
+          - 100
+          - 200
+          - 500
+          threshold: 0.5
+    outs:
+    - path: models/baseline-synthetic-v0/model.json
+      hash: md5
+      md5: 9ca649c8c9d0af8fbfb465157b762557
+      size: 7154
+  evaluate_baseline:
+    cmd: python -m certivo_ml.baseline evaluate
+    deps:
+    - path: certivo_ml/baseline.py
+      hash: md5
+      md5: e06cbd95ee3a7f1a979aa75da0f9f9d5
+      size: 5818
+    - path: certivo_ml/metrics.py
+      hash: md5
+      md5: fcfde66117a78a22b128774773e0fbfa
+      size: 3770
+    - path: certivo_ml/tracking.py
+      hash: md5
+      md5: 48477c86ac340d537760a27c80604596
+      size: 3763
+    - path: data/synthetic-v0
+      hash: md5
+      md5: 502f39d5a6d9403daea180973a422250.dir
+      size: 622851
+      nfiles: 5
+    - path: models/baseline-synthetic-v0/model.json
+      hash: md5
+      md5: 9ca649c8c9d0af8fbfb465157b762557
+      size: 7154
+    params:
+      params.yaml:
+        baseline:
+          temperature_grid:
+          - 1
+          - 2
+          - 5
+          - 10
+          - 20
+          - 50
+          - 100
+          - 200
+          - 500
+          threshold: 0.5
+    outs:
+    - path: metrics/baseline-synthetic-v0.json
+      hash: md5
+      md5: b1bbec5007ad24b239c5b20a07b82cf5
+      size: 4073
+  model_card:
+    cmd: python -m certivo_ml.model_card
+    deps:
+    - path: certivo_ml/model_card.py
+      hash: md5
+      md5: fe149a733a0702ec44903dacfb363b1b
+      size: 6848
+    - path: datasheets/synthetic-v0.md
+      hash: md5
+      md5: 6e0156501cdc61af8bfb597185808ba7
+      size: 1423
+    - path: metrics/baseline-synthetic-v0.json
+      hash: md5
+      md5: b1bbec5007ad24b239c5b20a07b82cf5
+      size: 4073
+    - path: model_cards/TEMPLATE.md
+      hash: md5
+      md5: c2274ad58085b6f8e9b8ef89dcde7142
+      size: 941
+    outs:
+    - path: model_cards/baseline-synthetic-v0.md
+      hash: md5
+      md5: 9fdbd11bfd86333bd29558b12e1e6b82
+      size: 3715

@@ -1,0 +1,48 @@
+# The baseline experiment as a pipeline. `dvc repro` runs whatever is out of date, in order, and records fingerprints in dvc.lock.
+stages:
+  make_data:
+    cmd: python -m certivo_ml.synthetic
+    deps:
+      - certivo_ml/synthetic.py
+      - certivo_ml/params.py
+    params:
+      - synthetic
+    outs:
+      - data/synthetic-v0
+
+  train_baseline:
+    cmd: python -m certivo_ml.baseline train
+    deps:
+      - data/synthetic-v0
+      - certivo_ml/baseline.py
+      - certivo_ml/synthetic.py
+      - certivo_ml/metrics.py
+    params:
+      - baseline
+    outs:
+      - models/baseline-synthetic-v0/model.json
+
+  evaluate_baseline:
+    cmd: python -m certivo_ml.baseline evaluate
+    deps:
+      - data/synthetic-v0
+      - models/baseline-synthetic-v0/model.json
+      - certivo_ml/baseline.py
+      - certivo_ml/metrics.py
+      - certivo_ml/tracking.py
+    params:
+      - baseline
+    metrics:
+      - metrics/baseline-synthetic-v0.json:
+          cache: false
+
+  model_card:
+    cmd: python -m certivo_ml.model_card
+    deps:
+      - metrics/baseline-synthetic-v0.json
+      - model_cards/TEMPLATE.md
+      - datasheets/synthetic-v0.md
+      - certivo_ml/model_card.py
+    outs:
+      - model_cards/baseline-synthetic-v0.md:
+          cache: false
