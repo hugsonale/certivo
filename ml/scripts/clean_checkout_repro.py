@@ -79,17 +79,19 @@ def main() -> int:
         env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}", "CERTIVO_MLFLOW_DIR": str(work / "mlflow")}
         env.pop("PYTHONPATH", None)
 
-        print("3. Run EVERY stage of the pipeline again (dvc repro --force), so nothing is skipped as 'unchanged'")
-        run([str(python), "-m", "dvc", "repro", "--force"], cwd=ml, env=env)
-
         if args.tests:
-            print("4. Run the unit tests")
+            print("3. Run the unit tests FIRST, before anything has been built (as CI does), so a test cannot lean on a file only your machine has")
             run([str(python), "-m", "pytest", "tests", "-q"], cwd=ml, env=env)
+
+        print("4. Run EVERY stage of the pipeline again (dvc repro --force), so nothing is skipped as 'unchanged'")
+        run([str(python), "-m", "dvc", "repro", "--force"], cwd=ml, env=env)
 
         print("\nChecking that every committed file the pipeline produces came out unchanged")
         changed = subprocess.run(["git", "status", "--porcelain"], cwd=checkout, capture_output=True, text=True).stdout.strip()
         if changed:
             print("FAIL: the clean checkout did NOT reproduce. These files differ from what is committed:\n" + changed)
+            difference = subprocess.run(["git", "diff", "--no-color", "-U1"], cwd=checkout, capture_output=True, text=True).stdout
+            print("\nWhat differs (- is committed, + is what this run produced):\n" + difference[:6000])
             return 1
         produced = [p for p in ("ml/dvc.lock", "ml/metrics/baseline-synthetic-v0.json", "ml/model_cards/baseline-synthetic-v0.md") if (checkout / p).exists()]
         print("PASS: reproduced from a clean checkout. Unchanged: " + ", ".join(produced))

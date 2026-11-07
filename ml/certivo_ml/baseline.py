@@ -80,8 +80,9 @@ def train(config: dict[str, Any] | None = None) -> dict[str, Any]:
     return model
 
 
-def load_model(path: Path = MODEL_PATH) -> tuple[dict[int, np.ndarray], dict[int, int], float]:
-    model = json.loads(path.read_text(encoding="utf-8"))
+def load_model(path: Path | None = None) -> tuple[dict[int, np.ndarray], dict[int, int], float]:
+    # MODEL_PATH is looked up when this runs, not when the module loads, so tests can point it somewhere else
+    model = json.loads((path or MODEL_PATH).read_text(encoding="utf-8"))
     sums = {int(c): np.asarray(v, dtype=np.int64) for c, v in model["class_sums"].items()}
     counts = {int(c): int(n) for c, n in model["class_counts"].items()}
     return sums, counts, float(model["temperature"])
