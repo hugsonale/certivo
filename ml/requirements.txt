@@ -1,0 +1,7 @@
+# The tools the ML workspace needs. Exact versions, each at least 14 days old when chosen (guide P0-61).
+# constraints.txt pins everything these pull in. Install with:  pip install -r requirements.txt -c constraints.txt
+dvc==3.67.1
+mlflow==3.17.2
+numpy==2.5.4
+pytest==9.1.1
+PyYAML==6.0.3

@@ -1,0 +1,51 @@
+name: ml
+
+# The ML workspace (P0-30). The job IS a clean checkout: it installs the pinned tools, checks that no data is committed,
+# runs the tests, re-runs every stage of the pipeline, and fails if any committed file (dvc.lock, metrics, model card) changes.
+on:
+  pull_request:
+    paths:
+      - "ml/**"
+      - ".github/workflows/ml.yml"
+  push:
+    branches: [rebuild]
+    paths:
+      - "ml/**"
+      - ".github/workflows/ml.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  ml:
+    name: ml (Python ${{ matrix.python }}, reproduces from a clean checkout)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: ml/constraints.txt
+      - name: No data or footage in git
+        run: python ml/scripts/check_no_data.py
+      - name: Is this Python one the tools support
+        run: python ml/scripts/check_environment.py
+      - name: Install the pinned tools
+        working-directory: ml
+        run: pip install -r requirements.txt -c constraints.txt
+      - name: Unit tests
+        working-directory: ml
+        run: python -m pytest tests -q
+      - name: Re-run every stage of the pipeline
+        working-directory: ml
+        run: dvc repro --force
+      - name: Nothing committed may have changed
+        run: |
+          git status --porcelain
+          test -z "$(git status --porcelain)" || { echo "The pipeline did not reproduce the committed files."; git diff; exit 1; }

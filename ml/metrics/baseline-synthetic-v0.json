@@ -1,0 +1,209 @@
+{
+  "data_sha256": "edce86f069657bd9163dc10666cba6dd07f8af720a32b04e16dc0515ff16a024",
+  "dataset": "synthetic-v0",
+  "model": "baseline-synthetic-v0",
+  "samples": {
+    "test": 480,
+    "train": 1440,
+    "val": 480
+  },
+  "temperature": 5.0,
+  "test": {
+    "accuracy": {
+      "ci95": [
+        0.842404,
+        0.901641
+      ],
+      "count": 420,
+      "of": 480,
+      "value": 0.875
+    },
+    "auc": 0.912872,
+    "confusion": {
+      "false_negative": 37,
+      "false_positive": 23,
+      "true_negative": 205,
+      "true_positive": 215
+    },
+    "expected_calibration_error": 0.0736,
+    "false_negative_rate": {
+      "ci95": [
+        0.108435,
+        0.195822
+      ],
+      "count": 37,
+      "of": 252,
+      "value": 0.146825
+    },
+    "false_positive_rate": {
+      "ci95": [
+        0.068163,
+        0.146818
+      ],
+      "count": 23,
+      "of": 228,
+      "value": 0.100877
+    },
+    "log_loss": 0.3841,
+    "samples": 480
+  },
+  "test_by_group": {
+    "0": {
+      "accuracy": {
+        "ci95": [
+          0.963206,
+          0.998822
+        ],
+        "count": 149,
+        "of": 150,
+        "value": 0.993333
+      },
+      "auc": 0.998755,
+      "confusion": {
+        "false_negative": 0,
+        "false_positive": 1,
+        "true_negative": 75,
+        "true_positive": 74
+      },
+      "expected_calibration_error": 0.1697,
+      "false_negative_rate": {
+        "ci95": [
+          0.0,
+          0.049352
+        ],
+        "count": 0,
+        "of": 74,
+        "value": 0.0
+      },
+      "false_positive_rate": {
+        "ci95": [
+          0.002326,
+          0.070838
+        ],
+        "count": 1,
+        "of": 76,
+        "value": 0.013158
+      },
+      "log_loss": 0.207,
+      "samples": 150
+    },
+    "1": {
+      "accuracy": {
+        "ci95": [
+          0.829184,
+          0.927644
+        ],
+        "count": 142,
+        "of": 160,
+        "value": 0.8875
+      },
+      "auc": 0.957393,
+      "confusion": {
+        "false_negative": 14,
+        "false_positive": 4,
+        "true_negative": 72,
+        "true_positive": 70
+      },
+      "expected_calibration_error": 0.0764,
+      "false_negative_rate": {
+        "ci95": [
+          0.101956,
+          0.260532
+        ],
+        "count": 14,
+        "of": 84,
+        "value": 0.166667
+      },
+      "false_positive_rate": {
+        "ci95": [
+          0.020655,
+          0.127659
+        ],
+        "count": 4,
+        "of": 76,
+        "value": 0.052632
+      },
+      "log_loss": 0.2954,
+      "samples": 160
+    },
+    "2": {
+      "accuracy": {
+        "ci95": [
+          0.689253,
+          0.816955
+        ],
+        "count": 129,
+        "of": 170,
+        "value": 0.758824
+      },
+      "auc": 0.821389,
+      "confusion": {
+        "false_negative": 23,
+        "false_positive": 18,
+        "true_negative": 58,
+        "true_positive": 71
+      },
+      "expected_calibration_error": 0.1739,
+      "false_negative_rate": {
+        "ci95": [
+          0.168933,
+          0.340478
+        ],
+        "count": 23,
+        "of": 94,
+        "value": 0.244681
+      },
+      "false_positive_rate": {
+        "ci95": [
+          0.155392,
+          0.343616
+        ],
+        "count": 18,
+        "of": 76,
+        "value": 0.236842
+      },
+      "log_loss": 0.6239,
+      "samples": 170
+    }
+  },
+  "threshold": 0.5,
+  "validation": {
+    "accuracy": {
+      "ci95": [
+        0.828801,
+        0.890442
+      ],
+      "count": 414,
+      "of": 480,
+      "value": 0.8625
+    },
+    "auc": 0.90766,
+    "confusion": {
+      "false_negative": 35,
+      "false_positive": 31,
+      "true_negative": 224,
+      "true_positive": 190
+    },
+    "expected_calibration_error": 0.0679,
+    "false_negative_rate": {
+      "ci95": [
+        0.114024,
+        0.208651
+      ],
+      "count": 35,
+      "of": 225,
+      "value": 0.155556
+    },
+    "false_positive_rate": {
+      "ci95": [
+        0.08698,
+        0.16739
+      ],
+      "count": 31,
+      "of": 255,
+      "value": 0.121569
+    },
+    "log_loss": 0.4069,
+    "samples": 480
+  }
+}
